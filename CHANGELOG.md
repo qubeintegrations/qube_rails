@@ -1,27 +1,34 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## 0.2.0 (unreleased)
 
-## [0.1.0] - 2024-01-21
+A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit used to generate
+into every Rails app, so the app keeps only its own.
 
 ### Added
-- Initial release of QubeSyncRails gem
-- Rails engine with complete QuickBooks Desktop integration
-- Models for QuickBooks entities (Customer, Vendor, Item, Invoice)
-- ActiveRecord associations and validations
-- Rails controllers with CRUD operations
-- Background job templates for webhook processing
-- Rails generator for easy installation
-- RSpec testing helpers and factories
-- Comprehensive configuration system
-- Database migrations for all QuickBooks entities
-- Connection management with webhook callbacks
-- Data import/export functionality
+- `QubeRails::Engine`, mounted with `mount QubeRails::Engine => "/"`: the webhook endpoint
+  (`POST /webhooks/qube/:operation/:record_id`), onboarding (`POST /quickbooks/connect`) and the
+  question routes (`POST /qube/questions/:operation/:record_id`, `GET .../search`).
+- `QubeRails::WebhookJob` (ActiveJob) and `QubeRails.run`, for an app with another queue.
+- `QubeRails::Operation` and `QubeRails::ConnectionEvents`, the bases of the app's operation and
+  connection classes, with the reference, revision and delivery-id checks under the row lock.
+- The question partial, `qube_rails/_question.html.erb`, which the app can override.
+- `QubeRails.configure` in `config/initializers/qube_rails.rb`: operations, connection,
+  current_account, authorize_question, enqueue, queue, dedupe, parent_controller and the API
+  settings. An unset setting raises `QubeRails::NotConfigured` naming that file.
+- `rails g qube_rails:install [table]`: the initializer, a connection class, its migration and
+  the mount line.
 
-### Features
-- **Models**: Qube::Connection, Qube::Request, QBD::Customer, QBD::Vendor, QBD::Item, QBD::Invoice, QBD::InvoiceLineItem
-- **Controllers**: Complete CRUD operations for all QuickBooks entities
-- **Jobs**: Webhook processing for real-time data synchronization  
-- **Generator**: `rails generate qube_rails:install` for automated setup
-- **Testing**: RSpec helpers and FactoryBot factories
-- **Configuration**: Environment-based API key and webhook management
+### Changed
+- Needs Ruby 3.3, Rails 7.0 and qube_sync 0.4.0 or later. The source stays Ruby 2.7 and Rails
+  5.2 compatible, and every call to qube_sync goes through `QubeRails::Backend`, so the kit can
+  vendor it into older apps.
+
+### Removed
+- Everything from 0.1.0 (v1): the generator's models, migrations, controllers and jobs, and the
+  path dependency on qube_sync.
+
+## 0.1.0 (2024-01-21)
+
+The v1 engine: generated QuickBooks entity models, connection and request tables, and a webhook
+job for customer queries.

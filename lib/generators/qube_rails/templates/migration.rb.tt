@@ -1,0 +1,8 @@
+# Where an account keeps its QuBe Sync connection: its id, which every run starts on, and the
+# revision of the last connection event applied (QubeRails::ConnectionEvents).
+class AddQubeConnectionTo<%= table_name.camelize %> < ActiveRecord::Migration<%= migration_version %>
+  def change
+    add_column :<%= table_name %>, :qube_connection_id, :string
+    add_column :<%= table_name %>, :qube_connection_revision, :integer
+  end
+end

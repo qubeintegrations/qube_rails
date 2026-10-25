@@ -1,0 +1,120 @@
+<%# The question a QuBe Sync run is asking about record, with a form per choice, or nothing
+    when it isn't asking. Render it on the record's page, with its operation's slug:
+      render "qube_rails/question", record: @invoice, operation: "create_invoice"
+    It's the question QubeRails::Operation#question saved (saved_question). Each form posts
+    your user's choice to the engine's question route, and a record field's box searches
+    through it too, so the API key never reaches the browser. ERB escapes everything it
+    prints, and the qube- classes are for your CSS. For other markup, copy this file to
+    app/views/qube_rails/_question.html.erb in your app, which Rails renders instead. %>
+<% handler = QubeRails.config.operation_class(operation) %>
+<% raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" unless handler %>
+<% question = handler.new(record).saved_question %>
+<% if question %>
+<%   action = qube_rails.question_path(operation, record.id) %>
+<section class="qube-question">
+  <p class="qube-question-message"><%= question["message"] %></p>
+<%   if question["details"].present? %>
+  <table class="qube-question-details">
+<%     question["details"].each do |row| %>
+    <tr><th scope="row"><%= row["label"] %></th><td><%= row["value"] %></td></tr>
+<%     end %>
+  </table>
+<%   end %>
+<%   question["choices"].to_a.each_with_index do |choice, n| %>
+  <form class="qube-choice" method="post" action="<%= action %>">
+    <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token,
+                         id: nil %>
+    <%= hidden_field_tag :choice, choice["id"], id: nil %>
+<%     choice["fields"].to_a.each do |field| %>
+<%       id = "qube-#{question["token"]}-#{n}-#{field["name"]}" %>
+<%       name = "data[#{field["name"]}]" %>
+    <div class="qube-field">
+      <%= label_tag id, field["label"] || field["name"] %>
+<%       if field["type"] == "record" %>
+      <div class="qube-search" data-qube-search="<%= action %>/search"
+           data-qube-field="<%= field["name"] %>">
+        <%= tag.input(type: "search", id: id, class: "qube-search-input", maxlength: 100,
+                      autocomplete: "off", required: field["required"]) %>
+        <%= hidden_field_tag name, nil, id: nil, class: "qube-search-value" %>
+        <div class="qube-search-results" aria-live="polite"></div>
+      </div>
+      <script nonce="<%= content_security_policy_nonce %>">
+      // A record field's search box: what your user types is looked up through your
+      // app's search route (data-qube-search), and the match they pick fills the field.
+      // Plain JavaScript for the browser, no build; it binds each box once.
+      (function () {
+        var boxes = document.querySelectorAll(".qube-search:not([data-qube-ready])");
+        Array.prototype.forEach.call(boxes, function (box) {
+          box.setAttribute("data-qube-ready", "");
+          var input = box.querySelector(".qube-search-input");
+          var value = box.querySelector(".qube-search-value");
+          var results = box.querySelector(".qube-search-results");
+          var timer = null;
+          var asked = 0;
+          // Until a match is picked, the form won't send what was typed.
+          var check = function () {
+            var unpicked = input.value && !value.value;
+            input.setCustomValidity(unpicked ? "Pick one of the matches." : "");
+          };
+          input.addEventListener("input", function () {
+            value.value = "";
+            check();
+            clearTimeout(timer);
+            results.textContent = "";
+            var q = input.value.trim();
+            if (q.length < 2) return;
+            timer = setTimeout(function () {
+              var n = ++asked;
+              var url = box.getAttribute("data-qube-search") +
+                "?field=" + encodeURIComponent(box.getAttribute("data-qube-field")) +
+                "&q=" + encodeURIComponent(q);
+              fetch(url, {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+              })
+                .then(function (res) { return res.ok ? res.json() : []; })
+                .then(function (matches) {
+                  if (n !== asked) return; // a later search has gone out since
+                  results.textContent = matches.length ? "" : "No matches.";
+                  matches.forEach(function (match) {
+                    var pick = document.createElement("button");
+                    pick.type = "button";
+                    pick.className = "qube-search-result";
+                    pick.textContent = match.label;
+                    if (match.detail) pick.textContent += " · " + match.detail;
+                    pick.addEventListener("click", function () {
+                      value.value = match.value;
+                      input.value = match.label;
+                      results.textContent = "";
+                      check();
+                    });
+                    results.appendChild(pick);
+                  });
+                });
+            }, 250);
+          });
+        });
+      })();
+      </script>
+<%       elsif field["type"] == "boolean" %>
+      <%= check_box_tag name, "true", false, id: id %>
+<%       elsif field["type"] == "number" %>
+      <%= number_field_tag name, nil, id: id, step: "any", required: field["required"] %>
+<%       else %>
+      <%= text_field_tag name, nil, id: id, required: field["required"] %>
+<%       end %>
+    </div>
+<%     end %>
+    <button type="submit" class="qube-choice-button">
+      <%= choice["label"] %>
+<%     if choice["detail"].present? %>
+      <span class="qube-choice-detail"><%= choice["detail"] %></span>
+<%     end %>
+    </button>
+<%     if choice["description"].present? %>
+    <p class="qube-choice-description"><%= choice["description"] %></p>
+<%     end %>
+  </form>
+<%   end %>
+</section>
+<% end %>

@@ -1,0 +1,42 @@
+# The customer's QuickBooks Desktop connection, from your app's side: the account that keeps it,
+# and what your app does with each of the connection's own events. QubeRails::ConnectionEvents
+# (the qube_rails gem) does the rest: checking the event is this account's connection's, newer
+# than the last one applied, under the account's row lock.
+#
+# The account keeps the connection's id and the last event's revision in qube_connection_id and
+# qube_connection_revision (the migration beside this). Onboarding saves the id; start a run on
+# it with QuickbooksDesktop::<Operation>.start(record, Connection.new(account).saved_connection_id).
+module QuickbooksDesktop
+  class Connection < QubeRails::ConnectionEvents
+    # Your account, by the id in the connection's webhook URL.
+    def self.find_record(id)
+      <%= model_name %>.find(id)
+    end
+
+    # QuickBooks is connected: mark the account connected, and start syncing.
+    def connected(event)
+      log_event(event)
+    end
+
+    # They chose "Cancel setup" on the setup page: offer Connect QuickBooks Desktop again.
+    def setup_cancelled(event)
+      log_event(event)
+    end
+
+    # Your requests are waiting and QuickBooks hasn't been reached. Show the customer, and tell
+    # them what event.stall_reason says:
+    # - "not_checking_in": the Web Connector isn't calling in. Turn on the QuickBooks computer,
+    #   and check the Web Connector runs.
+    # - "quickbooks_unavailable": it is calling in and can't reach QuickBooks. Open QuickBooks
+    #   with the company file.
+    # A stall can send this again with a new reason: show the newest. resumed clears it.
+    def stalled(event)
+      log_event(event)
+    end
+
+    # Clear what stalled showed, whichever its reason.
+    def resumed(event)
+      log_event(event)
+    end
+  end
+end

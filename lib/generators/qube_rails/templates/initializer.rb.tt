@@ -1,0 +1,59 @@
+# QuBe Sync (qube_rails): the only place the engine reads your app from. A setting left unset
+# raises QubeRails::NotConfigured, naming this file, the first time it's needed; an unset
+# authorize_question refuses every answer and search instead. Fill in authorize_question and
+# current_account before anything else.
+#
+# The engine's routes come from `mount QubeRails::Engine => "/"` in config/routes.rb:
+#   POST /quickbooks/connect                           onboarding, behind your sign-in
+#   POST /webhooks/qube/:operation/:record_id          QuBe Sync's webhooks (signed, no sign-in)
+#   POST /qube/questions/:operation/:record_id         an answer, behind your sign-in and CSRF
+#   GET  /qube/questions/:operation/:record_id/search  a record field's matches
+QubeRails.configure do |config|
+  # Each operation by the slug in its webhook URL, as class names (resolved when used, so code
+  # reloading works). Add one per QubeRails::Operation subclass in app/services/quickbooks_desktop/.
+  # A fixed list: the webhook endpoint answers 404 for any other slug.
+  config.operations = {
+    # "create_invoice" => "QuickbooksDesktop::CreateInvoice",
+  }
+
+  # The connection class, which takes the connection's own events
+  # (QUBE_WEBHOOK_URL/connection/<account id>) and keeps the connection's id on the account.
+  config.connection = "QuickbooksDesktop::Connection"
+
+  # The signed-in customer's account, from the controller handling the request (your
+  # current_user and other helpers are on it). Onboarding keeps the connection on it; nil
+  # answers 401.
+  # config.current_account = ->(controller) { controller.current_user.account }
+
+  # Whether the signed-in user may answer or search the question a run asks about record, for the
+  # operation with that slug. Only true allows. The record's id comes from the URL, so this is
+  # all that keeps one customer's users off another's records: until it's set, every answer and
+  # search is refused (and logged).
+  # config.authorize_question = ->(controller, record, operation) {
+  #   record.<%= model_name.underscore %>_id == controller.current_user.<%= model_name.underscore %>_id
+  # }
+
+  # How a verified webhook reaches a worker. The default is ActiveJob (QubeRails::WebhookJob) on
+  # config.queue. For another queue, hand it on and call QubeRails.run from its worker:
+  # config.enqueue = ->(delivery) {
+  #   MyQueue.push(delivery[:operation], delivery[:record_id], delivery[:body])
+  # }
+  # config.queue = :default
+
+  # Where notification delivery ids are remembered, so a retry is taken once: seen?(key) and
+  # remember(key). The default is Rails.cache for a day: make that a store your workers share
+  # (Redis, Solid Cache), or pass one here.
+  # config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
+
+  # The controller onboarding and the questions inherit, so your sign-in and CSRF apply.
+  # config.parent_controller = "ApplicationController"
+
+  # Read from the environment when unset: QUBE_API_KEY, QUBE_URL (https://qubesync.com) and
+  # QUBE_WEBHOOK_SECRET, which `qube env --write .env` writes, and QUBE_WEBHOOK_URL, the base of
+  # each webhook URL (`qube listen --write-env .env` in development; your app's /webhooks/qube in
+  # production). webhook_secret may be a list while a secret rotates. Never logged.
+  # config.api_key = ENV.fetch("QUBE_API_KEY")
+  # config.base_url = "https://qubesync.com"
+  # config.webhook_secret = [ENV.fetch("QUBE_WEBHOOK_SECRET"), ENV.fetch("QUBE_WEBHOOK_SECRET_OLD")]
+  # config.webhook_url = "https://example.com/webhooks/qube"
+end
