@@ -77,7 +77,7 @@ RSpec.describe "Onboarding", type: :request do
     it "adopts a connection whose create landed but whose id was never saved, making no second one" do
       row = make_connection(account, qube_id: nil, status: "pending")
       stub_request(:get, api_url("/connections"))
-        .to_return(json_data([{ "id" => "conn-q-lost", "webhook_url" => row.webhook_url }]))
+        .to_return(json_data([qube_connection_for(row)]))
       stub_request(:put, api_url("/connections/conn-q-lost")).to_return(json_data({}))
       stub_request(:post, api_url("/connections/conn-q-lost/onboarding-url"))
         .to_return(json_data("links" => { "onboarding" => onboarding }))

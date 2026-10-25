@@ -4,8 +4,8 @@
 # and the QuickBooks ids it learns, each against its connection. Your own tables need nothing.
 #
 # The polymorphic ids (owner_id, record_id) are strings, so integer and UUID keys both fit.
-# input (what the run was started with, so a start can be resent unchanged), question and links
-# are JSON kept as text (QubeRails::JSONCoder says why). The 100-character
+# input (what the run was started with, so a start can be resent unchanged), error (a failed
+# run's, as its event carried it), question and links are JSON kept as text (QubeRails::JSONCoder says why). The 100-character
 # limits keep the composite indexes inside MySQL's 3072-byte key limit under utf8mb4.
 class CreateQubeTables < ActiveRecord::Migration[5.2]
   def change
@@ -33,6 +33,9 @@ class CreateQubeTables < ActiveRecord::Migration[5.2]
       t.integer :revision, null: false, default: 0
       t.string :state, null: false, default: "starting"
       t.string :outcome
+      t.text :error
+      t.text :cancel_reason
+      t.datetime :ended_at
       t.text :question
       t.text :links
       t.string :run_url

@@ -60,7 +60,7 @@ RSpec.describe QubeRails::ConnectionEvents do
 
     it "adopts QuBe Sync's connection made with the row's webhook URL, then applies the event" do
       stub_request(:get, api_url("/connections"))
-        .to_return(json_data([{ "id" => QubeRailsHelpers::QUBE_ID, "webhook_url" => connection.webhook_url }]))
+        .to_return(json_data([qube_connection_for(connection, "id" => QubeRailsHelpers::QUBE_ID)]))
 
       QubeRails.run("connection", connection.id.to_s, vector_body("connection.connected"))
 

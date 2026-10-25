@@ -179,7 +179,9 @@ module QubeRails
     end
 
     # What an operation does with the rest of its run's events: each operation says, and until it
-    # does, each logs.
+    # does, each logs. The engine has already kept every ending on the run (state, outcome, error,
+    # cancel_reason, ended_at: the qube_rails/run_status partial shows it), so these are for your
+    # own records: an invoice marked sent, a sync's last-finished time.
     def notification(event)
       log_event(event)
     end
@@ -268,6 +270,16 @@ module QubeRails
       # Applied already, or older than what was.
       return unless event.newer_than?(run.revision)
 
+      # The run as of this event, before your handler runs, so every ending is on the run row
+      # whatever the handler does: state, outcome, and a failure's error or a cancel's reason.
+      run.state = event.run_state || run_state_for(event)
+      run.outcome = event.outcome
+      if event.failed? || event.cancelled? || event.completed?
+        run.ended_at ||= Time.now
+        run.error = event.error if event.failed?
+        run.cancel_reason = event.cancel_reason if event.cancelled?
+      end
+
       if event.awaiting_input?
         question(event)
       elsif event.completed?
@@ -280,10 +292,17 @@ module QubeRails
         run.question = nil
         run.links = nil
       end
-      run.state = event.run_state if event.run_state
-      run.outcome = event.outcome
       run.revision = event.revision
       run.save!
+    end
+
+    def run_state_for(event)
+      if event.awaiting_input? then "awaiting_input"
+      elsif event.completed? then "completed"
+      elsif event.failed? then "failed"
+      elsif event.cancelled? then "cancelled"
+      else run.state
+      end
     end
 
     # Runs the block once per delivery_id, kept in the dedupe store (config.dedupe).

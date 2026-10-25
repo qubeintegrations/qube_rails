@@ -1,2 +1,3 @@
 <h1>Invoice <%= @invoice.number %></h1>
+<%= render "qube_rails/run_status", record: @invoice, operation: "create_invoice" %>
 <%= render "qube_rails/question", record: @invoice, operation: "create_invoice" %>

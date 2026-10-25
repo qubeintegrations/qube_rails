@@ -20,7 +20,9 @@ module QubeRails
     belongs_to :connection, class_name: "QubeRails::Connection", inverse_of: :runs
     belongs_to :record, polymorphic: true
 
-    JSONCoder.serialize(self, :input, :question, :links)
+    JSONCoder.serialize(self, :input, :error, :question, :links)
+
+    ENDED_STATES = %w[completed failed cancelled].freeze
 
     # record's newest run of operation, or nil: the one whose question the partial shows.
     def self.latest_for(record, operation)
@@ -43,8 +45,71 @@ module QubeRails
       "#{QubeRails.config.webhook_url}/runs/#{ERB::Util.url_encode(id.to_s)}"
     end
 
+    def humanize(word)
+      text = word.to_s.tr("_", " ")
+      text.empty? ? text : text[0].upcase + text[1..-1]
+    end
+    private :humanize
+
     def operation_slug
       self[:operation]
+    end
+
+    # Whether it has ended: completed, failed or cancelled.
+    def ended?
+      ENDED_STATES.include?(state)
+    end
+
+    def failed?
+      state == "failed"
+    end
+
+    def cancelled?
+      state == "cancelled"
+    end
+
+    # Where it stands, in one plain sentence for a person: "Added to QuickBooks", "Done",
+    # "Failed: <message>", "Cancelled: <reason>", "Waiting for your answer" or "Running".
+    def summary_text
+      case state
+      when "completed"
+        case outcome.to_s
+        when "added" then "Added to QuickBooks"
+        when "", "completed" then "Done"
+        else "Done: #{humanize(outcome)}"
+        end
+      when "failed"
+        message = error_message
+        message ? "Failed: #{message}" : "Failed"
+      when "cancelled"
+        cancel_reason.to_s.strip.empty? ? "Cancelled" : "Cancelled: #{cancel_reason}"
+      when "awaiting_input" then "Waiting for your answer"
+      else "Running"
+      end
+    end
+
+    # A failed run's message: its error's own (a sentence, or the message of a code, message and
+    # detail), else its outcome in words, or nil.
+    def error_message
+      text =
+        case error
+        when String then error
+        when Hash then error["message"] || error["detail"]
+        end
+      text = text.to_s.strip
+      return text unless text.empty?
+      return "it couldn't be started" if outcome.nil? && ended_at.nil?
+
+      outcome.to_s.empty? || outcome == "failed" ? nil : humanize(outcome)
+    end
+
+    # The error's detail, when it carries one apart from its message.
+    def error_detail
+      return nil unless error.is_a?(Hash)
+
+      detail = error["detail"]
+      detail = detail.to_s.strip
+      detail.empty? || detail == error_message ? nil : detail
     end
 
     # The question it's asking, as its webhook's prompt had it, or nil.

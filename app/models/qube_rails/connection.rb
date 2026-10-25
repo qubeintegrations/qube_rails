@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "erb"
+require "time"
 
 module QubeRails
   # One QuickBooks Desktop connection: a company file on a customer's computer, reached through
@@ -45,17 +46,33 @@ module QubeRails
       status == "connected"
     end
 
-    # For a row without a qube_id: QuBe Sync's connection whose webhook URL is this row's, when a
-    # create landed but its id was never saved (it didn't commit, or the process died between the
-    # call and the save). Saves and returns the id, or nil when there's none, so a second
-    # connection is never made for one row.
+    # How long QuBe Sync's onboarding link lasts from when a connection is made (or its link is
+    # made again): two days. Its connections carry no creation time, so this dates them.
+    ONBOARDING_LINK_SECONDS = 2 * 24 * 60 * 60
+    # Clock difference allowed between this app and QuBe Sync.
+    CLOCK_SKEW_SECONDS = 5 * 60
+
+    # For a row without a qube_id: QuBe Sync's connection made for it, when a create landed but
+    # its id was never saved (it didn't commit, or the process died between the call and the
+    # save). Saves and returns the id, or nil, so a second connection is never made for one row.
+    #
+    # It lists the app's connections (GET /api/v2/connections, which isn't paged) and adopts one
+    # only when exactly one has this row's webhook URL, has never connected (last_connected_at is
+    # null), was made after this row (its onboarding link expires two days after it's made, so
+    # no earlier than two days after the row), and has the row's name when the row has one. So a
+    # row id used again (MySQL 5.7 after a restart, a restored database) never takes an old
+    # connection. The listing only runs for a row without an id, which is rare.
     def adopt_qube_connection
       return qube_id unless qube_id.to_s.empty?
 
-      found = Array(QubeRails.client.list_connections).find do |made|
-        made.is_a?(Hash) && made["webhook_url"].to_s.chomp("/") == webhook_url
+      candidates = Array(QubeRails.client.list_connections).select { |made| made_for_this_row?(made) }
+      if candidates.size > 1
+        QubeRails.logger.warn("QuBe Sync: connection #{id} has no qube_id and #{candidates.size} of QuBe Sync's " \
+                              "connections could be its; adopted none")
+        return nil
       end
-      return nil unless found && !found["id"].to_s.empty?
+      found = candidates.first
+      return nil unless found
 
       QubeRails.logger.info("QuBe Sync: connection #{id} adopted QuBe Sync's connection #{found["id"]}, " \
                             "made for it before its id was saved")
@@ -144,6 +161,24 @@ module QubeRails
     end
 
     private
+
+    def made_for_this_row?(made)
+      return false unless made.is_a?(Hash) && !made["id"].to_s.empty?
+      return false unless made["webhook_url"].to_s.chomp("/") == webhook_url
+      return false unless made["last_connected_at"].nil?
+      return false unless name.to_s.empty? || made["name"] == name
+
+      expires = parse_time(made["onboarding_token_expires_at"])
+      return false unless expires && created_at
+
+      expires - ONBOARDING_LINK_SECONDS >= created_at - CLOCK_SKEW_SECONDS
+    end
+
+    def parse_time(value)
+      Time.iso8601(value.to_s)
+    rescue ArgumentError
+      nil
+    end
 
     def only_one(scope, what)
       rows = scope.limit(2).to_a

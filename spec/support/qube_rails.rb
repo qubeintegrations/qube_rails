@@ -66,6 +66,12 @@ module QubeRailsHelpers
     vector_body(name, { "reference" => run.reference, "connection_id" => run.connection.qube_id }.merge(changes))
   end
 
+  # One of QuBe Sync's connections, as GET /api/v2/connections lists it, made for row just now.
+  def qube_connection_for(row, changes = {})
+    { "id" => "conn-q-lost", "webhook_url" => row.webhook_url, "last_connected_at" => nil, "name" => row.name,
+      "onboarding_token_expires_at" => (Time.now + 2 * 24 * 60 * 60).utc.iso8601 }.merge(changes)
+  end
+
   def api_url(path)
     "#{BASE_URL}/api/v2#{path}"
   end
