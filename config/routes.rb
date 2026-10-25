@@ -12,6 +12,9 @@ QubeRails::Engine.routes.draw do
   post "webhooks/qube/runs/:id", to: "webhooks#run_event", as: :run_webhook
   post "webhooks/qube/connections/:id", to: "webhooks#connection_event", as: :connection_webhook
 
+  # A start QuBe Sync never confirmed, sent again, from the run status partial.
+  post "qube/runs/:id/retry_start", to: "runs#retry_start", as: :retry_start
+
   # Your user's answer to a run's question, from the question partial, and a record field's
   # search.
   post "qube/questions/runs/:id", to: "questions#create", as: :question

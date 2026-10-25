@@ -56,6 +56,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
+| `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
 
 The webhook routes verify the signature (401 if it doesn't check out), answer 404 when the row
 isn't there, enqueue, and answer 200. No sign-in, no CSRF, the raw body, any content type, up to
@@ -278,7 +279,7 @@ module QuickbooksDesktop
       without_nils({
         operation: "invoice.create",
         params: {
-          # Its ListID on this connection when it's linked, else its name.
+          # Its ListID on this connection when it's linked, otherwise its name.
           customer_ref: quickbooks_ref(record.customer, kind: "customer", name: record.customer&.name),
           ref_number: record.number,
           invoice_line_add: record.lines.map { |line|
@@ -364,9 +365,17 @@ The engine keeps every ending on the run row before your handler runs, under the
 `state`, `outcome`, a failure's `error` (as the event carried it: a sentence, or its code,
 message and detail), a cancel's `cancel_reason`, and `ended_at`. So a run's result is there
 whether or not your `ended` and `failed` handlers write anything; those are for your own records.
-`run.ended?`, `run.failed?` and `run.cancelled?` say which, and `run.summary_text` says it in a
-sentence: "Added to QuickBooks", "Done", "Failed: <message>", "Cancelled: <reason>", "Waiting for
-your answer" or "Running".
+`run.ended?`, `run.failed?` and `run.cancelled?` say which (a run that completed on a
+`cancelled` outcome, where your app chose to stop, counts as cancelled), and `run.summary_text`
+says it in a sentence: "Added to QuickBooks", "Done", "Failed: <message>", "Cancelled: <reason>",
+"Waiting for your answer", "Starting", "Not confirmed by QuBe Sync yet" or "Running".
+
+A start QuBe Sync hasn't confirmed for a minute (`run.unconfirmed?`: still `starting`, after a
+start that got no answer) reads "Not confirmed by QuBe Sync yet", and the partial offers a "Try
+the start again" button. It posts to `POST qube/runs/:id/retry_start`, behind your sign-in and
+CSRF, which runs the same `authorize_question` policy as the questions (404 otherwise), answers
+409 for a run that isn't `starting`, calls `run.retry_start!` (same reference, so a start that did
+land answers with its run) and redirects back with 303.
 
 Show the latest run's on the record's page:
 

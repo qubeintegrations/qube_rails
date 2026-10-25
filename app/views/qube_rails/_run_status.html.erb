@@ -1,5 +1,6 @@
 <%# Where record's latest run of an operation stands, in a sentence, and what went wrong when it
-    failed, or nothing when the record has no runs of it. Render it on the record's page:
+    failed, or nothing when the record has no runs of it. A start QuBe Sync hasn't confirmed for a
+    minute gets a "Try the start again" button, which resends it with the same reference. Render it on the record's page:
       render "qube_rails/run_status", record: @invoice, operation: "create_invoice"
     It reads the run row the engine keeps (QubeRails::Run#summary_text, #error_detail). ERB
     escapes everything it prints, and the qube- classes are for your CSS. For other markup, copy
@@ -10,10 +11,14 @@
 <% end %>
 <% run = QubeRails::Run.latest_for(record, operation) %>
 <% if run %>
-<div class="qube-run-status qube-run-<%= run.state %>">
+<div class="qube-run-status qube-run-<%= run.cancelled? ? "cancelled" : run.state %>">
   <p class="qube-run-summary"><%= run.summary_text %></p>
 <%   if run.failed? && run.error_detail %>
   <p class="qube-run-error-detail"><%= run.error_detail %></p>
+<%   end %>
+<%   if run.unconfirmed? %>
+  <%= button_to "Try the start again", qube_rails.retry_start_path(run), class: "qube-retry-start",
+                form: { class: "qube-retry-start-form" } %>
 <%   end %>
 </div>
 <% end %>

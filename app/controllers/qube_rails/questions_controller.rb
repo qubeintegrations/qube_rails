@@ -17,6 +17,8 @@ module QubeRails
   class QuestionsController < QubeRails.config.parent_controller.constantize
     CHANGED = "This question has changed; reload."
 
+    include RunAuthorization
+
     before_action :find_question
 
     # Posts your user's choice, with what they filled in for its fields, to the question's
@@ -59,20 +61,8 @@ module QubeRails
     private
 
     def find_question
-      authorize = QubeRails.config.authorize_question
-      run = QubeRails::Run.find_by(id: params[:id])
-      operation = run && QubeRails.config.operation_class(run.operation)
-      record = operation && operation.record_for(run)
-      return head(:not_found) unless record
-
-      # Only true lets it through: a truthy record, or a forgotten return, doesn't. Refused, it
-      # answers 404, as for a run that doesn't exist, so a user can't tell another customer's
-      # run is there.
-      unless authorize.call(self, record, run) == true
-        QubeRails.logger.warn("QuBe Sync: refused an answer or search for run #{run.id}: " \
-                              "config.authorize_question said no")
-        return refuse
-      end
+      run, operation, record = authorized_run("an answer or search")
+      return refuse unless run
 
       @operation = operation.new(record, run)
       @question = run.open_question

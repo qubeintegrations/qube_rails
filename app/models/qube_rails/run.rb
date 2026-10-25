@@ -64,14 +64,29 @@ module QubeRails
       state == "failed"
     end
 
+    # Cancelled by your app (state "cancelled"), or a chart that ended on its own "cancelled"
+    # outcome (the app chose to stop): neither is a success.
     def cancelled?
-      state == "cancelled"
+      state == "cancelled" || (state == "completed" && outcome == "cancelled")
+    end
+
+    # How long a start may go unconfirmed before the status says so and offers to send it again.
+    UNCONFIRMED_AFTER_SECONDS = 60
+
+    # A start QuBe Sync hasn't confirmed for a minute: send it again with retry_start!.
+    def unconfirmed?
+      state == "starting" && created_at && created_at < Time.now - UNCONFIRMED_AFTER_SECONDS
     end
 
     # Where it stands, in one plain sentence for a person: "Added to QuickBooks", "Done",
-    # "Failed: <message>", "Cancelled: <reason>", "Waiting for your answer" or "Running".
+    # "Failed: <message>", "Cancelled: <reason>", "Waiting for your answer", "Starting", "Not
+    # confirmed by QuBe Sync yet" or "Running".
     def summary_text
+      return "Cancelled: #{cancel_reason_text}" if cancelled?
+
       case state
+      when "starting"
+        unconfirmed? ? "Not confirmed by QuBe Sync yet" : "Starting"
       when "completed"
         case outcome.to_s
         when "added" then "Added to QuickBooks"
@@ -81,11 +96,15 @@ module QubeRails
       when "failed"
         message = error_message
         message ? "Failed: #{message}" : "Failed"
-      when "cancelled"
-        cancel_reason.to_s.strip.empty? ? "Cancelled" : "Cancelled: #{cancel_reason}"
       when "awaiting_input" then "Waiting for your answer"
       else "Running"
       end
+    end
+
+    # Why it was cancelled: the reason it carried, else what a cancelled outcome means.
+    def cancel_reason_text
+      reason = cancel_reason.to_s.strip
+      reason.empty? ? "your app chose to stop" : reason
     end
 
     # A failed run's message: its error's own (a sentence, or the message of a code, message and

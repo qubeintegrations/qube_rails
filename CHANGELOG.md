@@ -45,7 +45,9 @@ into every Rails app, so the app keeps only its own.
 - `Operation#quickbooks_ref` and `#link_references`.
 - Every ending kept on the run row (state, outcome, error, cancel_reason, ended_at) before the
   app's handler runs; `Run#ended?`, `#failed?`, `#cancelled?`, `#summary_text`, and the
-  `qube_rails/run_status` partial.
+  `qube_rails/run_status` partial. A completed run on a `cancelled` outcome reads as cancelled; a
+  start unconfirmed for a minute reads "Not confirmed by QuBe Sync yet", with a "Try the start
+  again" button posting to `POST qube/runs/:id/retry_start`.
 - Adoption takes only a never-connected QuBe Sync connection whose `created_at` is at or after the
   row's, with its webhook URL and name; one with no `created_at` is never adopted.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,

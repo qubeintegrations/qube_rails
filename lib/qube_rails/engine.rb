@@ -11,6 +11,7 @@ module QubeRails
   #   POST webhooks/qube/connections/:id           a connection's webhooks: no sign-in, no CSRF
   #   POST qube/questions/runs/:id                 an answer, behind your sign-in and CSRF
   #   GET  qube/questions/runs/:id/search          a record field's matches, behind sign-in
+  #   POST qube/runs/:id/retry_start               an unconfirmed start sent again, likewise
   # Your views reach them through the qube_rails route proxy: qube_rails.connections_path,
   # qube_rails.connection_onboarding_path(connection).
   class Engine < ::Rails::Engine

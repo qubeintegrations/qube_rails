@@ -32,6 +32,22 @@ RSpec.describe "The run status partial", type: :request do
     expect(page.at_css(".qube-run-error-detail")).to be_nil
   end
 
+  it "offers to try an unconfirmed start again, and only then" do
+    travel_to(2.minutes.ago) { make_run(invoice, connection).update!(state: "starting") }
+    button = page.at_css("form.qube-retry-start-form")
+
+    expect(page.at_css(".qube-run-summary").text).to eq("Not confirmed by QuBe Sync yet")
+    expect(button["action"]).to eq("/qube/runs/#{QubeRails::Run.last.id}/retry_start")
+    expect(button.at_css("button.qube-retry-start, input.qube-retry-start")).not_to be_nil
+
+    make_run(invoice, connection).update!(state: "starting") # a younger one, now the latest
+    expect(page.at_css(".qube-run-summary").text).to eq("Starting")
+    expect(page.at_css("form.qube-retry-start-form")).to be_nil
+
+    make_run(invoice, connection).update!(state: "running")
+    expect(page.at_css("form.qube-retry-start-form")).to be_nil
+  end
+
   it "shows nothing for a record with no runs" do
     expect(page.at_css(".qube-run-status")).to be_nil
   end

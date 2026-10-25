@@ -22,6 +22,8 @@ module QubeRails
     APIError = QubeSync::APIError
     SignatureError = QubeSync::Webhooks::SignatureError
     ParseError = QubeSync::Webhooks::ParseError
+    # What a call that got no answer raises (a timeout, a refused or dropped connection).
+    NETWORK_ERRORS = QubeSync::Client::NETWORK_ERRORS
 
     module_function
 
