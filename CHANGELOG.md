@@ -43,6 +43,10 @@ into every Rails app, so the app keeps only its own.
   `QubeRails::WebhookJob` retries (`retry_on`, `job_attempts`, default 10) and logs when it gives
   up.
 - `Operation#quickbooks_ref` and `#link_references`.
+- Every ending kept on the run row (state, outcome, error, cancel_reason, ended_at) before the
+  app's handler runs; `Run#ended?`, `#failed?`, `#cancelled?`, `#summary_text`, and the
+  `qube_rails/run_status` partial.
+- Adoption takes only a never-connected QuBe Sync connection made after the row, with its name.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,
   the engine's migrations and the mount line.
 

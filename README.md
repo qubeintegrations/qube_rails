@@ -196,6 +196,14 @@ QuBe Sync's connection made with the row's webhook URL and keeps its id, or rais
 `QubeRails::NotReady`, so the job tries again shortly. Connect does the same for a row left
 without an id (a crash between the create and the save), so one row never gets two connections.
 
+Adopting lists the app's connections (`GET /api/v2/connections`, which isn't paged) and takes
+only the one with the row's webhook URL that has never connected (`last_connected_at` is null),
+was made after the row (its onboarding link expires two days after it's made; the listing carries
+no creation time), and has the row's name when the row has one; if two qualify it takes neither.
+So a row id used again (MySQL 5.7 after a restart, a restored database) never takes an old
+connection. The unpaged listing is acceptable because it only runs for a row without an id,
+which is rare: a lost create, or an event that beat the save.
+
 ```ruby
 module QuickbooksDesktop
   class ConnectionEvents < QubeRails::ConnectionEvents
@@ -343,11 +351,32 @@ as it is, and refuses one that `failed`. (The gem's client also resends a start 
 answer twice itself, within 60 seconds, with the same key.)
 
 A `QubeRails::Run` keeps `operation`, `record`, `connection`, `reference`, `revision`, `state`,
-`outcome`, and the open `question` and its `links`. Each event is applied under the run row's
+`outcome`, `error`, `cancel_reason`, `ended_at`, and the open `question` and its `links`. Each event is applied under the run row's
 lock: one whose reference isn't the run's, or whose `connection_id` isn't its connection's, is
 skipped and logged; a notification is taken once; anything else only when its revision is newer
 than the last applied. Handlers see `record`, `run` and `connection`. A handler you don't write
 logs.
+
+## Run status
+
+The engine keeps every ending on the run row before your handler runs, under the same lock:
+`state`, `outcome`, a failure's `error` (as the event carried it: a sentence, or its code,
+message and detail), a cancel's `cancel_reason`, and `ended_at`. So a run's result is there
+whether or not your `ended` and `failed` handlers write anything; those are for your own records.
+`run.ended?`, `run.failed?` and `run.cancelled?` say which, and `run.summary_text` says it in a
+sentence: "Added to QuickBooks", "Done", "Failed: <message>", "Cancelled: <reason>", "Waiting for
+your answer" or "Running".
+
+Show the latest run's on the record's page:
+
+```erb
+<%= render "qube_rails/run_status", record: @invoice, operation: "create_invoice" %>
+```
+
+Its locals are `record` and `operation`. It shows the summary (`.qube-run-summary`, inside
+`.qube-run-status.qube-run-<state>`) and, for a failure, the error's detail
+(`.qube-run-error-detail`), and nothing for a record with no runs. Copy it to
+`app/views/qube_rails/_run_status.html.erb` for other markup.
 
 ## Questions
 
