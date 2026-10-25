@@ -46,9 +46,6 @@ module QubeRails
       status == "connected"
     end
 
-    # How long QuBe Sync's onboarding link lasts from when a connection is made (or its link is
-    # made again): two days. Its connections carry no creation time, so this dates them.
-    ONBOARDING_LINK_SECONDS = 2 * 24 * 60 * 60
     # Clock difference allowed between this app and QuBe Sync.
     CLOCK_SKEW_SECONDS = 5 * 60
 
@@ -58,14 +55,19 @@ module QubeRails
     #
     # It lists the app's connections (GET /api/v2/connections, which isn't paged) and adopts one
     # only when exactly one has this row's webhook URL, has never connected (last_connected_at is
-    # null), was made after this row (its onboarding link expires two days after it's made, so
-    # no earlier than two days after the row), and has the row's name when the row has one. So a
-    # row id used again (MySQL 5.7 after a restart, a restored database) never takes an old
-    # connection. The listing only runs for a row without an id, which is rare.
+    # null), was made at or after this row (its created_at), and has the row's name when the row
+    # has one. So a row id used again (MySQL 5.7 after a restart, a restored database) never takes
+    # an old connection. A connection with no created_at (a server from before v2 sent it) is
+    # never adopted. The listing only runs for a row without an id, which is rare.
     def adopt_qube_connection
       return qube_id unless qube_id.to_s.empty?
 
-      candidates = Array(QubeRails.client.list_connections).select { |made| made_for_this_row?(made) }
+      listed = Array(QubeRails.client.list_connections).select { |made| made.is_a?(Hash) }
+      if listed.any? { |made| made["created_at"].to_s.empty? && same_url?(made) }
+        QubeRails.logger.warn("QuBe Sync: connection #{id}: QuBe Sync's connections carry no created_at, so " \
+                              "none is adopted; a new one is made instead")
+      end
+      candidates = listed.select { |made| made_for_this_row?(made) }
       if candidates.size > 1
         QubeRails.logger.warn("QuBe Sync: connection #{id} has no qube_id and #{candidates.size} of QuBe Sync's " \
                               "connections could be its; adopted none")
@@ -162,16 +164,20 @@ module QubeRails
 
     private
 
+    def same_url?(made)
+      made["webhook_url"].to_s.chomp("/") == webhook_url
+    end
+
     def made_for_this_row?(made)
-      return false unless made.is_a?(Hash) && !made["id"].to_s.empty?
-      return false unless made["webhook_url"].to_s.chomp("/") == webhook_url
+      return false if made["id"].to_s.empty?
+      return false unless same_url?(made)
       return false unless made["last_connected_at"].nil?
       return false unless name.to_s.empty? || made["name"] == name
 
-      expires = parse_time(made["onboarding_token_expires_at"])
-      return false unless expires && created_at
+      made_at = parse_time(made["created_at"])
+      return false unless made_at && created_at
 
-      expires - ONBOARDING_LINK_SECONDS >= created_at - CLOCK_SKEW_SECONDS
+      made_at >= created_at - CLOCK_SKEW_SECONDS
     end
 
     def parse_time(value)

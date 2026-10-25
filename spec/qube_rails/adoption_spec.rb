@@ -16,9 +16,22 @@ RSpec.describe "Adopting QuBe Sync's connection for a row without a qube_id" do
   end
 
   it "skips a connection made before the row (a row id used again)" do
-    listing(qube_connection_for(row, "onboarding_token_expires_at" => (row.created_at + 3600).utc.iso8601))
+    listing(qube_connection_for(row, "created_at" => (row.created_at - 3600).utc.iso8601))
 
     expect(row.adopt_qube_connection).to be_nil
+  end
+
+  it "allows five minutes of clock difference" do
+    listing(qube_connection_for(row, "created_at" => (row.created_at - 240).utc.iso8601))
+
+    expect(row.adopt_qube_connection).to eq("conn-q-lost")
+  end
+
+  it "never adopts a connection with no created_at (an older server), and logs it once" do
+    listing(qube_connection_for(row, "created_at" => nil), qube_connection_for(row, "id" => "conn-q-2", "created_at" => nil))
+
+    expect(row.adopt_qube_connection).to be_nil
+    expect(log_output.scan("carry no created_at").size).to eq(1)
   end
 
   it "skips one that has connected" do
@@ -40,9 +53,8 @@ RSpec.describe "Adopting QuBe Sync's connection for a row without a qube_id" do
     expect(row.adopt_qube_connection).to eq("conn-q-lost")
   end
 
-  it "skips one with another webhook URL, or no onboarding time" do
-    listing(qube_connection_for(row, "webhook_url" => "https://elsewhere.example/webhooks/qube/connections/1"),
-            qube_connection_for(row, "id" => "conn-q-2", "onboarding_token_expires_at" => nil))
+  it "skips one with another webhook URL" do
+    listing(qube_connection_for(row, "webhook_url" => "https://elsewhere.example/webhooks/qube/connections/1"))
 
     expect(row.adopt_qube_connection).to be_nil
   end

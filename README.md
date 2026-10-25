@@ -198,8 +198,9 @@ without an id (a crash between the create and the save), so one row never gets t
 
 Adopting lists the app's connections (`GET /api/v2/connections`, which isn't paged) and takes
 only the one with the row's webhook URL that has never connected (`last_connected_at` is null),
-was made after the row (its onboarding link expires two days after it's made; the listing carries
-no creation time), and has the row's name when the row has one; if two qualify it takes neither.
+was made at or after the row (its `created_at`, with five minutes allowed for clock difference),
+and has the row's name when the row has one; if two qualify it takes neither. A connection with no
+`created_at` (from a server before it sent one) is never adopted, and that's logged.
 So a row id used again (MySQL 5.7 after a restart, a restored database) never takes an old
 connection. The unpaged listing is acceptable because it only runs for a row without an id,
 which is rare: a lost create, or an event that beat the save.
