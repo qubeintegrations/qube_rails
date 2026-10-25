@@ -1,58 +1,116 @@
 # frozen_string_literal: true
 
-RSpec.describe "POST /quickbooks/connect", type: :request do
+RSpec.describe "Onboarding", type: :request do
   let(:account) { Account.create!(name: "Riverbend") }
+  let(:signed_in) { { "X-Account" => account.id.to_s } }
   let(:onboarding) { "https://qube.example/onboard/abc" }
-  let(:webhook_url) { "https://app.example/webhooks/qube/connection/#{account.id}" }
 
-  it "creates a connection for an account without one, saves its id, and sends them to onboarding" do
-    created = stub_request(:post, api_url("/connections"))
-              .with(body: { webhook_url: webhook_url })
-              .to_return(json_data("id" => "conn-1", "links" => { "onboarding" => onboarding }))
+  describe "POST /quickbooks/connections" do
+    it "writes a connection row, makes QuBe Sync's with the row's webhook URL, and sends them to setup" do
+      created = stub_request(:post, api_url("/connections"))
+                .with { |req| JSON.parse(req.body)["webhook_url"] =~ %r{\Ahttps://app\.example/webhooks/qube/connections/\d+\z} }
+                .to_return(json_data("id" => "conn-q-1", "links" => { "onboarding" => onboarding }))
 
-    post "/quickbooks/connect", headers: { "X-Account" => account.id.to_s }
+      post "/quickbooks/connections", params: { name: " Main file " }, headers: signed_in
 
-    expect(created).to have_been_requested
-    expect(response).to have_http_status(:see_other)
-    expect(response).to redirect_to(onboarding)
-    expect(account.reload.qube_connection_id).to eq("conn-1")
+      connection = QubeRails::Connection.last
+      expect(created).to have_been_requested
+      expect(a_request(:post, api_url("/connections"))
+        .with(body: { webhook_url: connection.webhook_url, name: "Main file" })).to have_been_made
+      expect(response).to have_http_status(:see_other)
+      expect(response).to redirect_to(onboarding)
+      expect(connection).to have_attributes(owner: account, qube_id: "conn-q-1", status: "pending", name: "Main file")
+    end
+
+    it "makes another connection for an account that has one" do
+      make_connection(account)
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(QubeRails::Connection.owned_by(account).pluck(:qube_id))
+        .to contain_exactly(QubeRailsHelpers::QUBE_ID, "conn-q-2")
+    end
+
+    it "leaves the row without a qube_id when QuBe Sync doesn't answer" do
+      stub_request(:post, api_url("/connections")).to_return(status: 500, body: "")
+
+      expect { post "/quickbooks/connections", headers: signed_in }.to raise_error(QubeSync::APIError)
+      expect(QubeRails::Connection.last).to have_attributes(qube_id: nil, status: "pending")
+    end
+
+    it "is behind the app's sign-in" do
+      post "/quickbooks/connections"
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(QubeRails::Connection.count).to eq(0)
+    end
+
+    it "answers 401 when current_account finds no account" do
+      QubeRails.config.current_account = ->(_controller) { nil }
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(log_output).to include("config.current_account found no signed-in account")
+    end
+
+    it "raises naming the initializer when current_account isn't set" do
+      QubeRails.config.current_account = nil
+
+      expect { post "/quickbooks/connections", headers: signed_in }
+        .to raise_error(QubeRails::NotConfigured, %r{current_account.*config/initializers/qube_rails\.rb})
+    end
   end
 
-  it "reuses a saved connection: its webhook URL brought up to date, with a fresh link" do
-    account.update_columns(qube_connection_id: "conn-1", qube_connection_revision: 3)
-    updated = stub_request(:put, api_url("/connections/conn-1"))
-              .with(body: { webhook_url: webhook_url })
-              .to_return(json_data("id" => "conn-1"))
-    regenerated = stub_request(:post, api_url("/connections/conn-1/onboarding-url"))
-                  .to_return(json_data("id" => "conn-1", "links" => { "onboarding" => onboarding }))
+  describe "POST /quickbooks/connections/:id/onboarding" do
+    let!(:connection) { make_connection(account) }
 
-    post "/quickbooks/connect", headers: { "X-Account" => account.id.to_s }
+    it "brings the connection's webhook URL up to date and sends them back through setup" do
+      updated = stub_request(:put, api_url("/connections/#{connection.qube_id}"))
+                .with(body: { webhook_url: connection.webhook_url })
+                .to_return(json_data("id" => connection.qube_id))
+      regenerated = stub_request(:post, api_url("/connections/#{connection.qube_id}/onboarding-url"))
+                    .to_return(json_data("links" => { "onboarding" => onboarding }))
 
-    expect(updated).to have_been_requested
-    expect(regenerated).to have_been_requested
-    expect(a_request(:post, api_url("/connections"))).not_to have_been_made
-    expect(response).to redirect_to(onboarding)
-    expect(account.reload.qube_connection_revision).to eq(3)
-  end
+      post "/quickbooks/connections/#{connection.id}/onboarding", headers: signed_in
 
-  it "is behind the app's sign-in" do
-    post "/quickbooks/connect"
+      expect(updated).to have_been_requested
+      expect(regenerated).to have_been_requested
+      expect(response).to have_http_status(:see_other)
+      expect(response).to redirect_to(onboarding)
+    end
 
-    expect(response).to have_http_status(:unauthorized)
-  end
+    it "makes QuBe Sync's connection for a row left without one" do
+      connection.update!(qube_id: nil)
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-9", "links" => { "onboarding" => onboarding }))
 
-  it "answers 401 when current_account finds no account" do
-    QubeRails.config.current_account = ->(_controller) { nil }
-    post "/quickbooks/connect", headers: { "X-Account" => account.id.to_s }
+      post "/quickbooks/connections/#{connection.id}/onboarding", headers: signed_in
 
-    expect(response).to have_http_status(:unauthorized)
-    expect(log_output).to include("config.current_account found no signed-in account")
-  end
+      expect(connection.reload.qube_id).to eq("conn-q-9")
+      expect(response).to redirect_to(onboarding)
+    end
 
-  it "raises naming the initializer when current_account isn't set" do
-    QubeRails.config.current_account = nil
+    it "answers 404 for another account's connection, and asks QuBe Sync nothing" do
+      other = Account.create!(name: "Someone else")
 
-    expect { post "/quickbooks/connect", headers: { "X-Account" => account.id.to_s } }
-      .to raise_error(QubeRails::NotConfigured, %r{current_account.*config/initializers/qube_rails\.rb})
+      post "/quickbooks/connections/#{connection.id}/onboarding", headers: { "X-Account" => other.id.to_s }
+
+      expect(response).to have_http_status(:not_found)
+      expect(a_request(:any, /qube\.example/)).not_to have_been_made
+    end
+
+    it "answers 404 for a connection that isn't there" do
+      post "/quickbooks/connections/0/onboarding", headers: signed_in
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "is behind the app's sign-in" do
+      post "/quickbooks/connections/#{connection.id}/onboarding"
+
+      expect(response).to have_http_status(:unauthorized)
+    end
   end
 end

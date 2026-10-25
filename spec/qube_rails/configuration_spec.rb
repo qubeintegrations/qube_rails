@@ -13,7 +13,7 @@ RSpec.describe QubeRails::Configuration do
 
   {
     operations: "config.operations",
-    connection: "config.connection",
+    connection_events: "config.connection_events",
     current_account: "config.current_account",
     api_key: "QUBE_API_KEY",
     webhook_secret: "QUBE_WEBHOOK_SECRET",
@@ -52,21 +52,17 @@ RSpec.describe QubeRails::Configuration do
     expect(config.authorize_question).to be_nil
   end
 
-  it "keeps operations as class names, resolved at use" do
+  it "keeps operations and connection_events as class names, resolved at use" do
     config.operations = { create_invoice: QuickbooksDesktop::CreateInvoice, "other" => "QuickbooksDesktop::Nope" }
-    config.connection = "QuickbooksDesktop::Connection"
+    config.connection_events = QuickbooksDesktop::ConnectionEvents
 
     expect(config.operations).to eq("create_invoice" => "QuickbooksDesktop::CreateInvoice",
                                      "other" => "QuickbooksDesktop::Nope")
     expect(config.operation_class("create_invoice")).to eq(QuickbooksDesktop::CreateInvoice)
-    expect(config.handler_for("connection")).to eq(QuickbooksDesktop::Connection)
-    expect(config.operation_class("connection")).to be_nil
-    expect(config.handler_for("missing")).to be_nil
+    expect(config.operation_class("missing")).to be_nil
+    expect(config.connection_events).to eq("QuickbooksDesktop::ConnectionEvents")
+    expect(config.connection_events_class).to eq(QuickbooksDesktop::ConnectionEvents)
     expect { config.operation_class("other") }.to raise_error(NameError)
-  end
-
-  it "refuses connection as an operation's slug" do
-    expect { config.operations = { "connection" => "X" } }.to raise_error(ArgumentError, /config.connection/)
   end
 
   it "refuses settings that can't be called" do

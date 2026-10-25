@@ -4,39 +4,43 @@
 # current_account before anything else.
 #
 # The engine's routes come from `mount QubeRails::Engine => "/"` in config/routes.rb:
-#   POST /quickbooks/connect                           onboarding, behind your sign-in
-#   POST /webhooks/qube/:operation/:record_id          QuBe Sync's webhooks (signed, no sign-in)
-#   POST /qube/questions/:operation/:record_id         an answer, behind your sign-in and CSRF
-#   GET  /qube/questions/:operation/:record_id/search  a record field's matches
+#   POST /quickbooks/connections                 a new connection for the signed-in account
+#   POST /quickbooks/connections/:id/onboarding  one of its connections, through setup again
+#   POST /webhooks/qube/runs/:id                 QuBe Sync's webhooks (signed, no sign-in)
+#   POST /webhooks/qube/connections/:id
+#   POST /qube/questions/runs/:id                an answer, behind your sign-in and CSRF
+#   GET  /qube/questions/runs/:id/search         a record field's matches
+#
+# Its tables (qube_connections, qube_runs, qube_quickbooks_records) keep every connection, run
+# and QuickBooks id; your own tables need nothing.
 QubeRails.configure do |config|
-  # Each operation by the slug in its webhook URL, as class names (resolved when used, so code
-  # reloading works). Add one per QubeRails::Operation subclass in app/services/quickbooks_desktop/.
-  # A fixed list: the webhook endpoint answers 404 for any other slug.
+  # Each operation by its SLUG, as class names (resolved when used, so code reloading works).
+  # Add one per QubeRails::Operation subclass in app/services/quickbooks_desktop/.
   config.operations = {
     # "create_invoice" => "QuickbooksDesktop::CreateInvoice",
   }
 
-  # The connection class, which takes the connection's own events
-  # (QUBE_WEBHOOK_URL/connection/<account id>) and keeps the connection's id on the account.
-  config.connection = "QuickbooksDesktop::Connection"
+  # Your class for a connection's own events (connected, setup cancelled, stalled, resumed).
+  config.connection_events = "QuickbooksDesktop::ConnectionEvents"
 
   # The signed-in customer's account, from the controller handling the request (your
-  # current_user and other helpers are on it). Onboarding keeps the connection on it; nil
-  # answers 401.
+  # current_user and other helpers are on it). It owns the connections it makes, and only its
+  # own can be set up again; nil answers 401.
   # config.current_account = ->(controller) { controller.current_user.account }
 
-  # Whether the signed-in user may answer or search the question a run asks about record, for the
-  # operation with that slug. Only true allows. The record's id comes from the URL, so this is
-  # all that keeps one customer's users off another's records: until it's set, every answer and
-  # search is refused (and logged).
-  # config.authorize_question = ->(controller, record, operation) {
-  #   record.<%= model_name.underscore %>_id == controller.current_user.<%= model_name.underscore %>_id
+  # Whether the signed-in user may answer or search the question run asks about record. The run
+  # carries its operation and its connection, whose owner is the account that connected it. Only
+  # true allows (anything else answers 404). The run's id comes from the URL, so this is all that
+  # keeps one customer's users off another's: until it's set, every answer and search is refused
+  # (and logged).
+  # config.authorize_question = ->(controller, record, run) {
+  #   run.connection.owner == controller.current_user.account
   # }
 
   # How a verified webhook reaches a worker. The default is ActiveJob (QubeRails::WebhookJob) on
   # config.queue. For another queue, hand it on and call QubeRails.run from its worker:
   # config.enqueue = ->(delivery) {
-  #   MyQueue.push(delivery[:operation], delivery[:record_id], delivery[:body])
+  #   MyQueue.push(delivery[:kind], delivery[:id], delivery[:body])
   # }
   # config.queue = :default
 

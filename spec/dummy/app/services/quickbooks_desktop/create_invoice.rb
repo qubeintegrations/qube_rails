@@ -6,7 +6,7 @@ module QuickbooksDesktop
     SLUG = "create_invoice"
 
     def self.find_record(id)
-      Invoice.find(id)
+      Invoice.find_by(id: id)
     end
 
     # What each handler was called with, for the examples.
@@ -15,7 +15,7 @@ module QuickbooksDesktop
     end
 
     def input
-      { operation: "invoice.create", params: { ref_number: record.number } }
+      without_nils({ operation: "invoice.create", params: { ref_number: record.number, memo: nil } })
     end
 
     def notification(event)
@@ -23,8 +23,10 @@ module QuickbooksDesktop
     end
 
     def ended(event)
-      self.class.calls << [:ended, event.outcome]
-      record.update!(status: "sent", txn_id: event.dig("output", "record", "txn_id"))
+      self.class.calls << [:ended, event.outcome, run.id, connection.id]
+      record.update!(status: "sent")
+      txn = event.dig("output", "record") || {}
+      connection.link(record, kind: "invoice", qb_id: txn["txn_id"], name: txn["ref_number"]) if txn["txn_id"]
     end
 
     def failed(event)

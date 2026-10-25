@@ -4,5 +4,5 @@
 # after QubeRails.reset!, so an example can unset one.
 QubeRails.configure do |config|
   config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
-  config.connection = "QuickbooksDesktop::Connection"
+  config.connection_events = "QuickbooksDesktop::ConnectionEvents"
 end

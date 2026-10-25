@@ -24,16 +24,19 @@ RSpec.describe "The question routes", type: :request do
       ]
     }
   end
-  let(:invoice) do
-    Invoice.create!(account: account, number: "1001", qube_reference: "ref", qube_revision: 6,
-                    qube_question: question, qube_links: { "decisions" => decisions, "search" => search_url })
+  let(:invoice) { Invoice.create!(account: account, number: "1001") }
+  let(:connection) { make_connection(account) }
+  let(:run) do
+    make_run(invoice, connection, revision: 6).tap do |r|
+      r.update!(question: question, links: { "decisions" => decisions, "search" => search_url })
+    end
   end
   let(:signed_in) { { "X-Account" => account.id.to_s } }
 
   def answer(params, options = {})
     headers = options.fetch(:headers, signed_in)
-    record = options.fetch(:record, invoice)
-    post "/qube/questions/create_invoice/#{record.id}", params: params, headers: headers.merge("HTTP_REFERER" => "/invoices/#{record.id}")
+    target = options.fetch(:run, run)
+    post "/qube/questions/runs/#{target.id}", params: params, headers: headers.merge("HTTP_REFERER" => "/invoices/#{invoice.id}")
   end
 
   def api_error(status, body)
@@ -51,7 +54,7 @@ RSpec.describe "The question routes", type: :request do
       expect(answered).to have_been_requested
       expect(response).to have_http_status(:see_other)
       expect(response).to redirect_to("/invoices/#{invoice.id}")
-      expect(invoice.reload.qube_question).to be_nil
+      expect(run.reload.question).to be_nil
     end
 
     it "sends an unticked checkbox as false, and a number it can't read as typed" do
@@ -78,7 +81,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:conflict)
-      expect(invoice.reload.qube_question).to be_nil
+      expect(run.reload.question).to be_nil
     end
 
     it "forgets the question and answers 409 for a 400 not_awaiting_input" do
@@ -87,7 +90,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:conflict)
-      expect(invoice.reload.qube_question).to be_nil
+      expect(run.reload.question).to be_nil
     end
 
     it "keeps the question and says why for a 422" do
@@ -98,7 +101,7 @@ RSpec.describe "The question routes", type: :request do
 
       expect(response).to have_http_status(422)
       expect(response.body).to eq("QuBe Sync couldn't take that answer: count must be a whole number")
-      expect(invoice.reload.qube_question).to eq(question)
+      expect(run.reload.question).to eq(question)
     end
 
     it "raises for anything else QuBe Sync answers" do
@@ -113,13 +116,13 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:forbidden)
-      expect(log_output).to include("ERROR QuBe Sync: refused an answer or search for create_invoice #{invoice.id}: " \
+      expect(log_output).to include("ERROR QuBe Sync: refused an answer or search for run #{run.id}: " \
                                     "config.authorize_question isn't set in config/initializers/qube_rails.rb")
       expect(a_request(:post, decisions)).not_to have_been_made
-      expect(invoice.reload.qube_question).to eq(question)
+      expect(run.reload.question).to eq(question)
     end
 
-    it "answers 404 when authorize_question says no, so the record's existence doesn't show" do
+    it "answers 404 for another account's run, so its existence doesn't show" do
       other = Account.create!(name: "Someone else")
 
       answer({ choice: "use:1" }, headers: { "X-Account" => other.id.to_s })
@@ -129,19 +132,19 @@ RSpec.describe "The question routes", type: :request do
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
-    it "passes the controller, the record and the slug to authorize_question" do
+    it "passes the controller, the record and the run to authorize_question" do
       seen = nil
-      QubeRails.config.authorize_question = lambda do |controller, record, operation|
-        seen = [controller.class.name, record, operation]
+      QubeRails.config.authorize_question = lambda do |controller, record, asked|
+        seen = [controller.class.name, record, asked]
         false
       end
       answer(choice: "use:1")
 
-      expect(seen).to eq(["QubeRails::QuestionsController", invoice, "create_invoice"])
+      expect(seen).to eq(["QubeRails::QuestionsController", invoice, run])
     end
 
     it "lets only true through: a truthy answer is refused" do
-      QubeRails.config.authorize_question = ->(_controller, record, _operation) { record }
+      QubeRails.config.authorize_question = ->(_controller, record, _run) { record }
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:not_found)
@@ -155,26 +158,34 @@ RSpec.describe "The question routes", type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
+    it "answers 409 for a run that has stopped asking" do
+      run.update!(question: nil, links: nil)
+      answer(choice: "use:1")
+
+      expect(response).to have_http_status(:conflict)
+    end
+
     it "forgets the question and answers 409 for any other 400" do
       stub_request(:post, decisions).to_return(api_error(400, "errors" => { "code" => "bad_request" }))
 
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:conflict)
-      expect(invoice.reload.qube_question).to be_nil
+      expect(run.reload.question).to be_nil
     end
 
-    it "answers 404 for a slug no operation has, the connection's included" do
-      post "/qube/questions/connection/#{account.id}", params: { choice: "x" }, headers: signed_in
+    it "answers 404 for a run that isn't there, or whose operation isn't configured" do
+      post "/qube/questions/runs/0", params: { choice: "x" }, headers: signed_in
       expect(response).to have_http_status(:not_found)
 
-      post "/qube/questions/nope/1", params: { choice: "x" }, headers: signed_in
+      QubeRails.config.operations = { "sync_customer" => "QuickbooksDesktop::SyncCustomer" }
+      answer(choice: "use:1")
       expect(response).to have_http_status(:not_found)
     end
 
-    it "raises RecordNotFound, which Rails answers 404, for a record that doesn't exist" do
-      expect { post "/qube/questions/create_invoice/0", params: { choice: "x" }, headers: signed_in }
-        .to raise_error(ActiveRecord::RecordNotFound)
+    it "has no route for the old /:operation/:record_id URLs" do
+      expect { post "/qube/questions/create_invoice/#{invoice.id}", params: { choice: "x" }, headers: signed_in }
+        .to raise_error(ActionController::RoutingError)
     end
 
     it "is behind the app's sign-in" do
@@ -186,7 +197,7 @@ RSpec.describe "The question routes", type: :request do
 
   describe "GET /qube/questions/:operation/:record_id/search" do
     def search(q, headers: signed_in)
-      get "/qube/questions/create_invoice/#{invoice.id}/search", params: { field: "list_id", q: q }, headers: headers
+      get "/qube/questions/runs/#{run.id}/search", params: { field: "list_id", q: q }, headers: headers
     end
 
     it "returns the matches from the question's links.search" do
@@ -207,10 +218,10 @@ RSpec.describe "The question routes", type: :request do
       expect(JSON.parse(response.body)).to eq([])
       expect(response).to have_http_status(:ok)
 
-      get "/qube/questions/create_invoice/#{invoice.id}/search", params: { field: "", q: "river" }, headers: signed_in
+      get "/qube/questions/runs/#{run.id}/search", params: { field: "", q: "river" }, headers: signed_in
       expect(JSON.parse(response.body)).to eq([])
 
-      get "/qube/questions/create_invoice/#{invoice.id}/search", params: { field: "f" * 101, q: "river" },
+      get "/qube/questions/runs/#{run.id}/search", params: { field: "f" * 101, q: "river" },
                                                                  headers: signed_in
       expect(JSON.parse(response.body)).to eq([])
       expect(response).to have_http_status(:ok)
@@ -219,7 +230,7 @@ RSpec.describe "The question routes", type: :request do
     end
 
     it "answers 409 when the question has no search link" do
-      invoice.update_columns(qube_links: { "decisions" => decisions })
+      run.update!(links: { "decisions" => decisions })
 
       search("river")
 
@@ -236,7 +247,7 @@ RSpec.describe "The question routes", type: :request do
     end
 
     it "answers [] with 404 when authorize_question says no" do
-      QubeRails.config.authorize_question = ->(_controller, _record, _operation) { false }
+      QubeRails.config.authorize_question = ->(_controller, _record, _run) { false }
 
       search("river")
 

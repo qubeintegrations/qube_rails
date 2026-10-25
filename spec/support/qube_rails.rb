@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "securerandom"
 require "openssl"
 require "stringio"
 
@@ -15,10 +16,13 @@ module QubeRailsHelpers
   def configure_qube_rails
     QubeRails.reset!
     QubeRails.configure do |config|
-      config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
-      config.connection = "QuickbooksDesktop::Connection"
+      config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice",
+                            "sync_customer" => "QuickbooksDesktop::SyncCustomer" }
+      config.connection_events = "QuickbooksDesktop::ConnectionEvents"
       config.current_account = ->(controller) { controller.current_account }
-      config.authorize_question = ->(controller, record, _operation) { record.account_id == controller.current_account.id }
+      config.authorize_question = lambda do |controller, _record, run|
+        run.connection.owner == controller.current_account
+      end
       config.dedupe = QubeRails::CacheDedupe.new(ActiveSupport::Cache::MemoryStore.new)
       config.api_key = API_KEY
       config.base_url = BASE_URL
@@ -42,6 +46,24 @@ module QubeRailsHelpers
     JSON.generate(JSON.parse(entry["body"]).merge(changes))
   end
 
+  # The vectors' connection id: a connection made with it receives the vectors' events.
+  QUBE_ID = "0196a1c0-0000-7000-8000-00000000c001"
+
+  def make_connection(owner, qube_id: QUBE_ID, status: "connected")
+    QubeRails::Connection.create!(owner: owner, qube_id: qube_id, status: status)
+  end
+
+  def make_run(record, connection, operation: "create_invoice", reference: nil, revision: 0)
+    QubeRails::Run.create!(connection: connection, operation: operation, record: record,
+                           reference: reference || "#{operation}-#{record.id}-#{SecureRandom.uuid}",
+                           state: "running", revision: revision)
+  end
+
+  # A vector's run event, made this run's (its reference and its connection's qube_id).
+  def run_body(name, run, changes = {})
+    vector_body(name, { "reference" => run.reference, "connection_id" => run.connection.qube_id }.merge(changes))
+  end
+
   def api_url(path)
     "#{BASE_URL}/api/v2#{path}"
   end
@@ -62,7 +84,8 @@ RSpec.configure do |config|
       logger.formatter = proc { |severity, _time, _progname, message| "#{severity} #{message}\n" }
     end
     QuickbooksDesktop::CreateInvoice.calls.clear
-    QuickbooksDesktop::Connection.calls.clear
+    QuickbooksDesktop::SyncCustomer.calls.clear
+    QuickbooksDesktop::ConnectionEvents.calls.clear
   end
 
   config.after do

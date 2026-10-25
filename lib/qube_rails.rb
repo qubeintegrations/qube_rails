@@ -5,21 +5,27 @@ require "qube_rails/version"
 require "qube_rails/backend"
 require "qube_rails/configuration"
 require "qube_rails/cache_dedupe"
+require "qube_rails/json_coder"
 require "qube_rails/operation"
 require "qube_rails/connection_events"
 
 # QuBe Sync's Rails engine: the code that's the same in every Rails app's integration. Your app
 # keeps its own: config/initializers/qube_rails.rb (QubeRails.configure), an operation class per
-# way it starts a workflow (QubeRails::Operation), its connection class
-# (QubeRails::ConnectionEvents), and `mount QubeRails::Engine => "/"` in config/routes.rb.
+# way it starts a workflow (QubeRails::Operation), its class for a connection's events
+# (QubeRails::ConnectionEvents), and `mount QubeRails::Engine => "/"` in config/routes.rb. The
+# engine's own tables (qube_connections, qube_runs, qube_quickbooks_records) keep every
+# connection, every run and every QuickBooks id, so your tables need no QuBe columns.
 module QubeRails
-  # A webhook job for a slug none of the operations has (the endpoint answers those 404, so this
-  # is a job enqueued before an operation was taken out of config.operations).
+  # A run whose operation none of config.operations has any more (taken out after it started).
   class UnknownOperation < StandardError; end
 
-  # find_record found nothing for a webhook's record id. The job raises it so your queue retries:
-  # the record may not be committed yet, or the webhook URL names a record since deleted.
+  # The run or connection a delivery names, or a run's record, isn't there. The job raises it so
+  # your queue retries: the record may not be committed yet, or it was deleted since.
   class RecordMissing < StandardError; end
+
+  # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
+  # hasn't finished onboarding, or QuBe Sync didn't answer it.
+  class NotConnected < ArgumentError; end
 
   class << self
     def config
@@ -29,7 +35,7 @@ module QubeRails
     # In config/initializers/qube_rails.rb:
     #   QubeRails.configure do |config|
     #     config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
-    #     config.connection = "QuickbooksDesktop::Connection"
+    #     config.connection_events = "QuickbooksDesktop::ConnectionEvents"
     #     ...
     #   end
     def configure
@@ -53,33 +59,46 @@ module QubeRails
                   "in #{info[:delay].to_f.round(1)} s")
     end
 
-    # Where a connection's own events go: QUBE_WEBHOOK_URL, then connection and the id of the
-    # account that keeps it (your connection class takes them).
-    def connection_webhook_url(account_id)
-      "#{config.webhook_url}/#{Configuration::CONNECTION_SLUG}/" \
-        "#{ERB::Util.url_encode(account_id.to_s)}"
-    end
-
-    # Runs one verified delivery: the class its URL's slug names finds its record and handles the
-    # event (QubeRails::Operation#handle, or your connection class's). QubeRails::WebhookJob calls
-    # it; so does your own queue's worker when config.enqueue hands deliveries elsewhere.
+    # Runs one verified delivery. kind is "run" (QUBE_WEBHOOK_URL/runs/<id>): the run's
+    # operation finds its record and handles the event (QubeRails::Operation#handle); or
+    # "connection" (QUBE_WEBHOOK_URL/connections/<id>): your config.connection_events class
+    # handles it for that connection. QubeRails::WebhookJob calls it; so does your own queue's
+    # worker when config.enqueue hands deliveries elsewhere.
     #
     # body is the delivery's raw body, which the webhook endpoint verified: parsed into its typed
     # event here, and not verified again, since a job can run after its timestamp's 5 minutes are
     # up.
-    def run(operation, record_id, body)
-      handler = config.handler_for(operation)
-      raise UnknownOperation, "QuBe Sync: no operation has the slug #{operation.inspect}" unless handler
-
+    def run(kind, id, body)
       event = Backend.parse(body)
-      record = handler.find_record(record_id)
-      raise RecordMissing, "QuBe Sync: #{handler.name}.find_record(#{record_id.inspect}) found nothing" unless record
-
-      handler.new(record).handle(event)
+      case kind.to_s
+      when "run" then run_event(id, event)
+      when "connection" then connection_event(id, event)
+      else raise ArgumentError, "QuBe Sync: a delivery is for a run or a connection, not #{kind.inspect}"
+      end
     end
 
     def logger
       Rails.logger
+    end
+
+    def run_event(id, event)
+      run = Run.find_by(id: id)
+      raise RecordMissing, "QuBe Sync: no run #{id.inspect}" unless run
+
+      operation = config.operation_class(run.operation)
+      raise UnknownOperation, "QuBe Sync: no operation has the slug #{run.operation.inspect}" unless operation
+
+      record = operation.record_for(run)
+      raise RecordMissing, "QuBe Sync: run #{run.id}'s #{run.record_type} #{run.record_id} isn't there" unless record
+
+      operation.new(record, run).handle(event)
+    end
+
+    def connection_event(id, event)
+      connection = Connection.find_by(id: id)
+      raise RecordMissing, "QuBe Sync: no connection #{id.inspect}" unless connection
+
+      config.connection_events_class.new(connection).handle(event)
     end
 
     # Forgets the settings and the client: for tests.

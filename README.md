@@ -100,6 +100,7 @@ Secrets are never logged, and `QubeRails.config.inspect` hides them.
 The default dedupe store is `Rails.cache`: make that a store your workers share (Redis, Solid
 Cache), or a retry that reaches another worker isn't caught.
 
+# TODO: what??
 With another queue, hand the delivery on and run it from your worker:
 
 ```ruby

@@ -1,16 +1,19 @@
 <%# The question a QuBe Sync run is asking about record, with a form per choice, or nothing
     when it isn't asking. Render it on the record's page, with its operation's slug:
       render "qube_rails/question", record: @invoice, operation: "create_invoice"
-    It's the question QubeRails::Operation#question saved (saved_question). Each form posts
-    your user's choice to the engine's question route, and a record field's box searches
-    through it too, so the API key never reaches the browser. ERB escapes everything it
+    It's the open question of record's latest run of that operation (QubeRails::Run), as
+    QubeRails::Operation#question kept it. Each form posts your user's choice to the engine's
+    question route for that run, and a record field's box searches through it too, so the API
+    key never reaches the browser. ERB escapes everything it
     prints, and the qube- classes are for your CSS. For other markup, copy this file to
     app/views/qube_rails/_question.html.erb in your app, which Rails renders instead. %>
-<% handler = QubeRails.config.operation_class(operation) %>
-<% raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" unless handler %>
-<% question = handler.new(record).saved_question %>
+<% unless QubeRails.config.operation_class(operation) %>
+<%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
+<% end %>
+<% run = QubeRails::Run.latest_for(record, operation) %>
+<% question = run && run.open_question %>
 <% if question %>
-<%   action = qube_rails.question_path(operation, record.id) %>
+<%   action = qube_rails.question_path(run) %>
 <section class="qube-question">
   <p class="qube-question-message"><%= question["message"] %></p>
 <%   if question["details"].present? %>

@@ -14,10 +14,15 @@ RSpec.describe QubeRails::Generators::InstallGenerator do
     end
   end
 
-  def generate(*args)
-    capture = StringIO.new
-    $stdout = capture
-    described_class.start(args, destination_root: @root)
+  let(:commands) { [] }
+
+  # rails_command is stubbed on the instance: it would boot an app in the temporary directory.
+  def generate
+    $stdout = StringIO.new
+    generator = described_class.new([], {}, destination_root: @root)
+    ran = commands
+    allow(generator).to receive(:rails_command) { |command| ran << command }
+    generator.invoke_all
   ensure
     $stdout = STDOUT
   end
@@ -35,56 +40,36 @@ RSpec.describe QubeRails::Generators::InstallGenerator do
     generate
 
     initializer = read("config/initializers/qube_rails.rb")
-    %w[operations connection current_account authorize_question enqueue queue dedupe parent_controller
-       api_key base_url webhook_secret webhook_url].each do |setting|
+    %w[operations connection_events current_account authorize_question enqueue queue dedupe
+       parent_controller api_key base_url webhook_secret webhook_url].each do |setting|
       expect(initializer).to include("config.#{setting}")
     end
-    expect(initializer).to include('config.connection = "QuickbooksDesktop::Connection"')
-    expect(initializer).to include("# config.authorize_question")
+    expect(initializer).to include('config.connection_events = "QuickbooksDesktop::ConnectionEvents"',
+                                   "# config.authorize_question = ->(controller, record, run)")
     expect(compiles(initializer)).to be(true)
   end
 
-  it "writes the connection class with find_record and the four handlers" do
+  it "writes the app's ConnectionEvents class with the four handlers" do
     generate
 
-    connection = read("app/services/quickbooks_desktop/connection.rb")
-    expect(connection).to include("class Connection < QubeRails::ConnectionEvents", "Account.find(id)")
+    source = read("app/services/quickbooks_desktop/connection_events.rb")
+    expect(source).to include("class ConnectionEvents < QubeRails::ConnectionEvents")
     %w[connected setup_cancelled stalled resumed].each do |handler|
-      expect(connection).to include("def #{handler}(event)\n      log_event(event)")
+      expect(source).to include("def #{handler}(event)\n      log_event(event)")
     end
-    expect(compiles(connection)).to be(true)
+    expect(compiles(source)).to be(true)
   end
 
-  it "writes the migration for accounts by default, and mounts the engine" do
+  it "copies the engine's migrations and mounts the engine" do
     generate
 
-    migration = Dir[File.join(@root, "db/migrate/*_add_qube_connection_to_accounts.rb")].first
-    expect(migration).not_to be_nil
-    source = File.read(migration)
-    expect(source).to include("class AddQubeConnectionToAccounts < ActiveRecord::Migration[#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}]")
-    expect(source).to include("add_column :accounts, :qube_connection_id, :string",
-                              "add_column :accounts, :qube_connection_revision, :integer")
-    expect(compiles(source)).to be(true)
+    expect(commands).to eq(["qube_rails:install:migrations"])
     expect(read("config/routes.rb")).to include('mount QubeRails::Engine => "/"')
+    expect(Dir[File.join(@root, "db/migrate/*")]).to be_empty # nothing on the app's own tables
   end
 
-  it "takes the table as an argument" do
-    generate("organizations")
-
-    expect(Dir[File.join(@root, "db/migrate/*_add_qube_connection_to_organizations.rb")]).not_to be_empty
-    expect(read("app/services/quickbooks_desktop/connection.rb")).to include("Organization.find(id)")
-    expect(read("config/initializers/qube_rails.rb")).to include("record.organization_id")
-  end
-
-  it "writes a migration that runs" do
-    generate("widgets")
-    ActiveRecord::Base.connection.create_table(:widgets, force: true)
-    load Dir[File.join(@root, "db/migrate/*_add_qube_connection_to_widgets.rb")].first
-    AddQubeConnectionToWidgets.new.migrate(:up)
-
-    columns = ActiveRecord::Base.connection.columns(:widgets).map { |c| [c.name, c.type] }
-    expect(columns).to include(["qube_connection_id", :string], ["qube_connection_revision", :integer])
-  ensure
-    ActiveRecord::Base.connection.drop_table(:widgets, if_exists: true)
+  it "has the engine's install:migrations task to run" do
+    Rails.application.load_tasks
+    expect(Rake::Task.task_defined?("qube_rails:install:migrations")).to be(true)
   end
 end

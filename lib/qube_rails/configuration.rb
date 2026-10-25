@@ -12,15 +12,12 @@ module QubeRails
   class Configuration
     FILE = "config/initializers/qube_rails.rb"
     DEFAULT_BASE_URL = "https://qubesync.com"
-    # The connection's own events, in webhook URLs: QUBE_WEBHOOK_URL/connection/<account id>.
-    # Not an operation: the connection class takes them.
-    CONNECTION_SLUG = "connection"
 
     attr_writer :base_url, :api_key, :webhook_secret, :webhook_url, :queue, :parent_controller
 
     def initialize
       @operations = nil
-      @connection = nil
+      @connection_events = nil
       @current_account = nil
       @authorize_question = nil
       @enqueue = nil
@@ -33,11 +30,11 @@ module QubeRails
       @webhook_url = nil
     end
 
-    # Each operation by the slug in its webhook URL, as class *names*:
+    # Each operation by its slug (the SLUG a run row keeps, in qube_runs.operation), as class
+    # *names*:
     #   config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
     # Names, not classes, so code reloading in development finds the class again each time. A
-    # fixed list, so a class is never looked up from the URL itself: the webhook endpoint answers
-    # 404 for any other slug.
+    # fixed list, so a class is never looked up from anything a request says.
     def operations=(map)
       unless map.respond_to?(:each_pair)
         raise ArgumentError, "operations is a Hash of slug => class name, in #{FILE}"
@@ -45,12 +42,7 @@ module QubeRails
 
       list = {}
       map.each_pair do |slug, name|
-        slug = slug.to_s
-        if slug == CONNECTION_SLUG
-          raise ArgumentError, "\"connection\" is the connection's own slug, not an operation's: " \
-                               "set config.connection in #{FILE} instead"
-        end
-        list[slug] = name.is_a?(Module) ? name.name : name.to_s
+        list[slug.to_s] = name.is_a?(Module) ? name.name : name.to_s
       end
       @operations = list.freeze
     end
@@ -59,40 +51,31 @@ module QubeRails
       @operations || not_configured(:operations, "the operations by slug, as class names")
     end
 
-    # The connection class (a QubeRails::ConnectionEvents), by name:
-    #   config.connection = "QuickbooksDesktop::Connection"
-    def connection=(name)
-      @connection = name.is_a?(Module) ? name.name : name.to_s
+    # Your class for a connection's own events (a QubeRails::ConnectionEvents), by name:
+    #   config.connection_events = "QuickbooksDesktop::ConnectionEvents"
+    def connection_events=(name)
+      @connection_events = name.is_a?(Module) ? name.name : name && name.to_s
     end
 
-    def connection
-      @connection || not_configured(:connection, "the connection class's name")
+    def connection_events
+      @connection_events || not_configured(:connection_events, "your ConnectionEvents class's name")
     end
 
-    def connection_class
-      constantize(connection)
+    def connection_events_class
+      constantize(connection_events)
     end
 
-    # The operation class for a slug, or nil when none of your operations has it (the connection's
-    # own slug included).
+    # The operation class for a slug, or nil when none of your operations has it.
     def operation_class(slug)
       name = operations[slug.to_s]
       name && constantize(name)
     end
 
-    # The class that takes a webhook to this slug: an operation's, the connection class for
-    # "connection", or nil.
-    def handler_for(slug)
-      return connection_class if slug.to_s == CONNECTION_SLUG
-
-      operation_class(slug)
-    end
-
     # The signed-in customer's account, called with the controller handling the request (so your
     # current_user and other helpers are there):
     #   config.current_account = ->(controller) { controller.current_user.account }
-    # Onboarding keeps the connection on it, and its id goes in the connection's webhook URL; nil
-    # answers 401.
+    # It owns the connections onboarding makes (QubeRails::Connection#owner), and only its own can
+    # be sent back through setup; nil answers 401.
     def current_account=(callable)
       @current_account = callable!(:current_account, callable)
     end
@@ -102,23 +85,24 @@ module QubeRails
                                          "->(controller) { the signed-in customer's account }")
     end
 
-    # Whether the signed-in user may answer or search the question a run asks about record, with
-    # the operation's slug:
-    #   config.authorize_question = ->(controller, record, operation) {
-    #     record.account_id == controller.current_user.account_id
+    # Whether the signed-in user may answer or search the question a run asks about record. The
+    # run (a QubeRails::Run) carries its operation and its connection, whose owner is the account
+    # that connected it:
+    #   config.authorize_question = ->(controller, record, run) {
+    #     run.connection.owner == controller.current_user.account
     #   }
-    # Only true allows; anything else is refused (404, as for a missing record) and logged. The record's id comes from the URL,
-    # so this is all that keeps one customer's users off another's records. Unset, every answer
-    # and search is refused, and logged.
+    # Only true allows; anything else is refused (404, as for a missing run) and logged. The run's
+    # id comes from the URL, so this is all that keeps one customer's users off another's records
+    # and connections. Unset, every answer and search is refused (403), and logged.
     def authorize_question=(callable)
       @authorize_question = callable!(:authorize_question, callable)
     end
 
     attr_reader :authorize_question
 
-    # Hands a verified delivery, { operation:, record_id:, body: }, to a queue. The default puts
-    # it on ActiveJob (QubeRails::WebhookJob, on the queue setting). Your own queue's worker calls
-    # QubeRails.run(operation, record_id, body).
+    # Hands a verified delivery, { kind:, id:, body: } (kind "run" or "connection", id the row's),
+    # to a queue. The default puts it on ActiveJob (QubeRails::WebhookJob, on the queue setting).
+    # Your own queue's worker calls QubeRails.run(kind, id, body).
     def enqueue=(callable)
       @enqueue = callable!(:enqueue, callable)
     end
@@ -181,7 +165,7 @@ module QubeRails
     # Never the API key or a webhook secret.
     def inspect
       "#<#{self.class.name} base_url=#{base_url.inspect} operations=#{@operations.inspect} " \
-        "connection=#{@connection.inspect} api_key=#{secret_state(@api_key, "QUBE_API_KEY")} " \
+        "connection_events=#{@connection_events.inspect} api_key=#{secret_state(@api_key, "QUBE_API_KEY")} " \
         "webhook_secret=#{secret_state(@webhook_secret, "QUBE_WEBHOOK_SECRET")}>"
     end
     alias to_s inspect
@@ -189,7 +173,7 @@ module QubeRails
     private
 
     def enqueue_on_active_job(delivery)
-      QubeRails::WebhookJob.perform_later(delivery[:operation], delivery[:record_id], delivery[:body])
+      QubeRails::WebhookJob.perform_later(delivery[:kind], delivery[:id], delivery[:body])
     end
 
     def constantize(name)

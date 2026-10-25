@@ -5,10 +5,10 @@ require "json"
 module QubeRails
   # Your user's answers to the questions a run asks, from the question partial
   # (qube_rails/_question) on the record's page:
-  #   POST /qube/questions/<operation>/<record id>         a choice, with its fields
-  #   GET  /qube/questions/<operation>/<record id>/search  a record field's matches, as JSON
-  # Each finds the record through config.operations, as the webhooks do, and asks
-  # config.authorize_question before anything else. The calls to QuBe Sync are made here, with
+  #   POST /qube/questions/runs/<run id>         a choice, with its fields
+  #   GET  /qube/questions/runs/<run id>/search  a record field's matches, as JSON
+  # Each finds the run, its operation (config.operations) and its record, as the webhooks do, and
+  # asks config.authorize_question(controller, record, run) before anything is sent. The calls to QuBe Sync are made here, with
   # the API key, so the browser only ever talks to your app.
   #
   # Behind your sign-in, as your ApplicationController (config.parent_controller) is. The answers
@@ -59,37 +59,33 @@ module QubeRails
     private
 
     def find_question
-      slug = params[:operation].to_s
-      operation = QubeRails.config.operation_class(slug)
-      # A slug none of your operations has: the connection's own events ask nothing.
-      return head(:not_found) unless operation && operation <= QubeRails::Operation
-
       authorize = QubeRails.config.authorize_question
       unless authorize
-        # The record's id comes from the URL, so authorize_question is all that keeps one
-        # customer's users off another's records: until it's written, nothing is let through.
-        QubeRails.logger.error("QuBe Sync: refused an answer or search for #{slug} " \
-                               "#{params[:record_id]}: config.authorize_question isn't set in " \
-                               "#{Configuration::FILE}, so every one is refused until it is")
+        # The run's id comes from the URL, so authorize_question is all that keeps one customer's
+        # users off another's records: until it's written, nothing is let through.
+        QubeRails.logger.error("QuBe Sync: refused an answer or search for run #{params[:id]}: " \
+                               "config.authorize_question isn't set in #{Configuration::FILE}, so " \
+                               "every one is refused until it is")
         return refuse(:forbidden)
       end
 
-      # nil, or ActiveRecord::RecordNotFound, answers 404.
-      record = operation.find_record(params[:record_id])
+      run = QubeRails::Run.find_by(id: params[:id])
+      operation = run && QubeRails.config.operation_class(run.operation)
+      record = operation && operation.record_for(run)
       return head(:not_found) unless record
 
       # Only true lets it through: a truthy record, or a forgotten return, doesn't. Refused, it
-      # answers 404, as for a record that doesn't exist, so a user can't tell another customer's
-      # record is there.
-      unless authorize.call(self, record, slug) == true
-        QubeRails.logger.warn("QuBe Sync: refused an answer or search for #{slug} " \
-                              "#{params[:record_id]}: config.authorize_question said no")
+      # answers 404, as for a run that doesn't exist, so a user can't tell another customer's
+      # run is there.
+      unless authorize.call(self, record, run) == true
+        QubeRails.logger.warn("QuBe Sync: refused an answer or search for run #{run.id}: " \
+                              "config.authorize_question said no")
         return refuse(:not_found)
       end
 
-      @operation = operation.new(record)
-      @question = @operation.saved_question
-      @links = @operation.saved_links || {}
+      @operation = operation.new(record, run)
+      @question = run.open_question
+      @links = run.links || {}
     end
 
     def refuse(status)

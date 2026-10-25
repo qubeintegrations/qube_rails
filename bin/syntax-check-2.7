@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks that every Ruby file the gem ships parses on Ruby 2.7: the kit vendors these same files
 # into apps below qube_sync's Ruby 3.3 floor, with an inline QubeRails::Backend. It runs
-# `ruby -c` on each file in app/, config/ and lib/, on the question partial's Ruby (erb -x), and
+# `ruby -c` on each file in app/, config/, db/ and lib/, on the question partial's Ruby (erb -x), and
 # on the generator's templates as rendered. It checks syntax only: a Rails or Ruby API newer than
 # Rails 5.2 / Ruby 2.7 is for review to catch.
 #
@@ -19,7 +19,7 @@ ruby -v
 failed=0
 count=0
 
-for file in $(find app config lib -name '*.rb' | sort); do
+for file in $(find app config db lib -name '*.rb' | sort); do
   count=$((count + 1))
   if ! ruby -wc "$file" >/dev/null; then
     echo "FAIL $file"

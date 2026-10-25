@@ -24,7 +24,7 @@ Gem::Specification.new do |spec|
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
-    Dir["{app,config,lib}/**/*", "README.md", "CHANGELOG.md", "LICENSE.txt"].reject do |f|
+    Dir["{app,config,db,lib}/**/*", "README.md", "CHANGELOG.md", "LICENSE.txt"].reject do |f|
       File.directory?(f) || File.basename(f) == ".DS_Store"
     end
   end
