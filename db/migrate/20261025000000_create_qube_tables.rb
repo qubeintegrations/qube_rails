@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# QuBe Sync's three tables (qube_rails): your customers' connections, the runs your app starts,
-# and the QuickBooks ids it learns, each against its connection. Your own tables need nothing.
+# QuBe Sync's tables (qube_rails): your customers' connections, the runs your app starts, the
+# notifications each run's handler has taken, and the QuickBooks ids your app learns, each against
+# its connection. Your own tables need nothing.
 #
 # The polymorphic ids (owner_id, record_id) are strings, so integer and UUID keys both fit.
 # input (what the run was started with, so a start can be resent unchanged), error (a failed
@@ -47,6 +48,17 @@ class CreateQubeTables < ActiveRecord::Migration[5.2]
     add_index :qube_runs, [:record_type, :record_id, :operation, :created_at],
               name: "index_qube_runs_on_record_and_operation"
     add_foreign_key :qube_runs, :qube_connections, column: :connection_id
+
+    # The notifications a run's handler has taken, by delivery_id, so a redelivery runs it once.
+    # Written in the same transaction as the handler, and deleted with the run.
+    create_table :qube_notifications do |t|
+      t.bigint :run_id, null: false
+      t.string :delivery_id, null: false, limit: 100
+      t.datetime :created_at, null: false
+    end
+    add_index :qube_notifications, [:run_id, :delivery_id], unique: true,
+              name: "index_qube_notifications_on_run_and_delivery"
+    add_foreign_key :qube_notifications, :qube_runs, column: :run_id, on_delete: :cascade
 
     create_table :qube_quickbooks_records do |t|
       t.bigint :connection_id, null: false

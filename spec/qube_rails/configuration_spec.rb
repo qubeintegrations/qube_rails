@@ -48,7 +48,7 @@ RSpec.describe QubeRails::Configuration do
     expect(config.queue).to eq(:default)
     expect(config.job_attempts).to eq(10)
     expect(config.parent_controller).to eq("ApplicationController")
-    expect(config.dedupe).to be_a(QubeRails::CacheDedupe)
+    expect(config.dedupe).to be_a(QubeRails::DatabaseDedupe)
     expect(config.enqueue).to respond_to(:call)
     expect(config.authorize_question).to respond_to(:call)
   end

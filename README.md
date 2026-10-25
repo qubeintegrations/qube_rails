@@ -3,7 +3,7 @@
 QuBe Sync's Rails engine, for QuickBooks Desktop through [qubesync.com](https://qubesync.com). It
 holds the part of an integration that's the same in every Rails app:
 
-- three tables of its own: your customers' **connections** (an account can have several, one per
+- tables of its own: your customers' **connections** (an account can have several, one per
   company file), the **runs** your app starts, and the **QuickBooks ids** it learns, each kept
   against its connection;
 - onboarding: make a connection for the signed-in account, or send one of its connections back
@@ -38,7 +38,7 @@ The generator writes:
 - `config/initializers/qube_rails.rb`, every setting, commented;
 - `app/services/quickbooks_desktop/connection_events.rb`, your class for a connection's events;
 - the engine's migration (`bin/rails qube_rails:install:migrations`), which adds
-  `qube_connections`, `qube_runs` and `qube_quickbooks_records`;
+  `qube_connections`, `qube_runs`, `qube_notifications` and `qube_quickbooks_records`;
 - `mount QubeRails::Engine => "/"` in `config/routes.rb`.
 
 Fill in `current_account` in the initializer before anything else: onboarding and the question
@@ -96,7 +96,7 @@ end
 | `enqueue` | `->(delivery) { ... }`, handing `{ kind:, id:, body: }` (kind `"run"` or `"connection"`) to a queue | ActiveJob: `QubeRails::WebhookJob` on `queue` |
 | `queue` | the ActiveJob queue | `:default` |
 | `job_attempts` | how many times `QubeRails::WebhookJob` runs a delivery whose work raised, with a growing wait, before it logs an error and raises to your adapter (read when the job class loads) | `10` |
-| `dedupe` | `seen?(key)` / `remember(key)` for notification delivery ids | `QubeRails::CacheDedupe`: `Rails.cache`, one day |
+| `dedupe` | where each run's taken notification delivery ids are kept: `once(run, delivery_id) { }`, or `seen?(key)` / `remember(key)` | `QubeRails::DatabaseDedupe`: the engine's `qube_notifications` table, in the handler's transaction |
 | `parent_controller` | the controller onboarding and the questions inherit | `"ApplicationController"` |
 | `api_key` | | `QUBE_API_KEY` |
 | `base_url` | | `QUBE_URL`, else `https://qubesync.com` |
@@ -120,8 +120,13 @@ config.authorize_question = ->(controller, record, run) {
 }
 ```
 
-The default dedupe store is `Rails.cache`: make that a store your workers share (Redis, Solid
-Cache), or a retry that reaches another worker isn't caught.
+A notification (a sync's page, say) is taken once per run by its `delivery_id`. By default the id
+goes in `qube_notifications` inside the run row's lock and the same transaction as your
+`notification` handler: a redelivery finds the row and is skipped, and a handler that raises rolls
+its row back with its own writes, so the retry runs it again. `QubeRails::CacheDedupe` keeps the
+ids in `Rails.cache` instead (`config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in:
+1.day)`); it needs a cache your workers share (Redis, Solid Cache), and it isn't transactional: a
+crash between the handler's commit and the cache write runs the handler again.
 
 ## Background work
 
@@ -408,6 +413,14 @@ An answer QuBe Sync can't take (422) shows its reason; one it says has changed (
 forgets the question and answers 409; the run's next webhook says what came of it.
 
 ## Storage
+
+Rows go with their run: deleting a run deletes its notifications. Runs themselves are yours to
+prune once you no longer need them, for instance from a scheduled job:
+
+```ruby
+QubeRails::Run.where(state: %w[completed failed cancelled]).where("ended_at < ?", 90.days.ago).in_batches.destroy_all
+```
+
 
 `qube_runs.question` and `qube_runs.links` are JSON kept as text (`QubeRails::JSONCoder`), not a
 native json column: the engine runs on PostgreSQL, MySQL and SQLite, from Rails 5.2 (vendored into

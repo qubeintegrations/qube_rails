@@ -21,7 +21,6 @@ module QubeRailsHelpers
       config.connection_events = "QuickbooksDesktop::ConnectionEvents"
       config.current_account = ->(controller) { controller.current_account }
       # authorize_question is left to its default: the signed-in account owns the run's connection.
-      config.dedupe = QubeRails::CacheDedupe.new(ActiveSupport::Cache::MemoryStore.new)
       config.api_key = API_KEY
       config.base_url = BASE_URL
       config.webhook_secret = SECRET

@@ -155,7 +155,8 @@ module QubeRails
     # with more than one worker, in any order:
     # - an event whose reference isn't the run's, or whose connection_id isn't its connection's
     #   qube_id (a signed body posted to another run's URL), is logged and skipped;
-    # - a notification is taken once, by its delivery_id (the dedupe setting);
+    # - a notification is taken once, by its delivery_id (in qube_notifications, with what the
+    #   handler writes; the dedupe setting);
     # - any other event is applied only when its revision is newer than the last one applied.
     # It holds the run row's lock while it does (with_lock, which reads it again), so two workers
     # never apply one run's events at once, and what a handler writes is saved with the revision
@@ -305,10 +306,14 @@ module QubeRails
       end
     end
 
-    # Runs the block once per delivery_id, kept in the dedupe store (config.dedupe).
+    # Runs the block once per delivery_id of this run, kept in the dedupe store (config.dedupe).
+    # The default store writes its row inside this run's lock and transaction, so the row and the
+    # handler's writes commit together, or neither does.
     def take_once(delivery_id)
-      key = "qube-sync/delivery/#{delivery_id}"
       store = QubeRails.config.dedupe
+      return store.once(run, delivery_id) { yield } if store.respond_to?(:once)
+
+      key = "qube-sync/delivery/#{delivery_id}"
       return if store.seen?(key) # a retry of one already taken
 
       yield

@@ -6,7 +6,7 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
-- Three engine tables and models, from `bin/rails qube_rails:install:migrations`:
+- Engine tables and models, from `bin/rails qube_rails:install:migrations`:
   `QubeRails::Connection` (`qube_connections`: an account can have any number, one per company
   file), `QubeRails::Run` (`qube_runs`: each run's reference, revision, state and question) and
   `QubeRails::QuickbooksRecord` (`qube_quickbooks_records`: QuickBooks ids by connection and kind).
@@ -43,6 +43,9 @@ into every Rails app, so the app keeps only its own.
   `QubeRails::WebhookJob` retries (`retry_on`, `job_attempts`, default 10) and logs when it gives
   up.
 - `Operation#quickbooks_ref` and `#link_references`.
+- Notification dedupe by default in the engine's `qube_notifications` table
+  (`QubeRails::DatabaseDedupe`), in the same transaction as the handler, so a handler that raises
+  runs again on the redelivery. `QubeRails::CacheDedupe` stays as an option.
 - Every ending kept on the run row (state, outcome, error, cancel_reason, ended_at) before the
   app's handler runs; `Run#ended?`, `#failed?`, `#cancelled?`, `#summary_text`, and the
   `qube_rails/run_status` partial. A completed run on a `cancelled` outcome reads as cancelled; a

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 module QubeRails
-  # The base of the engine's three models. Their tables are qube_connections, qube_runs and
-  # qube_quickbooks_records, from the engine's migration (`bin/rails qube_rails:install:migrations`).
+  # The base of the engine's models. Their tables are qube_connections, qube_runs,
+  # qube_notifications and qube_quickbooks_records, from the engine's migration
+  # (`bin/rails qube_rails:install:migrations`).
   class ApplicationRecord < ActiveRecord::Base
     self.abstract_class = true
 

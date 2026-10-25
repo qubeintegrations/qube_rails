@@ -135,19 +135,21 @@ module QubeRails
       @queue || :default
     end
 
-    # seen?(key) and remember(key), for notification delivery ids. The default is Rails.cache, for
-    # a day (QubeRails::CacheDedupe): give it a store your workers share (Redis, Solid Cache), so
-    # a retry that reaches another worker is still caught.
+    # Where the notification delivery ids each run has taken are kept, so a redelivery runs its
+    # handler once. The default is the engine's qube_notifications table
+    # (QubeRails::DatabaseDedupe), written in the same transaction as the handler. Another store
+    # answers once(run, delivery_id) { } (running the block unless it's taken), or seen?(key) and
+    # remember(key), as QubeRails::CacheDedupe (Rails.cache, not transactional) does.
     def dedupe=(store)
-      unless store.respond_to?(:seen?) && store.respond_to?(:remember)
-        raise ArgumentError, "dedupe needs seen?(key) and remember(key), in #{FILE}"
+      unless store.respond_to?(:once) || (store.respond_to?(:seen?) && store.respond_to?(:remember))
+        raise ArgumentError, "dedupe needs once(run, delivery_id) { }, or seen?(key) and remember(key), in #{FILE}"
       end
 
       @dedupe = store
     end
 
     def dedupe
-      @dedupe ||= CacheDedupe.new
+      @dedupe ||= DatabaseDedupe.new
     end
 
     # The controller onboarding and the question routes inherit, by name, so your sign-in and

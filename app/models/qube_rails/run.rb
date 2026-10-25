@@ -19,6 +19,7 @@ module QubeRails
 
     belongs_to :connection, class_name: "QubeRails::Connection", inverse_of: :runs
     belongs_to :record, polymorphic: true
+    has_many :notifications, class_name: "QubeRails::Notification", dependent: :delete_all
 
     JSONCoder.serialize(self, :input, :error, :question, :links)
 

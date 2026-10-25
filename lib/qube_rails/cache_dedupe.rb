@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
 module QubeRails
-  # The default dedupe setting: the notification delivery ids already taken, in Rails.cache, for
-  # a day. Give it a store your workers share (Redis, Solid Cache): with a per-process store
-  # (memory, or the file store on more than one machine) a retry that reaches another worker
-  # isn't caught. Rails' test environment's null store remembers nothing.
+  # A dedupe setting for an app that would rather not use the engine's table
+  # (QubeRails::DatabaseDedupe, the default): the notification delivery ids already taken, in
+  # Rails.cache, for a day. It needs a store your workers share (Redis, Solid Cache): with a
+  # per-process store (memory, or the file store on more than one machine) a retry that reaches
+  # another worker isn't caught, and the null store remembers nothing. It isn't transactional:
+  # the id is remembered after the handler commits, so a crash between the two runs the handler
+  # again on the redelivery.
+  #   config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
   class CacheDedupe
     DAY = 24 * 60 * 60
 

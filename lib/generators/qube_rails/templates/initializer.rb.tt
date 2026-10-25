@@ -47,9 +47,9 @@ QubeRails.configure do |config|
   # a smaller number (or 1, to leave retries to Sidekiq) avoids retrying twice over.
   # config.job_attempts = 10
 
-  # Where notification delivery ids are remembered, so a retry is taken once: seen?(key) and
-  # remember(key). The default is Rails.cache for a day: make that a store your workers share
-  # (Redis, Solid Cache), or pass one here.
+  # Where notification delivery ids are remembered, so a redelivery runs its handler once. The
+  # default is the engine's qube_notifications table, written in the same transaction as the
+  # handler. Rails.cache instead needs a cache your workers share, and isn't transactional:
   # config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
 
   # The controller onboarding and the questions inherit, so your sign-in and CSRF apply.
