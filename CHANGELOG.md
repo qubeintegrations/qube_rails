@@ -27,6 +27,8 @@ into every Rails app, so the app keeps only its own.
 - `QubeRails.configure` in `config/initializers/qube_rails.rb`: operations, connection_events,
   current_account, authorize_question, enqueue, queue, dedupe, parent_controller and the API
   settings. An unset setting raises `QubeRails::NotConfigured` naming that file.
+  `authorize_question` defaults to allowing only the account that owns the run's connection.
+- A delivery whose run, connection or record was deleted is logged and dropped, not retried.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,
   the engine's migrations and the mount line.
 

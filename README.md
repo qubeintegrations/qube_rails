@@ -41,8 +41,8 @@ The generator writes:
   `qube_connections`, `qube_runs` and `qube_quickbooks_records`;
 - `mount QubeRails::Engine => "/"` in `config/routes.rb`.
 
-Fill in `authorize_question` and `current_account` in the initializer before anything else: until
-`authorize_question` is set, every answer and search is refused.
+Fill in `current_account` in the initializer before anything else: onboarding and the question
+routes both need it.
 
 ## Routes
 
@@ -79,9 +79,6 @@ QubeRails.configure do |config|
   config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
   config.connection_events = "QuickbooksDesktop::ConnectionEvents"
   config.current_account = ->(controller) { controller.current_user.account }
-  config.authorize_question = ->(controller, record, run) {
-    run.connection.owner == controller.current_user.account
-  }
 end
 ```
 
@@ -90,7 +87,7 @@ end
 | `operations` | slug => operation class *name* (resolved when used, so code reloading works) | none: raises |
 | `connection_events` | your `QubeRails::ConnectionEvents` class's name | none: raises |
 | `current_account` | `->(controller) { account }`: the signed-in customer's account, which owns its connections. nil answers 401. | none: raises |
-| `authorize_question` | `->(controller, record, run) { true }` when the signed-in user may answer or search that run's question. The run carries its `operation` and its `connection` (whose `owner` connected it). Only `true` allows; anything else answers 404 (search: `[]` with 404), as for a missing run, so a refused user can't tell it exists. | none: refuses every answer and search with 403, and logs why |
+| `authorize_question` | `->(controller, record, run) { true }` when the signed-in user may answer or search that run's question. The run carries its `operation` and its `connection` (whose `owner` connected it). Only `true` allows; anything else answers 404 (search: `[]` with 404), as for a missing run, and is logged. | allows only when `current_account` owns the run's connection (compared by type and id, so a nil or unsaved account never matches) |
 | `enqueue` | `->(delivery) { ... }`, handing `{ kind:, id:, body: }` (kind `"run"` or `"connection"`) to a queue | ActiveJob: `QubeRails::WebhookJob` on `queue` |
 | `queue` | the ActiveJob queue | `:default` |
 | `dedupe` | `seen?(key)` / `remember(key)` for notification delivery ids | `QubeRails::CacheDedupe`: `Rails.cache`, one day |
@@ -107,23 +104,55 @@ Secrets are never logged, and `QubeRails.config.inspect` hides them.
 `controller` is the engine's controller handling the request, a subclass of your
 `ApplicationController`, so `current_user` and your other helpers are on it.
 
+Set `authorize_question` only to change who may answer. The default lets the account that owns
+the run's connection answer it, which is right for most apps. Set your own to check more (that
+this user may see the record) or less (staff who act for any account):
+
+```ruby
+config.authorize_question = ->(controller, record, run) {
+  run.connection.owner == controller.current_user.account && controller.current_user.can_edit?(record)
+}
+```
+
 The default dedupe store is `Rails.cache`: make that a store your workers share (Redis, Solid
 Cache), or a retry that reaches another worker isn't caught.
 
-With another queue, hand the delivery on and run it from your worker:
+## Background work
+
+QuBe Sync's webhooks are handled in the background. The endpoint verifies a delivery, answers 200
+at once, and hands the work to `QubeRails::WebhookJob`, an ActiveJob, so it runs on whatever queue
+your app's ActiveJob uses (Sidekiq, Solid Queue, GoodJob...). Most apps change nothing here; set
+`queue` to put it on a queue other than `:default`.
+
+If your app's workers don't run ActiveJob (plain Sidekiq workers, say), set `enqueue` to hand the
+delivery to your own worker, and have that worker call `QubeRails.run` with what it was given:
 
 ```ruby
+# config/initializers/qube_rails.rb
 config.enqueue = ->(delivery) {
   QubeDeliveryWorker.perform_async(delivery[:kind], delivery[:id], delivery[:body])
 }
 
-# in QubeDeliveryWorker#perform(kind, id, body):
-QubeRails.run(kind, id, body)
+# app/workers/qube_delivery_worker.rb
+class QubeDeliveryWorker
+  include Sidekiq::Job
+
+  def perform(kind, id, body)
+    QubeRails.run(kind, id, body)
+  end
+end
 ```
 
-QuBe Sync had its 2xx when the delivery was enqueued, so a job that raises is your queue's to
-retry. `QubeRails.run` raises `QubeRails::RecordMissing` when the run, the connection or the run's
-record isn't there, so the queue retries it.
+Retries are your queue's. QuBe Sync stops sending a delivery once your endpoint has answered 200,
+so if the work fails later, your queue is the only thing that will run it again. `QubeRails.run`
+raises when it can't do the work (a handler of yours raised, the database is down, or the run's
+operation was taken out of `operations`), so a queue that retries failed jobs will retry it.
+
+One case isn't retried: a delivery whose run, connection or record has been deleted from your
+database since it arrived. The endpoint answers 404 unless the run or connection row exists, and
+your app saves a record before starting its run, so a row that's missing by the time the job runs
+was deleted, and retrying would never succeed. `QubeRails.run` logs a warning ("QuBe Sync:
+dropped ...") and returns.
 
 ## Environment
 
