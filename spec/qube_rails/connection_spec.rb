@@ -16,9 +16,9 @@ RSpec.describe QubeRails::Connection do
                                    name: "Riverbend Electric", record: customer)
     expect(connection.qb_id_for(customer, kind: "customer")).to eq("80000001-1")
     expect(connection.qb_id_for(customer, kind: "vendor")).to be_nil
-    expect(connection.find_linked("customer", "80000001-1")).to eq(customer)
-    expect(connection.find_linked("customer", "nope")).to be_nil
-    expect(connection.quickbooks_record("customer", "80000001-1")).to eq(row)
+    expect(connection.find_linked("80000001-1", kind: "customer")).to eq(customer)
+    expect(connection.find_linked("nope", kind: "customer")).to be_nil
+    expect(connection.quickbooks_record("80000001-1", kind: "customer")).to eq(row)
   end
 
   it "replaces a record's id for the same kind when it's linked again" do
@@ -36,7 +36,7 @@ RSpec.describe QubeRails::Connection do
 
     connection.link(customer, kind: "customer", qb_id: "80000001-1")
 
-    expect(connection.find_linked("customer", "80000001-1")).to eq(customer)
+    expect(connection.find_linked("80000001-1", kind: "customer")).to eq(customer)
     expect(connection.qb_id_for(other, kind: "customer")).to be_nil
     expect(connection.qb_id_for(customer, kind: "customer")).to eq("80000001-1")
     expect(connection.quickbooks_records.count).to eq(1)
@@ -49,8 +49,8 @@ RSpec.describe QubeRails::Connection do
     connection.link(customer, kind: "customer", qb_id: "80000001-1")
     second.link(other, kind: "customer", qb_id: "80000001-1")
 
-    expect(connection.find_linked("customer", "80000001-1")).to eq(customer)
-    expect(second.find_linked("customer", "80000001-1")).to eq(other)
+    expect(connection.find_linked("80000001-1", kind: "customer")).to eq(customer)
+    expect(second.find_linked("80000001-1", kind: "customer")).to eq(other)
   end
 
   it "lists an owner's connections, whatever its key's type" do
@@ -59,6 +59,77 @@ RSpec.describe QubeRails::Connection do
 
     expect(described_class.owned_by(account)).to contain_exactly(connection, second)
     expect(connection.owner_id).to eq(account.id.to_s)
+  end
+
+  describe "list families (one ListID counter per family, verified on QuickBooks Enterprise 24.0)" do
+    let(:contact) { Customer.create!(account: account, name: "Lone Star Supply") }
+
+    it "maps kinds to families" do
+      family = QubeRails::QuickbooksRecord.method(:family_for)
+      expect(%w[customer vendor employee other_name].map(&family)).to all(eq("name"))
+      expect(%w[item item_service item_non_inventory item_sales_tax item_group].map(&family)).to all(eq("item"))
+      expect(%w[account class invoice bill made_up_kind].map(&family)).to eq(%w[account class invoice bill made_up_kind])
+    end
+
+    it "links one contact as a customer and as a vendor, with different ids" do
+      connection.link(contact, kind: "customer", qb_id: "80000010-1")
+      connection.link(contact, kind: "vendor", qb_id: "80000011-1")
+
+      expect(connection.qb_id_for(contact, kind: "customer")).to eq("80000010-1")
+      expect(connection.qb_id_for(contact, kind: "vendor")).to eq("80000011-1")
+      expect(connection.quickbooks_records.pluck(:list).uniq).to eq(["name"])
+    end
+
+    it "finds an EntityRef's id with no kind" do
+      connection.link(contact, kind: "vendor", qb_id: "80000011-1")
+
+      expect(connection.find_linked("80000011-1")).to eq(contact)
+      expect(connection.find_linked("80000011-1", kind: "customer")).to eq(contact) # same name family
+      expect(connection.quickbooks_record("80000011-1").kind).to eq("vendor")
+    end
+
+    it "finds an item linked as item_service as item and as item_non_inventory, and relinks it with a new kind" do
+      connection.link(customer, kind: "item_service", qb_id: "80000003-1")
+
+      expect(connection.qb_id_for(customer, kind: "item")).to eq("80000003-1")
+      expect(connection.qb_id_for(customer, kind: "item_non_inventory")).to eq("80000003-1")
+      expect(connection.find_linked("80000003-1", kind: "item")).to eq(customer)
+
+      connection.link(customer, kind: "item_non_inventory", qb_id: "80000003-1", edit_sequence: "2")
+
+      expect(connection.quickbooks_records.where(list: "item").pluck(:kind, :edit_sequence))
+        .to eq([%w[item_non_inventory 2]])
+    end
+
+    it "links the same qb_id in two families to two records without a clash" do
+      connection.link(contact, kind: "customer", qb_id: "80000003-1")
+      connection.link(customer, kind: "account", qb_id: "80000003-1")
+
+      expect(connection.find_linked("80000003-1", kind: "customer")).to eq(contact)
+      expect(connection.find_linked("80000003-1", kind: "account")).to eq(customer)
+      expect(connection.quickbooks_records.count).to eq(2)
+    end
+
+    it "raises for a no-kind lookup that finds the id in more than one family" do
+      connection.link(contact, kind: "customer", qb_id: "80000003-1")
+      connection.link(customer, kind: "class", qb_id: "80000003-1")
+
+      expect { connection.find_linked("80000003-1") }
+        .to raise_error(ArgumentError, /more than one kind \(class, customer\): pass kind:/)
+    end
+
+    it "never hands out a customer's id as a vendor's" do
+      connection.link(contact, kind: "customer", qb_id: "80000010-1")
+
+      expect(connection.qb_id_for(contact, kind: "vendor")).to be_nil
+    end
+
+    it "raises for qb_id_for when the family has several links and none is that kind" do
+      connection.link(customer, kind: "item_service", qb_id: "80000003-1")
+      connection.link(customer, kind: "item_inventory", qb_id: "80000004-1")
+
+      expect { connection.qb_id_for(customer, kind: "item") }.to raise_error(ArgumentError, /pass kind/)
+    end
   end
 
   it "refuses a link without a qb_id" do

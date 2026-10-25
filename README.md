@@ -124,7 +124,7 @@ at once, and hands the work to `QubeRails::WebhookJob`, an ActiveJob, so it runs
 your app's ActiveJob uses (Sidekiq, Solid Queue, GoodJob...). Most apps change nothing here; set
 `queue` to put it on a queue other than `:default`.
 
-If your app's workers don't run ActiveJob (plain Sidekiq workers, say), set `enqueue` to hand the
+If your app's workers don't run ActiveJob (e.g. plain Sidekiq workers), set `enqueue` to hand the
 delivery to your own worker, and have that worker call `QubeRails.run` with what it was given:
 
 ```ruby
@@ -202,18 +202,27 @@ end
 
 ### QuickBooks ids
 
-Every ListID and TxnID your app learns is kept against its connection and kind, since QuickBooks
-makes one unique only within one list of one company file:
+Every ListID and TxnID your app learns is kept against its connection and its list family.
+QuickBooks gives out ListIDs from one counter per family, so an id is unique only within its
+family of one company file (verified on QuickBooks Enterprise 24.0): customers, vendors,
+employees and other names share one, every item type shares another, each other list (accounts,
+classes, terms...) has its own, and the same counter value turns up in several families.
+TxnIDs are kept per transaction type.
 
 ```ruby
 connection.link(customer, kind: "customer", qb_id: list_id, edit_sequence: "171", name: "Riverbend Electric")
-connection.qb_id_for(customer, kind: "customer")      # => "80000001-1738310400", or nil
-connection.find_linked("customer", list_id)           # => your Customer, or nil
-connection.quickbooks_record("customer", list_id)     # => the row, with edit_sequence and name
+connection.qb_id_for(customer, kind: "customer")       # => "80000001-1738310400", or nil
+connection.find_linked(list_id, kind: "customer")      # => your Customer, or nil
+connection.find_linked(entity_ref_list_id)             # any family; raises if the id is in several
+connection.quickbooks_record(list_id, kind: "item")    # => the row, with kind, edit_sequence and name
 ```
 
-A record has one id per kind on a connection; linking it again replaces it. An id already linked
-to another of your records moves to this one, and that's logged.
+A record has one id per kind on a connection; linking it again replaces it. One contact can be
+linked as a customer and as a vendor (two QuickBooks names, two ids). An id already linked in
+that family to another of your records moves to this one, and that's logged; linked again with
+another kind of the same family (an item converted from service to non-inventory), the row's
+kind changes. `qb_id_for` finds an item linked as `item_service` when asked for `item` or
+`item_non_inventory`, but never hands out a customer's id as a vendor's.
 
 ## Writing an operation
 

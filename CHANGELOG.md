@@ -21,7 +21,11 @@ into every Rails app, so the app keeps only its own.
 - `QubeRails::Operation` (`start(record, connection)` returns the run) and
   `QubeRails::ConnectionEvents`, the bases of the app's classes, with the reference, connection
   id, revision and delivery-id checks under the row's lock.
-- `Connection#link`, `#qb_id_for`, `#find_linked` and `#quickbooks_record`.
+- `Connection#link`, `#qb_id_for`, `#find_linked(qb_id, kind: nil)` and
+  `#quickbooks_record(qb_id, kind: nil)`. QuickBooks ids are unique by connection and list family
+  (`QubeRails::QuickbooksRecord.family_for`: one family for names, one for items, and each other
+  list or transaction type its own), as QuickBooks gives out ListIDs (verified on QuickBooks
+  Enterprise 24.0).
 - The question partial, `qube_rails/_question.html.erb`, showing a record's latest run's question,
   which the app can override.
 - `QubeRails.configure` in `config/initializers/qube_rails.rb`: operations, connection_events,

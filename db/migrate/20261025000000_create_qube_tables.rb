@@ -46,6 +46,7 @@ class CreateQubeTables < ActiveRecord::Migration[5.2]
     create_table :qube_quickbooks_records do |t|
       t.bigint :connection_id, null: false
       t.string :kind, null: false, limit: 100
+      t.string :list, null: false, limit: 100
       t.string :qb_id, null: false, limit: 100
       t.string :edit_sequence
       t.string :name
@@ -53,7 +54,10 @@ class CreateQubeTables < ActiveRecord::Migration[5.2]
       t.string :record_id
       t.timestamps null: false
     end
-    add_index :qube_quickbooks_records, [:connection_id, :kind, :qb_id], unique: true,
+    # A ListID is unique within its list family (QubeRails::QuickbooksRecord.family_for), not
+    # within one kind: every item type shares a counter, and so do customers, vendors, employees
+    # and other names.
+    add_index :qube_quickbooks_records, [:connection_id, :list, :qb_id], unique: true,
               name: "index_qube_quickbooks_records_on_qb_id"
     add_index :qube_quickbooks_records, [:connection_id, :kind, :record_type, :record_id], unique: true,
               name: "index_qube_quickbooks_records_on_record"
