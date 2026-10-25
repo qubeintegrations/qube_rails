@@ -10,8 +10,8 @@
 #   POST /qube/questions/runs/:id                an answer, behind your sign-in and CSRF
 #   GET  /qube/questions/runs/:id/search         a record field's matches
 #
-# Its tables (qube_connections, qube_runs, qube_quickbooks_records) keep every connection, run
-# and QuickBooks id; your own tables need nothing.
+# Its tables (qube_connections, qube_runs, qube_notifications, qube_quickbooks_records) keep
+# every connection, run and QuickBooks id; your own tables need nothing.
 QubeRails.configure do |config|
   # Each operation by its SLUG, as class names (resolved when used, so code reloading works).
   # Add one per QubeRails::Operation subclass in app/services/quickbooks_desktop/.
