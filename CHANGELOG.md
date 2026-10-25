@@ -33,6 +33,16 @@ into every Rails app, so the app keeps only its own.
   settings. An unset setting raises `QubeRails::NotConfigured` naming that file.
   `authorize_question` defaults to allowing only the account that owns the run's connection.
 - A delivery whose run, connection or record was deleted is logged and dropped, not retried.
+- Connect (`POST quickbooks/connections`) reuses the account's newest never-connected connection;
+  `new=1` makes another. A connection's event for a row without its `qube_id` adopts QuBe Sync's
+  connection made with the row's webhook URL, or raises `QubeRails::NotReady` to be retried.
+- A start that gets no answer stays `starting` with its input; `Run#retry_start!` /
+  `Operation.retry_start` resend it with the same Idempotency-Key. Only a 4xx, or an input that
+  raised, marks a run `failed`.
+- The webhook endpoint answers 503 when the enqueue returns false or raises.
+  `QubeRails::WebhookJob` retries (`retry_on`, `job_attempts`, default 10) and logs when it gives
+  up.
+- `Operation#quickbooks_ref` and `#link_references`.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,
   the engine's migrations and the mount line.
 

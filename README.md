@@ -50,7 +50,7 @@ Relative to where the engine is mounted (`"/"` above):
 
 | Route | What it does |
 | --- | --- |
-| `POST quickbooks/connections` | A new connection for the signed-in account (`current_account`), from a "Connect QuickBooks Desktop" button, with an optional `name`. Writes the row, makes QuBe Sync's connection with the row's webhook URL, keeps its `qube_id`, and redirects (303) to the setup. |
+| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
@@ -66,8 +66,12 @@ Onboarding and the question routes inherit your `ApplicationController` (the `pa
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
 engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`.
 
+Two buttons cover it: Connect, for an account setting up its first company file (or finishing a
+setup it started), and, once it has one, Connect another company file:
+
 ```erb
-<%= button_to "Connect QuickBooks Desktop", qube_rails.connections_path, params: { name: "Main file" } %>
+<%= button_to "Connect QuickBooks Desktop", qube_rails.connections_path %>
+<%= button_to "Connect another company file", qube_rails.connections_path, params: { new: 1, name: "Second file" } %>
 ```
 
 ## Settings
@@ -90,6 +94,7 @@ end
 | `authorize_question` | `->(controller, record, run) { true }` when the signed-in user may answer or search that run's question. The run carries its `operation` and its `connection` (whose `owner` connected it). Only `true` allows; anything else answers 404 (search: `[]` with 404), as for a missing run, and is logged. | allows only when `current_account` owns the run's connection (compared by type and id, so a nil or unsaved account never matches) |
 | `enqueue` | `->(delivery) { ... }`, handing `{ kind:, id:, body: }` (kind `"run"` or `"connection"`) to a queue | ActiveJob: `QubeRails::WebhookJob` on `queue` |
 | `queue` | the ActiveJob queue | `:default` |
+| `job_attempts` | how many times `QubeRails::WebhookJob` runs a delivery whose work raised, with a growing wait, before it logs an error and raises to your adapter (read when the job class loads) | `10` |
 | `dedupe` | `seen?(key)` / `remember(key)` for notification delivery ids | `QubeRails::CacheDedupe`: `Rails.cache`, one day |
 | `parent_controller` | the controller onboarding and the questions inherit | `"ApplicationController"` |
 | `api_key` | | `QUBE_API_KEY` |
@@ -144,9 +149,20 @@ end
 ```
 
 Retries are your queue's. QuBe Sync stops sending a delivery once your endpoint has answered 200,
-so if the work fails later, your queue is the only thing that will run it again. `QubeRails.run`
-raises when it can't do the work (a handler of yours raised, the database is down, or the run's
-operation was taken out of `operations`), so a queue that retries failed jobs will retry it.
+so if the work fails later, your queue is the only thing that will run it again. The endpoint
+answers 200 only once the enqueue has taken the delivery: when it returns `false` (ActiveJob 7.1+
+does when the adapter couldn't enqueue) or raises, the endpoint answers 503, logged without the
+body, and QuBe Sync sends it again.
+
+`QubeRails.run` raises when it can't do the work (a handler of yours raised, the database is down,
+the run's operation was taken out of `operations`, or a connection's event came before the
+connection's id was saved: `QubeRails::NotReady`). `QubeRails::WebhookJob` retries it itself
+(`retry_on`, with a growing wait), `job_attempts` times in all, since Solid Queue, GoodJob and
+`:async` don't retry a job that raises. When the attempts run out it logs an error ("QuBe Sync:
+gave up on a webhook ...") and raises, so your adapter sees the failure. With Sidekiq, its own
+retries (25 by default) follow ActiveJob's, so a failing delivery is tried `job_attempts` times
+and then Sidekiq's; set `job_attempts` to 1 to leave retrying to Sidekiq alone, or lower it. With
+your own `enqueue`, your worker's retries are the only ones.
 
 One case isn't retried: a delivery whose run, connection or record has been deleted from your
 database since it arrived. The endpoint answers 404 unless the run or connection row exists, and
@@ -172,7 +188,13 @@ account's.
 
 Its own events (QUBE_WEBHOOK_URL/connections/<id>) update `status`, `stall_reason` and `revision`
 when the event is for that connection (`qube_id`) and newer than the last one applied, under the
-row's lock. Then your class runs, with `connection` and `owner`:
+row's lock. Then your class runs, with `connection` and `owner`.
+
+An event can come before the row has its `qube_id`: a simulated connection sends
+`connection.connected` as it's made, before `create_connection` has answered. Such an event finds
+QuBe Sync's connection made with the row's webhook URL and keeps its id, or raises
+`QubeRails::NotReady`, so the job tries again shortly. Connect does the same for a row left
+without an id (a crash between the create and the save), so one row never gets two connections.
 
 ```ruby
 module QuickbooksDesktop
@@ -247,10 +269,11 @@ module QuickbooksDesktop
       without_nils({
         operation: "invoice.create",
         params: {
-          customer_ref: customer_ref,
+          # Its ListID on this connection when it's linked, else its name.
+          customer_ref: quickbooks_ref(record.customer, kind: "customer", name: record.customer&.name),
           ref_number: record.number,
           invoice_line_add: record.lines.map { |line|
-            { item_ref: { full_name: line.item&.name }, amount: line.total&.to_f }
+            { item_ref: quickbooks_ref(line.item, kind: "item", name: line.item&.name), amount: line.total&.to_f }
           }
         }
       })
@@ -259,6 +282,17 @@ module QuickbooksDesktop
     # How the run ended: event.outcome says which, event.output holds the result. Keep the
     # QuickBooks ids it carries on the connection.
     def ended(event)
+      # The records the add named, found or made, by the input's path: linked, so the next run
+      # refers to them by id. A cancelled ending can carry some too.
+      link_references(event) do |path, _entry|
+        if path == "customer_ref"
+          record.customer
+        elsif (line = path[/\Ainvoice_line_add\.(\d+)\.item_ref\z/, 1])
+          record.lines[line.to_i]&.item
+        end
+      end
+      return unless event.outcome == "added"
+
       txn = event.dig("output", "record") || {}
       connection.link(record, kind: "invoice", qb_id: txn["txn_id"],
                               edit_sequence: txn["edit_sequence"], name: txn["ref_number"])
@@ -275,13 +309,6 @@ module QuickbooksDesktop
       log_event(event)
     end
 
-    private
-
-    # The customer's ListID on this connection when it's linked, else its name.
-    def customer_ref
-      list_id = connection.qb_id_for(record.customer, kind: "customer")
-      list_id ? { list_id: list_id } : { full_name: record.customer.name }
-    end
   end
 end
 ```
@@ -294,8 +321,26 @@ run = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
 no `qube_id`). It writes the run's row first, with a new reference and state `starting`, since a
 webhook can come before it returns; starts the run with that reference as the idempotency key and
 `QUBE_WEBHOOK_URL/runs/<run id>` as its webhook URL; keeps QuBe Sync's `qube_run_id`, `state`,
-`run_url` and `cancel_url`; and returns the row. A start that raises marks the row `failed` and
-raises again.
+`run_url` and `cancel_url`; and returns the row. The row keeps the input it sent.
+
+A start can fail two ways, and they're handled differently:
+
+- **Refused** (QuBe Sync answered 4xx: bad input, a workflow that isn't published) or an input that
+  raised: nothing was started. The row is marked `failed` and the error raised; start again.
+- **No answer** (a timeout, a 5xx, a dropped connection): the run may have started. The row stays
+  `starting`, with its reference and input, and the error is raised. Send it again with
+  `run.retry_start!` (or `QuickbooksDesktop::CreateInvoice.retry_start(run)`), never with a new
+  `start`: a new reference would start a second run, and a second invoice.
+
+`retry_start!` resends the same reference as the `Idempotency-Key`, with the same workflow, input
+and webhook URL. QuBe Sync keys a start by its app and that key, and fingerprints the call
+(method, path, query and JSON body). The same key with the same call answers `201` with the run
+the first call started, as it is now, plus `Idempotent-Replayed: true`, and starts nothing; the
+same key with a different call is a `422`; a refused call (`400`, `403`, `404`, `422`) stores no
+key, so retrying it runs the checks again. A key lives as long as its run: finished runs are
+purged 60 days after they end. `retry_start!` returns a run that already has its `qube_run_id`
+as it is, and refuses one that `failed`. (The gem's client also resends a start that got no
+answer twice itself, within 60 seconds, with the same key.)
 
 A `QubeRails::Run` keeps `operation`, `record`, `connection`, `reference`, `revision`, `state`,
 `outcome`, and the open `question` and its `links`. Each event is applied under the run row's
