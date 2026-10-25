@@ -119,12 +119,12 @@ RSpec.describe "The question routes", type: :request do
       expect(invoice.reload.qube_question).to eq(question)
     end
 
-    it "refuses when authorize_question says no" do
+    it "answers 404 when authorize_question says no, so the record's existence doesn't show" do
       other = Account.create!(name: "Someone else")
 
       answer({ choice: "use:1" }, headers: { "X-Account" => other.id.to_s })
 
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:not_found)
       expect(log_output).to include("config.authorize_question said no")
       expect(a_request(:post, decisions)).not_to have_been_made
     end
@@ -144,7 +144,7 @@ RSpec.describe "The question routes", type: :request do
       QubeRails.config.authorize_question = ->(_controller, record, _operation) { record }
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:not_found)
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
@@ -233,6 +233,16 @@ RSpec.describe "The question routes", type: :request do
 
       expect(response).to have_http_status(:conflict)
       expect(JSON.parse(response.body)).to eq([])
+    end
+
+    it "answers [] with 404 when authorize_question says no" do
+      QubeRails.config.authorize_question = ->(_controller, _record, _operation) { false }
+
+      search("river")
+
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)).to eq([])
+      expect(a_request(:get, /search/)).not_to have_been_made
     end
 
     it "refuses every search while authorize_question isn't set" do

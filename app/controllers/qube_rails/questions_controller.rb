@@ -71,18 +71,20 @@ module QubeRails
         QubeRails.logger.error("QuBe Sync: refused an answer or search for #{slug} " \
                                "#{params[:record_id]}: config.authorize_question isn't set in " \
                                "#{Configuration::FILE}, so every one is refused until it is")
-        return refuse
+        return refuse(:forbidden)
       end
 
       # nil, or ActiveRecord::RecordNotFound, answers 404.
       record = operation.find_record(params[:record_id])
       return head(:not_found) unless record
 
-      # Only true lets it through: a truthy record, or a forgotten return, doesn't.
+      # Only true lets it through: a truthy record, or a forgotten return, doesn't. Refused, it
+      # answers 404, as for a record that doesn't exist, so a user can't tell another customer's
+      # record is there.
       unless authorize.call(self, record, slug) == true
         QubeRails.logger.warn("QuBe Sync: refused an answer or search for #{slug} " \
                               "#{params[:record_id]}: config.authorize_question said no")
-        return refuse
+        return refuse(:not_found)
       end
 
       @operation = operation.new(record)
@@ -90,11 +92,13 @@ module QubeRails
       @links = @operation.saved_links || {}
     end
 
-    def refuse
+    def refuse(status)
       if action_name == "search"
-        render json: [], status: :forbidden
+        render json: [], status: status
+      elsif status == :not_found
+        head :not_found
       else
-        render plain: REFUSED, status: :forbidden
+        render plain: REFUSED, status: status
       end
     end
 

@@ -80,7 +80,7 @@ end
 | `operations` | slug => operation class *name* (resolved when used, so code reloading works) | none: raises |
 | `connection` | the connection class's name | none: raises |
 | `current_account` | `->(controller) { account }`: the signed-in customer's account. nil answers 401. | none: raises |
-| `authorize_question` | `->(controller, record, operation) { true }` when the signed-in user may answer or search that record's question. Only `true` allows. | none: refuses every answer and search, and logs why |
+| `authorize_question` | `->(controller, record, operation) { true }` when the signed-in user may answer or search that record's question. Only `true` allows; anything else answers 404 (search: `[]` with 404), as for a missing record, so a refused user can't tell it exists. | none: refuses every answer and search with 403, and logs why |
 | `enqueue` | `->(delivery) { ... }`, handing `{ operation:, record_id:, body: }` to a queue | ActiveJob: `QubeRails::WebhookJob` on `queue` |
 | `queue` | the ActiveJob queue | `:default` |
 | `dedupe` | `seen?(key)` / `remember(key)` for notification delivery ids | `QubeRails::CacheDedupe`: `Rails.cache`, one day |

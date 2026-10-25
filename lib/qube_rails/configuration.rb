@@ -107,7 +107,7 @@ module QubeRails
     #   config.authorize_question = ->(controller, record, operation) {
     #     record.account_id == controller.current_user.account_id
     #   }
-    # Only true allows; anything else is refused and logged. The record's id comes from the URL,
+    # Only true allows; anything else is refused (404, as for a missing record) and logged. The record's id comes from the URL,
     # so this is all that keeps one customer's users off another's records. Unset, every answer
     # and search is refused, and logged.
     def authorize_question=(callable)
