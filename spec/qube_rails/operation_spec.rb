@@ -124,16 +124,28 @@ RSpec.describe QubeRails::Operation do
       expect(QuickbooksDesktop::SyncCustomer.calls).to eq([[:ended, customer]])
     end
 
-    it "raises when the record isn't there, so the queue retries" do
+    it "drops a delivery whose record was deleted, with a warning, rather than raising for ever" do
+      run
       invoice.destroy!
 
       expect { QubeRails::WebhookJob.perform_now("run", run.id.to_s, run_body("workflow_run.completed", run)) }
-        .to raise_error(QubeRails::RecordMissing, /isn't there/)
+        .not_to raise_error
+      expect(QuickbooksDesktop::CreateInvoice.calls).to be_empty
+      expect(log_output).to include("WARN QuBe Sync: dropped workflow_run.completed: run #{run.id}'s Invoice " \
+                                    "#{invoice.id} isn't there")
     end
 
-    it "raises for a run that isn't there, or an operation taken out of config.operations" do
-      expect { QubeRails.run("run", "0", vector_body("workflow_run.completed")) }
-        .to raise_error(QubeRails::RecordMissing)
+    it "drops one whose find_record raises RecordNotFound" do
+      allow(QuickbooksDesktop::CreateInvoice).to receive(:find_record).and_raise(ActiveRecord::RecordNotFound)
+
+      expect { run_event("workflow_run.completed") }.not_to raise_error
+      expect(log_output).to include("dropped workflow_run.completed")
+    end
+
+    it "drops a delivery for a run or connection deleted since, and raises for an operation taken out" do
+      expect { QubeRails.run("run", "0", vector_body("workflow_run.completed")) }.not_to raise_error
+      expect { QubeRails.run("connection", "0", vector_body("connection.connected")) }.not_to raise_error
+      expect(log_output).to include("run 0 isn't there", "connection 0 isn't there")
 
       QubeRails.config.operations = { "sync_customer" => "QuickbooksDesktop::SyncCustomer" }
       expect { QubeRails.run("run", run.id.to_s, run_body("workflow_run.completed", run)) }

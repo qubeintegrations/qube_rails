@@ -8,14 +8,14 @@ module QubeRails
   #   POST /qube/questions/runs/<run id>         a choice, with its fields
   #   GET  /qube/questions/runs/<run id>/search  a record field's matches, as JSON
   # Each finds the run, its operation (config.operations) and its record, as the webhooks do, and
-  # asks config.authorize_question(controller, record, run) before anything is sent. The calls to QuBe Sync are made here, with
+  # asks config.authorize_question(controller, record, run) before anything is sent: by default,
+  # whether the signed-in account owns the run's connection. The calls to QuBe Sync are made here, with
   # the API key, so the browser only ever talks to your app.
   #
   # Behind your sign-in, as your ApplicationController (config.parent_controller) is. The answers
   # come from forms, so they carry your CSRF token, as the partial writes it.
   class QuestionsController < QubeRails.config.parent_controller.constantize
     CHANGED = "This question has changed; reload."
-    REFUSED = "You can't answer this question."
 
     before_action :find_question
 
@@ -60,15 +60,6 @@ module QubeRails
 
     def find_question
       authorize = QubeRails.config.authorize_question
-      unless authorize
-        # The run's id comes from the URL, so authorize_question is all that keeps one customer's
-        # users off another's records: until it's written, nothing is let through.
-        QubeRails.logger.error("QuBe Sync: refused an answer or search for run #{params[:id]}: " \
-                               "config.authorize_question isn't set in #{Configuration::FILE}, so " \
-                               "every one is refused until it is")
-        return refuse(:forbidden)
-      end
-
       run = QubeRails::Run.find_by(id: params[:id])
       operation = run && QubeRails.config.operation_class(run.operation)
       record = operation && operation.record_for(run)
@@ -80,7 +71,7 @@ module QubeRails
       unless authorize.call(self, record, run) == true
         QubeRails.logger.warn("QuBe Sync: refused an answer or search for run #{run.id}: " \
                               "config.authorize_question said no")
-        return refuse(:not_found)
+        return refuse
       end
 
       @operation = operation.new(record, run)
@@ -88,13 +79,11 @@ module QubeRails
       @links = run.links || {}
     end
 
-    def refuse(status)
+    def refuse
       if action_name == "search"
-        render json: [], status: status
-      elsif status == :not_found
-        head :not_found
+        render json: [], status: :not_found
       else
-        render plain: REFUSED, status: status
+        head :not_found
       end
     end
 

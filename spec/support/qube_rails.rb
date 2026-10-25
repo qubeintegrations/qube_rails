@@ -20,9 +20,7 @@ module QubeRailsHelpers
                             "sync_customer" => "QuickbooksDesktop::SyncCustomer" }
       config.connection_events = "QuickbooksDesktop::ConnectionEvents"
       config.current_account = ->(controller) { controller.current_account }
-      config.authorize_question = lambda do |controller, _record, run|
-        run.connection.owner == controller.current_account
-      end
+      # authorize_question is left to its default: the signed-in account owns the run's connection.
       config.dedupe = QubeRails::CacheDedupe.new(ActiveSupport::Cache::MemoryStore.new)
       config.api_key = API_KEY
       config.base_url = BASE_URL

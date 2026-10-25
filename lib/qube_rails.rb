@@ -19,10 +19,6 @@ module QubeRails
   # A run whose operation none of config.operations has any more (taken out after it started).
   class UnknownOperation < StandardError; end
 
-  # The run or connection a delivery names, or a run's record, isn't there. The job raises it so
-  # your queue retries: the record may not be committed yet, or it was deleted since.
-  class RecordMissing < StandardError; end
-
   # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
   class NotConnected < ArgumentError; end
@@ -81,24 +77,40 @@ module QubeRails
       Rails.logger
     end
 
+    # A run, connection or record that isn't there is dropped with a warning, not raised: the
+    # endpoint answered 404 unless the row existed, and the app saves a record before its run's
+    # row, so by the time a job runs, a missing one was deleted, and retrying would never
+    # succeed. An operation taken out of config.operations raises (UnknownOperation): putting it
+    # back and retrying does.
     def run_event(id, event)
       run = Run.find_by(id: id)
-      raise RecordMissing, "QuBe Sync: no run #{id.inspect}" unless run
+      return dropped("run #{id} isn't there", event) unless run
 
       operation = config.operation_class(run.operation)
       raise UnknownOperation, "QuBe Sync: no operation has the slug #{run.operation.inspect}" unless operation
 
-      record = operation.record_for(run)
-      raise RecordMissing, "QuBe Sync: run #{run.id}'s #{run.record_type} #{run.record_id} isn't there" unless record
+      record = find_run_record(operation, run)
+      return dropped("run #{run.id}'s #{run.record_type} #{run.record_id} isn't there", event) unless record
 
       operation.new(record, run).handle(event)
     end
 
     def connection_event(id, event)
       connection = Connection.find_by(id: id)
-      raise RecordMissing, "QuBe Sync: no connection #{id.inspect}" unless connection
+      return dropped("connection #{id} isn't there", event) unless connection
 
       config.connection_events_class.new(connection).handle(event)
+    end
+
+    def find_run_record(operation, run)
+      operation.record_for(run)
+    rescue ActiveRecord::RecordNotFound # a find_record written with find
+      nil
+    end
+
+    def dropped(why, event)
+      logger.warn("QuBe Sync: dropped #{event.event || event.type}: #{why} (deleted since, so it can't be applied)")
+      nil
     end
 
     # Forgets the settings and the client: for tests.

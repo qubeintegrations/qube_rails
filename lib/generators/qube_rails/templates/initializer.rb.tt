@@ -1,6 +1,5 @@
 # QuBe Sync (qube_rails): the only place the engine reads your app from. A setting left unset
-# raises QubeRails::NotConfigured, naming this file, the first time it's needed; an unset
-# authorize_question refuses every answer and search instead. Fill in authorize_question and
+# raises QubeRails::NotConfigured, naming this file, the first time it's needed. Fill in
 # current_account before anything else.
 #
 # The engine's routes come from `mount QubeRails::Engine => "/"` in config/routes.rb:
@@ -28,13 +27,13 @@ QubeRails.configure do |config|
   # own can be set up again; nil answers 401.
   # config.current_account = ->(controller) { controller.current_user.account }
 
-  # Whether the signed-in user may answer or search the question run asks about record. The run
-  # carries its operation and its connection, whose owner is the account that connected it. Only
-  # true allows (anything else answers 404). The run's id comes from the URL, so this is all that
-  # keeps one customer's users off another's: until it's set, every answer and search is refused
-  # (and logged).
+  # Whether the signed-in user may answer or search the question run asks about record. By
+  # default, yes when the signed-in account (current_account) owns the run's connection, and no
+  # (404, logged) otherwise. Set it to check more, such as whether this user may see the record,
+  # or to let staff act across accounts. Only true allows.
   # config.authorize_question = ->(controller, record, run) {
-  #   run.connection.owner == controller.current_user.account
+  #   run.connection.owner == controller.current_user.account &&
+  #     controller.current_user.can_edit?(record)
   # }
 
   # How a verified webhook reaches a worker. The default is ActiveJob (QubeRails::WebhookJob) on

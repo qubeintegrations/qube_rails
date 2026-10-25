@@ -110,19 +110,41 @@ RSpec.describe "The question routes", type: :request do
       expect { answer(choice: "use:1") }.to raise_error(QubeSync::APIError)
     end
 
-    it "refuses every answer, logging why, while authorize_question isn't set" do
-      QubeRails.config.authorize_question = nil
+    it "by default lets the account that owns the run's connection answer" do
+      stub_request(:post, decisions).to_return(json_data({}))
 
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:forbidden)
-      expect(log_output).to include("ERROR QuBe Sync: refused an answer or search for run #{run.id}: " \
-                                    "config.authorize_question isn't set in config/initializers/qube_rails.rb")
-      expect(a_request(:post, decisions)).not_to have_been_made
-      expect(run.reload.question).to eq(question)
+      expect(response).to have_http_status(:see_other)
     end
 
-    it "answers 404 for another account's run, so its existence doesn't show" do
+    it "by default refuses when current_account finds no account" do
+      QubeRails.config.current_account = ->(_controller) { nil }
+
+      answer(choice: "use:1")
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "by default compares the owner by type and id, so an unsaved account never matches" do
+      QubeRails.config.current_account = ->(_controller) { Account.new(name: "Unsaved") }
+
+      answer(choice: "use:1")
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "uses an authorize_question the app sets in place of the default" do
+      other = Account.create!(name: "Staff account")
+      QubeRails.config.authorize_question = ->(_controller, record, _run) { record.number == "1001" }
+      stub_request(:post, decisions).to_return(json_data({}))
+
+      answer({ choice: "use:1" }, headers: { "X-Account" => other.id.to_s })
+
+      expect(response).to have_http_status(:see_other)
+    end
+
+    it "by default answers 404 for another account's run, logged, so its existence doesn't show" do
       other = Account.create!(name: "Someone else")
 
       answer({ choice: "use:1" }, headers: { "X-Account" => other.id.to_s })
@@ -256,12 +278,12 @@ RSpec.describe "The question routes", type: :request do
       expect(a_request(:get, /search/)).not_to have_been_made
     end
 
-    it "refuses every search while authorize_question isn't set" do
-      QubeRails.config.authorize_question = nil
+    it "by default answers [] with 404 for another account's run" do
+      other = Account.create!(name: "Someone else")
 
-      search("river")
+      search("river", headers: { "X-Account" => other.id.to_s })
 
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:not_found)
       expect(JSON.parse(response.body)).to eq([])
       expect(a_request(:get, /search/)).not_to have_been_made
     end

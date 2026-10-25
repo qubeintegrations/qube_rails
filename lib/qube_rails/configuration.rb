@@ -7,8 +7,7 @@ module QubeRails
   # The only place qube_rails reads your app from: QubeRails.configure in
   # config/initializers/qube_rails.rb (`rails g qube_rails:install` writes one). A setting your
   # app hasn't written raises QubeRails::NotConfigured, naming that file, the first time it's
-  # needed, so nothing silently passes; authorize_question, unset, refuses every answer and
-  # search instead.
+  # needed, so nothing silently passes.
   class Configuration
     FILE = "config/initializers/qube_rails.rb"
     DEFAULT_BASE_URL = "https://qubesync.com"
@@ -87,18 +86,23 @@ module QubeRails
 
     # Whether the signed-in user may answer or search the question a run asks about record. The
     # run (a QubeRails::Run) carries its operation and its connection, whose owner is the account
-    # that connected it:
+    # that connected it. Only true allows; anything else is refused (404, as for a missing run)
+    # and logged. The run's id comes from the URL, so this is what keeps one customer's users off
+    # another's runs.
+    #
+    # The default allows the signed-in account (current_account) when it owns the run's
+    # connection. Set your own to check more (that the user may see the record), or less (staff
+    # who act across accounts):
     #   config.authorize_question = ->(controller, record, run) {
-    #     run.connection.owner == controller.current_user.account
+    #     run.connection.owner == controller.current_user.account && controller.current_user.can_edit?(record)
     #   }
-    # Only true allows; anything else is refused (404, as for a missing run) and logged. The run's
-    # id comes from the URL, so this is all that keeps one customer's users off another's records
-    # and connections. Unset, every answer and search is refused (403), and logged.
     def authorize_question=(callable)
       @authorize_question = callable!(:authorize_question, callable)
     end
 
-    attr_reader :authorize_question
+    def authorize_question
+      @authorize_question || method(:owner_answers)
+    end
 
     # Hands a verified delivery, { kind:, id:, body: } (kind "run" or "connection", id the row's),
     # to a queue. The default puts it on ActiveJob (QubeRails::WebhookJob, on the queue setting).
@@ -171,6 +175,19 @@ module QubeRails
     alias to_s inspect
 
     private
+
+    # The default authorize_question: the signed-in account owns the run's connection. Compared
+    # by type and id, as the connection keeps them, so a nil or unsaved account never matches.
+    def owner_answers(controller, _record, run)
+      account = current_account.call(controller)
+      return false if account.nil? || account.id.nil?
+      return false if account.respond_to?(:persisted?) && !account.persisted?
+
+      klass = account.class
+      type = klass.respond_to?(:base_class) ? klass.base_class.name : klass.name
+      connection = run.connection
+      type == connection.owner_type && account.id.to_s == connection.owner_id.to_s
+    end
 
     def enqueue_on_active_job(delivery)
       QubeRails::WebhookJob.perform_later(delivery[:kind], delivery[:id], delivery[:body])
