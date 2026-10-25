@@ -27,6 +27,10 @@ module QubeRailsHelpers
       config.webhook_secret = SECRET
       config.webhook_url = WEBHOOK_URL
     end
+    # The client the engine would make, without the waits between its retries.
+    client = QubeSync::Client.new(api_key: API_KEY, base_url: BASE_URL, sleep: ->(_seconds) {},
+                                  on_retry: QubeRails.method(:log_retry))
+    QubeRails.instance_variable_set(:@client, client)
   end
 
   def log_output

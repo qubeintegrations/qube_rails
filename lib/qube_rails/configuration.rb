@@ -22,6 +22,7 @@ module QubeRails
       @enqueue = nil
       @dedupe = nil
       @queue = nil
+      @job_attempts = nil
       @parent_controller = nil
       @api_key = nil
       @base_url = nil
@@ -113,6 +114,20 @@ module QubeRails
 
     def enqueue
       @enqueue || method(:enqueue_on_active_job)
+    end
+
+    # How many times QubeRails::WebhookJob runs a delivery before it gives up (retry_on, with a
+    # growing wait), read when the job class loads. Default 10.
+    def job_attempts
+      @job_attempts || 10
+    end
+
+    def job_attempts=(attempts)
+      unless attempts.is_a?(Integer) && attempts >= 1
+        raise ArgumentError, "job_attempts is a whole number of 1 or more, in #{FILE}"
+      end
+
+      @job_attempts = attempts
     end
 
     # The ActiveJob queue QubeRails::WebhookJob runs on.

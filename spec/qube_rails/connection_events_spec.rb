@@ -5,7 +5,7 @@ RSpec.describe QubeRails::ConnectionEvents do
   let(:connection) { make_connection(account, status: "pending") }
 
   def run_event(name, changes = {}, target = connection)
-    QubeRails::WebhookJob.perform_now("connection", target.id.to_s, vector_body(name, changes))
+    QubeRails::WebhookJob.new.perform("connection", target.id.to_s, vector_body(name, changes))
     target.reload
   end
 
@@ -40,12 +40,33 @@ RSpec.describe QubeRails::ConnectionEvents do
                                   "\"someone-elses\": not this connection")
   end
 
-  it "skips everything while the row has no qube_id" do
-    connection.update!(qube_id: nil)
-    run_event("connection.connected", "connection" => { "id" => nil })
-    run_event("connection.connected")
+  describe "a row with no qube_id yet" do
+    before { connection.update!(qube_id: nil) }
 
-    expect(QuickbooksDesktop::ConnectionEvents.calls).to be_empty
+    it "raises NotReady, so the queue retries, when QuBe Sync has no connection for the row" do
+      stub_request(:get, api_url("/connections")).to_return(json_data([{ "id" => "other", "webhook_url" => "https://elsewhere" }]))
+
+      expect { QubeRails.run("connection", connection.id.to_s, vector_body("connection.connected")) }
+        .to raise_error(QubeRails::NotReady, /no qube_id yet/)
+      expect(QuickbooksDesktop::ConnectionEvents.calls).to be_empty
+    end
+
+    it "retries the job on NotReady" do
+      stub_request(:get, api_url("/connections")).to_return(json_data([]))
+      QubeRails::WebhookJob.perform_now("connection", connection.id.to_s, vector_body("connection.connected"))
+
+      expect(QubeRails::WebhookJob).to have_been_enqueued.with("connection", connection.id.to_s, anything)
+    end
+
+    it "adopts QuBe Sync's connection made with the row's webhook URL, then applies the event" do
+      stub_request(:get, api_url("/connections"))
+        .to_return(json_data([{ "id" => QubeRailsHelpers::QUBE_ID, "webhook_url" => connection.webhook_url }]))
+
+      QubeRails.run("connection", connection.id.to_s, vector_body("connection.connected"))
+
+      expect(connection.reload).to have_attributes(qube_id: QubeRailsHelpers::QUBE_ID, status: "connected")
+      expect(log_output).to include("adopted QuBe Sync's connection")
+    end
   end
 
   it "skips an event that isn't a connection's" do
@@ -75,7 +96,7 @@ RSpec.describe QubeRails::ConnectionEvents do
   it "raises naming the initializer when connection_events isn't set" do
     QubeRails.config.connection_events = nil
 
-    expect { run_event("connection.connected") }
+    expect { QubeRails.run("connection", connection.id.to_s, vector_body("connection.connected")) }
       .to raise_error(QubeRails::NotConfigured, %r{connection_events.*config/initializers/qube_rails\.rb})
   end
 

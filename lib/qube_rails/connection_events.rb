@@ -43,7 +43,18 @@ module QubeRails
     #   retried connection.stalled that comes after its connection.resumed is skipped.
     # It holds the connection row's lock while it does, so two workers never apply its events at
     # once, and what your handler writes is saved with the revision or not at all.
+    #
+    # A row with no qube_id yet can't be checked: its id is adopted from QuBe Sync when one of the
+    # app's connections there has this row's webhook URL (a create that landed but whose id
+    # wasn't saved yet), and otherwise QubeRails::NotReady is raised, so the queue retries it.
     def handle(event)
+      if connection.qube_id.to_s.empty?
+        connection.adopt_qube_connection
+        if connection.qube_id.to_s.empty?
+          raise NotReady, "QuBe Sync: connection #{connection.id} has no qube_id yet; #{event.event} waits for it"
+        end
+      end
+
       connection.with_lock { apply(event) }
     end
 

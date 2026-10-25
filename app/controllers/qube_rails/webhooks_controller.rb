@@ -42,9 +42,12 @@ module QubeRails
 
       # The signature covers the body, not the URL, so the id is only a pointer: the job checks
       # the event's reference and connection id against the row.
-      # The body goes as text, which any queue can carry; the job parses it again.
-      QubeRails.config.enqueue.call(kind: kind, id: id, body: body.dup.force_encoding(Encoding::UTF_8))
-      head :ok
+      # The body goes as text, which any queue can carry; the job parses it again. A 200 tells
+      # QuBe Sync it's taken and it won't send it again, so a queue that didn't take it answers
+      # 503 and QuBe Sync retries.
+      return head(:ok) if enqueued?(kind, id, body.dup.force_encoding(Encoding::UTF_8))
+
+      head :service_unavailable
     rescue Backend::SignatureError => e
       # Its reason (missing, malformed, stale or mismatch) is safe to log: never the secret, the
       # signature or the body.
@@ -54,6 +57,21 @@ module QubeRails
       # Signed, but not a JSON object: nothing a job could take.
       QubeRails.logger.warn("QuBe Sync: refused a webhook: #{e.message}")
       head :bad_request
+    end
+
+    # false (ActiveJob 7.1+ when the adapter couldn't enqueue, or a callback stopped it) or an
+    # error from the enqueue is a delivery not taken. Logged without the body.
+    def enqueued?(kind, id, body)
+      result = QubeRails.config.enqueue.call(kind: kind, id: id, body: body)
+      return true unless result == false
+
+      QubeRails.logger.error("QuBe Sync: couldn't enqueue a webhook for #{kind} #{id}: the enqueue returned false; " \
+                             "answered 503 so QuBe Sync sends it again")
+      false
+    rescue StandardError => e
+      QubeRails.logger.error("QuBe Sync: couldn't enqueue a webhook for #{kind} #{id} (#{e.class}); " \
+                             "answered 503 so QuBe Sync sends it again")
+      false
     end
 
     def too_large

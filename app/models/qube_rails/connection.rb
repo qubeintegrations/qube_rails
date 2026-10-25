@@ -18,6 +18,10 @@ module QubeRails
   class Connection < ApplicationRecord
     self.table_name = "qube_connections"
 
+    # The ones that have never connected, newest first: what Connect sends back through setup
+    # rather than making another.
+    scope :never_connected, -> { where(status: %w[pending setup_cancelled]).order(created_at: :desc, id: :desc) }
+
     STATUSES = %w[pending connected setup_cancelled stalled].freeze
 
     belongs_to :owner, polymorphic: true
@@ -39,6 +43,24 @@ module QubeRails
 
     def connected?
       status == "connected"
+    end
+
+    # For a row without a qube_id: QuBe Sync's connection whose webhook URL is this row's, when a
+    # create landed but its id was never saved (it didn't commit, or the process died between the
+    # call and the save). Saves and returns the id, or nil when there's none, so a second
+    # connection is never made for one row.
+    def adopt_qube_connection
+      return qube_id unless qube_id.to_s.empty?
+
+      found = Array(QubeRails.client.list_connections).find do |made|
+        made.is_a?(Hash) && made["webhook_url"].to_s.chomp("/") == webhook_url
+      end
+      return nil unless found && !found["id"].to_s.empty?
+
+      QubeRails.logger.info("QuBe Sync: connection #{id} adopted QuBe Sync's connection #{found["id"]}, " \
+                            "made for it before its id was saved")
+      update!(qube_id: found["id"])
+      qube_id
     end
 
     # Keeps record's QuickBooks id for kind ("invoice", "customer", "item_service"...) on this

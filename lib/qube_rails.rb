@@ -19,6 +19,11 @@ module QubeRails
   # A run whose operation none of config.operations has any more (taken out after it started).
   class UnknownOperation < StandardError; end
 
+  # A connection's event came before the row's qube_id was saved (create_connection hadn't
+  # returned yet, or its update hadn't committed: a simulated connection sends
+  # connection.connected at once). The job raises it so the queue retries once it's there.
+  class NotReady < StandardError; end
+
   # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
   class NotConnected < ArgumentError; end

@@ -60,6 +60,24 @@ RSpec.describe "QuBe Sync's webhooks", type: :request do
       expect(QubeRails::WebhookJob).not_to have_been_enqueued
     end
 
+    it "answers 503, logged without the body, when the enqueue returns false" do
+      QubeRails.config.enqueue = ->(_delivery) { false }
+      deliver("/webhooks/qube/runs/#{run.id}", body, signature(body))
+
+      expect(response).to have_http_status(503)
+      expect(log_output).to include("ERROR QuBe Sync: couldn't enqueue a webhook for run #{run.id}")
+      expect(log_output).not_to include(run.reference)
+    end
+
+    it "answers 503, logged without the body or the error's message, when the enqueue raises" do
+      QubeRails.config.enqueue = ->(delivery) { raise IOError, "redis is down: #{delivery[:body]}" }
+      deliver("/webhooks/qube/runs/#{run.id}", body, signature(body))
+
+      expect(response).to have_http_status(503)
+      expect(log_output).to include("(IOError)")
+      expect(log_output).not_to include(run.reference)
+    end
+
     it "uses config.queue" do
       QubeRails.config.queue = :qube
       deliver("/webhooks/qube/runs/#{run.id}", body, signature(body))

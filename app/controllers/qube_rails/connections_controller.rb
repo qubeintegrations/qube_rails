@@ -11,16 +11,22 @@ module QubeRails
   # your sign-in, as your ApplicationController (config.parent_controller) is.
   class ConnectionsController < QubeRails.config.parent_controller.constantize
     # POST /quickbooks/connections, from a "Connect QuickBooks Desktop" button, with an optional
-    # name. Best clicked on the computer where QuickBooks is installed. The row is written first,
-    # so the connection's webhook URL names it; if QuBe Sync doesn't answer, the row is left
-    # without a qube_id and its onboarding route tries again. Until connection.connected comes,
-    # show it as waiting for QuickBooks: the setup doesn't come back here.
+    # name. Best clicked on the computer where QuickBooks is installed. It sends the account's
+    # newest connection that has never connected (pending, or its setup cancelled) back through
+    # setup, so clicking Connect again doesn't pile up connections; it makes a new one when the
+    # account has none, or with new=1 (a "Connect another company file" button). A new row is
+    # written first, so the connection's webhook URL names it; if QuBe Sync doesn't answer, the
+    # row is left without a qube_id and the next click picks it up. Until connection.connected
+    # comes, show it as waiting for QuickBooks: the setup doesn't come back here.
     def create
       account = signed_in_account
       return head(:unauthorized) unless account
 
-      connection = QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending")
-      send_to_setup(connection)
+      connection = QubeRails::Connection.owned_by(account).never_connected.first unless params[:new].to_s == "1"
+      return send_to_setup(connection) if connection
+
+      send_to_setup(QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending"),
+                    fresh: true)
     end
 
     # POST /quickbooks/connections/:id/onboarding: sends one of the signed-in account's
@@ -51,7 +57,10 @@ module QubeRails
       name.empty? ? nil : name[0, 255]
     end
 
-    def send_to_setup(connection)
+    # fresh: a row this request wrote, which no earlier create can have been made for.
+    def send_to_setup(connection, fresh: false)
+      # An earlier create that landed before its id was saved: that connection, not a second one.
+      connection.adopt_qube_connection if !fresh && connection.qube_id.to_s.empty?
       if connection.qube_id
         QubeRails.client.update_connection(connection.qube_id, webhook_url: connection.webhook_url)
         made = QubeRails.client.regenerate_onboarding(connection.qube_id)

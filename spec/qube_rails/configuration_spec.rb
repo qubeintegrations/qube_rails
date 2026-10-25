@@ -46,6 +46,7 @@ RSpec.describe QubeRails::Configuration do
 
   it "has the defaults the plan names" do
     expect(config.queue).to eq(:default)
+    expect(config.job_attempts).to eq(10)
     expect(config.parent_controller).to eq("ApplicationController")
     expect(config.dedupe).to be_a(QubeRails::CacheDedupe)
     expect(config.enqueue).to respond_to(:call)

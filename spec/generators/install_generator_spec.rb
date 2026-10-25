@@ -40,7 +40,7 @@ RSpec.describe QubeRails::Generators::InstallGenerator do
     generate
 
     initializer = read("config/initializers/qube_rails.rb")
-    %w[operations connection_events current_account authorize_question enqueue queue dedupe
+    %w[operations connection_events current_account authorize_question enqueue queue job_attempts dedupe
        parent_controller api_key base_url webhook_secret webhook_url].each do |setting|
       expect(initializer).to include("config.#{setting}")
     end

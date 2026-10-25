@@ -7,7 +7,7 @@ RSpec.describe QubeRails::Operation do
   let(:run) { make_run(invoice, connection) }
 
   def run_event(name, changes = {}, target = run)
-    QubeRails::WebhookJob.perform_now("run", target.id.to_s, run_body(name, target, changes))
+    QubeRails::WebhookJob.new.perform("run", target.id.to_s, run_body(name, target, changes))
     target.reload
   end
 
@@ -196,11 +196,67 @@ RSpec.describe QubeRails::Operation do
       expect(QubeRails::Run.count).to eq(0)
     end
 
-    it "marks the run failed and raises again when the start raises" do
+    it "marks the run failed and raises again when QuBe Sync refuses the start (a 4xx)" do
       stub_request(:post, /workflow-runs/).to_return(status: 422, body: { errors: { detail: "bad input" } }.to_json)
 
       expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
       expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
+    end
+
+    it "marks the run failed when its input raises, before anything is sent" do
+      allow_any_instance_of(QuickbooksDesktop::CreateInvoice).to receive(:input).and_raise(NotImplementedError)
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(NotImplementedError)
+      expect(QubeRails::Run.last.state).to eq("failed")
+      expect(a_request(:post, /workflow-runs/)).not_to have_been_made
+    end
+
+    it "leaves the run starting, with its reference and input, when the start gets no answer" do
+      stub_request(:post, /workflow-runs/).to_timeout
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(Net::OpenTimeout)
+      expect(QubeRails::Run.last).to have_attributes(
+        state: "starting", qube_run_id: nil, input: { "operation" => "invoice.create", "params" => { "ref_number" => "1001" } }
+      )
+    end
+
+    it "leaves the run starting on a 5xx" do
+      stub_request(:post, /workflow-runs/).to_return(status: 500, body: "")
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
+      expect(QubeRails::Run.last.state).to eq("starting")
+    end
+  end
+
+  describe "#retry_start!" do
+    it "resends the same reference (as the Idempotency-Key), workflow, input and webhook URL" do
+      stub_request(:post, /workflow-runs/).to_timeout
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(Net::OpenTimeout)
+      started = QubeRails::Run.last
+      invoice.update!(number: "changed since") # the input it resends is the first one's
+
+      WebMock.reset!
+      replayed = stub_request(:post, api_url("/connections/#{connection.qube_id}/workflow-runs"))
+                 .to_return(json_data("id" => "run-q-1", "state" => "running").merge(
+                   headers: { "Content-Type" => "application/json", "Idempotent-Replayed" => "true" }
+                 ))
+
+      expect(started.retry_start!).to eq(started)
+      expect(replayed.with { |req|
+        sent = JSON.parse(req.body)
+        req.headers["Idempotency-Key"] == started.reference && sent["reference"] == started.reference &&
+          sent["workflow"] == "add_transaction" && sent["webhook_url"] == started.webhook_url &&
+          sent["input"] == { "operation" => "invoice.create", "params" => { "ref_number" => "1001" } }
+      }).to have_been_requested
+      expect(started.reload).to have_attributes(qube_run_id: "run-q-1", state: "running")
+    end
+
+    it "returns a run already answered as it is, and refuses one that failed" do
+      answered = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-9") }
+      expect(answered.retry_start!).to eq(answered)
+
+      failed = make_run(invoice, connection).tap { |r| r.update!(state: "failed") }
+      expect { failed.retry_start! }.to raise_error(ArgumentError, /only a start that got no answer/)
     end
   end
 
@@ -214,6 +270,72 @@ RSpec.describe QubeRails::Operation do
 
       operation.answered("t-1")
       expect(run.reload.question).to be_nil
+    end
+  end
+
+  describe "#quickbooks_ref" do
+    let(:customer) { Customer.create!(account: account, name: "Riverbend Electric") }
+    let(:operation) { QuickbooksDesktop::CreateInvoice.new(invoice, run) }
+
+    it "refers by ListID when the record is linked on the run's connection, else by name, else nil" do
+      expect(operation.quickbooks_ref(customer, kind: "customer", name: "Riverbend Electric"))
+        .to eq(full_name: "Riverbend Electric")
+      expect(operation.quickbooks_ref(nil, kind: "customer", name: nil)).to be_nil
+
+      connection.link(customer, kind: "customer", qb_id: "80000001-1")
+      expect(operation.quickbooks_ref(customer, kind: "customer", name: "Riverbend Electric")).to eq(list_id: "80000001-1")
+    end
+
+    it "never uses another connection's link" do
+      make_connection(account, qube_id: "conn-q-2").link(customer, kind: "customer", qb_id: "80000001-1")
+
+      expect(operation.quickbooks_ref(customer, kind: "customer", name: "R")).to eq(full_name: "R")
+    end
+  end
+
+  describe "#link_references" do
+    let(:customer) { Customer.create!(account: account, name: "Riverbend Electric") }
+    let(:widget) { Customer.create!(account: account, name: "Widget (an item, here)") }
+    let(:references) do
+      {
+        "customer_ref" => { "kind" => "customer", "outcome" => "found",
+                            "record" => { "type" => "customer", "list_id" => "80000001-1", "edit_sequence" => "17",
+                                          "full_name" => "Riverbend Electric" } },
+        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created",
+                                           "record" => { "type" => "item_service", "list_id" => "80000002-1",
+                                                         "full_name" => "Widget" } },
+        "invoice_line_add.1.item_ref" => { "kind" => "item", "outcome" => "not_found", "record" => nil },
+        "class_ref" => { "kind" => "class", "outcome" => "found", "record" => { "list_id" => "80000003-1" } }
+      }
+    end
+
+    def event_with(name, output)
+      QubeRails::Backend.parse(run_body(name, run, "output" => output))
+    end
+
+    it "links each reference's record to the app record the block returns, by the record's own type" do
+      operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
+      seen = []
+      linked = operation.link_references(event_with("workflow_run.completed", "references" => references)) do |path, entry|
+        seen << [path, entry["outcome"]]
+        { "customer_ref" => customer, "invoice_line_add.0.item_ref" => widget, "class_ref" => invoice }[path]
+      end
+
+      expect(seen).to eq([["customer_ref", "found"], ["invoice_line_add.0.item_ref", "created"], ["class_ref", "found"]])
+      expect(linked.size).to eq(3)
+      expect(connection.quickbooks_record("80000001-1", kind: "customer"))
+        .to have_attributes(record: customer, edit_sequence: "17", name: "Riverbend Electric")
+      expect(connection.quickbooks_record("80000002-1", kind: "item")).to have_attributes(kind: "item_service", record: widget)
+      expect(connection.quickbooks_record("80000003-1", kind: "class")).to have_attributes(kind: "class", record: invoice)
+    end
+
+    it "skips what the block returns nil for, and works on a cancelled ending" do
+      operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
+      cancelled = event_with("workflow_run.cancelled", "references" => references.slice("customer_ref"), "record" => nil)
+
+      expect(operation.link_references(cancelled) { |_path, _entry| customer }.size).to eq(1)
+      expect(operation.link_references(cancelled) { |_path, _entry| nil }).to eq([])
+      expect(operation.link_references(event_with("workflow_run.completed", nil)) { customer }).to eq([])
     end
   end
 

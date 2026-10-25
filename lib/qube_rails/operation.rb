@@ -36,8 +36,14 @@ module QubeRails
     # QubeRails::Connection the customer has finished onboarding, so it has a qube_id), and
     # returns the run row. The row is written first, with a new reference
     # (<slug>-<record id>-<uuid>) and state "starting", since a webhook can arrive before this
-    # returns. A start that raises (QuBe Sync refused it, or didn't answer) marks the row
-    # "failed" and raises again; starting again makes a new run.
+    # returns, and keeps the input it was started with.
+    #
+    # The reference is also the Idempotency-Key. When QuBe Sync refuses the start (a 4xx: bad
+    # input, a workflow that isn't published) or the input raises, the row is marked "failed"
+    # and the error raised: nothing was started, and starting again makes a new run. When the
+    # start gets no answer (a timeout, a 5xx, a dropped connection) it may have started, so the
+    # row stays "starting" and the error is raised: send it again with run.retry_start!, never a
+    # new start, or a run that did start runs twice (two invoices).
     def self.start(record, connection)
       unless connection.is_a?(QubeRails::Connection) && !connection.qube_id.to_s.empty?
         raise NotConnected, "QuBe Sync: #{name}.start needs a connection QuBe Sync has made (one with a " \
@@ -49,15 +55,48 @@ module QubeRails
         reference: "#{self::SLUG}-#{record.id}-#{SecureRandom.uuid}", state: "starting", revision: 0
       )
       begin
-        started = QubeRails.client.start_run(connection.qube_id, self::WORKFLOW, new(record, run).input,
-                                             reference: run.reference, webhook_url: run.webhook_url)
+        # As JSON reads it back, so a retry sends exactly what the first start did.
+        input = JSONCoder.load(JSONCoder.dump(new(record, run).input))
       rescue StandardError, NotImplementedError # an input not written yet, too
-        run.update_columns(state: "failed", updated_at: Time.now)
+        mark_failed(run)
         raise
       end
+      run.update!(input: input)
+      send_start(run, input)
+    end
+
+    # Sends a start that got no answer again (run.retry_start! calls it): the same reference as
+    # the Idempotency-Key, the same workflow, input and webhook URL. QuBe Sync answers a repeat of
+    # a start it took with the run that start made (201, Idempotent-Replayed: true) rather than
+    # starting another, for as long as that run is kept (60 days after it ends); a start it never
+    # took starts now. Returns the run; a run already answered is returned as it is.
+    def self.retry_start(run)
+      return run if run.qube_run_id
+      unless run.state == "starting"
+        raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer is sent again"
+      end
+
+      send_start(run, run.input)
+    end
+
+    def self.send_start(run, input)
+      started =
+        begin
+          QubeRails.client.start_run(run.connection.qube_id, self::WORKFLOW, input,
+                                     reference: run.reference, webhook_url: run.webhook_url)
+        rescue Backend::APIError => e
+          mark_failed(run) if e.status.between?(400, 499) # refused: nothing started
+          raise
+        end
       record_start(run, started.is_a?(Hash) ? started : {})
       run
     end
+    private_class_method :send_start
+
+    def self.mark_failed(run)
+      run.update_columns(state: "failed", updated_at: Time.now)
+    end
+    private_class_method :mark_failed
 
     # The run's id, links and state from QuBe Sync's answer. Its webhooks may have come first, so
     # the state is taken only while the row still says "starting".
@@ -151,6 +190,49 @@ module QubeRails
 
     def failed(event)
       log_event(event)
+    end
+
+    # How the input refers to one of your records in QuickBooks: { list_id: } when it's linked on
+    # this run's connection (connection.qb_id_for), else { full_name: name }, or nil when there's
+    # neither. Refer by id where you can: a name can match another record, or none after a
+    # rename.
+    #   customer_ref: quickbooks_ref(record.customer, kind: "customer", name: record.customer&.name)
+    def quickbooks_ref(app_record, kind:, name: nil)
+      list_id = app_record && connection.qb_id_for(app_record, kind: kind)
+      return { list_id: list_id } if list_id
+      return nil if name.nil? || name.to_s.empty?
+
+      { full_name: name }
+    end
+
+    # Links each QuickBooks record an ending carries (event.output["references"], keyed by the
+    # input's path: "customer_ref", "invoice_line_add.0.item_ref") to the record of yours your
+    # block returns for it, on this run's connection, so the next run refers to it by id. The
+    # block gets the path and the entry (kind, outcome and record: the record's own list as
+    # "type", with list_id, edit_sequence and full_name) and returns your record, or nil to skip
+    # it. An entry with no record (not found, or not reached before a cancel) is skipped. Works on
+    # an added ending and on a cancelled one, which can carry some. Returns the rows linked.
+    #   link_references(event) do |path, entry|
+    #     record.customer if path == "customer_ref"
+    #   end
+    def link_references(event)
+      output = event["output"]
+      references = output.is_a?(Hash) ? output["references"] : nil
+      return [] unless references.is_a?(Hash)
+
+      references.each_with_object([]) do |(path, entry), linked|
+        next unless entry.is_a?(Hash) && entry["record"].is_a?(Hash)
+
+        found = entry["record"]
+        next if found["list_id"].to_s.empty?
+
+        app_record = yield(path, entry)
+        next unless app_record
+
+        kind = found["type"].to_s.empty? ? entry["kind"] : found["type"]
+        linked << connection.link(app_record, kind: kind, qb_id: found["list_id"],
+                                              edit_sequence: found["edit_sequence"], name: found["full_name"])
+      end
     end
 
     # After your user's choice is in: the question is forgotten, unless the run has asked another

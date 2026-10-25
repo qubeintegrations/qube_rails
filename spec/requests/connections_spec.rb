@@ -22,7 +22,7 @@ RSpec.describe "Onboarding", type: :request do
       expect(connection).to have_attributes(owner: account, qube_id: "conn-q-1", status: "pending", name: "Main file")
     end
 
-    it "makes another connection for an account that has one" do
+    it "makes a new connection when the account's only one is connected" do
       make_connection(account)
       stub_request(:post, api_url("/connections"))
         .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
@@ -33,11 +33,60 @@ RSpec.describe "Onboarding", type: :request do
         .to contain_exactly(QubeRailsHelpers::QUBE_ID, "conn-q-2")
     end
 
-    it "leaves the row without a qube_id when QuBe Sync doesn't answer" do
+    it "sends the newest connection that never connected back through setup, rather than making another" do
+      travel_to(1.hour.ago) { make_connection(account, qube_id: "conn-q-old", status: "pending") }
+      cancelled = make_connection(account, qube_id: "conn-q-new", status: "setup_cancelled")
+      stub_request(:put, api_url("/connections/conn-q-new")).to_return(json_data({}))
+      stub_request(:post, api_url("/connections/conn-q-new/onboarding-url"))
+        .to_return(json_data("links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(response).to redirect_to(onboarding)
+      expect(QubeRails::Connection.count).to eq(2)
+      expect(a_request(:post, api_url("/connections"))).not_to have_been_made
+      expect(cancelled.reload.qube_id).to eq("conn-q-new")
+    end
+
+    it "makes another with new=1, for a second company file" do
+      make_connection(account, qube_id: "conn-q-pending", status: "pending")
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", params: { new: "1" }, headers: signed_in
+
+      expect(QubeRails::Connection.owned_by(account).count).to eq(2)
+    end
+
+    it "leaves the row without a qube_id when QuBe Sync doesn't answer, and the next click picks it up" do
       stub_request(:post, api_url("/connections")).to_return(status: 500, body: "")
 
       expect { post "/quickbooks/connections", headers: signed_in }.to raise_error(QubeSync::APIError)
-      expect(QubeRails::Connection.last).to have_attributes(qube_id: nil, status: "pending")
+      row = QubeRails::Connection.last
+      expect(row).to have_attributes(qube_id: nil, status: "pending")
+
+      stub_request(:get, api_url("/connections")).to_return(json_data([]))
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-1", "links" => { "onboarding" => onboarding }))
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(QubeRails::Connection.count).to eq(1)
+      expect(row.reload.qube_id).to eq("conn-q-1")
+    end
+
+    it "adopts a connection whose create landed but whose id was never saved, making no second one" do
+      row = make_connection(account, qube_id: nil, status: "pending")
+      stub_request(:get, api_url("/connections"))
+        .to_return(json_data([{ "id" => "conn-q-lost", "webhook_url" => row.webhook_url }]))
+      stub_request(:put, api_url("/connections/conn-q-lost")).to_return(json_data({}))
+      stub_request(:post, api_url("/connections/conn-q-lost/onboarding-url"))
+        .to_return(json_data("links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(row.reload.qube_id).to eq("conn-q-lost")
+      expect(a_request(:post, api_url("/connections"))).not_to have_been_made
+      expect(response).to redirect_to(onboarding)
     end
 
     it "is behind the app's sign-in" do
@@ -83,6 +132,7 @@ RSpec.describe "Onboarding", type: :request do
 
     it "makes QuBe Sync's connection for a row left without one" do
       connection.update!(qube_id: nil)
+      stub_request(:get, api_url("/connections")).to_return(json_data([]))
       stub_request(:post, api_url("/connections"))
         .to_return(json_data("id" => "conn-q-9", "links" => { "onboarding" => onboarding }))
 

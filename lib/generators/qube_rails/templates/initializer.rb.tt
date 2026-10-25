@@ -42,6 +42,10 @@ QubeRails.configure do |config|
   #   MyQueue.push(delivery[:kind], delivery[:id], delivery[:body])
   # }
   # config.queue = :default
+  # How many times QubeRails::WebhookJob runs a delivery whose work raised, with a growing wait,
+  # before it logs an error and raises to your adapter. With Sidekiq, whose own retries follow,
+  # a smaller number (or 1, to leave retries to Sidekiq) avoids retrying twice over.
+  # config.job_attempts = 10
 
   # Where notification delivery ids are remembered, so a retry is taken once: seen?(key) and
   # remember(key). The default is Rails.cache for a day: make that a store your workers share
