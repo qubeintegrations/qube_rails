@@ -365,6 +365,41 @@ skipped and logged; a notification is taken once; anything else only when its re
 than the last applied. Handlers see `record`, `run` and `connection`. A handler you don't write
 logs.
 
+## Typed workflow starts
+
+```sh
+bin/rails g qube_rails:workflows            # app/qube/qube_workflows.rb and sig/qube_workflows.rbs
+bin/rails g qube_rails:workflows --check    # in CI: exits 1 when the file is out of date
+```
+
+The generator fetches your app's workflow input types from QuBe Sync with `config.api_key` and
+writes `QubeWorkflows` (autoloaded from `app/qube`): a module per workflow, with a start method
+and an input method per branch of its input, whose operation bodies have the types and field docs
+of the qube_sync gem's operation methods. Check both files in, and run it again when a workflow is
+published. An operation's `input` can return the workflow's input method:
+
+```ruby
+def input
+  QubeWorkflows::AddTransaction.invoice_input(without_nils({
+    customer_ref: quickbooks_ref(record.customer, kind: "customer", name: record.customer&.name),
+    ref_number: record.number
+  }))
+end
+```
+
+It's still a Hash (the method leaves out nil inputs); its RBS type is
+`QubeWorkflows::AddTransaction::invoice_input`. Outside an operation,
+`QubeWorkflows.add_transaction.invoice(connection, params, reference:, webhook_url:)` starts a
+run on `QubeRails.client` directly (a `QubeRails::Connection` or its `qube_id`), without a run row.
+QuBe Sync still checks every start: a field the operation doesn't take is a 422 naming it
+(`{"path": "input.params", "message": "unknown parameter: \"customer_rf\""}`).
+
+- `--drafts` types each workflow's draft where it has one; `--check` fetches with whatever the file
+  was generated with.
+- `--check` exits 1 when the served digest isn't the file's (naming the workflows that changed) or
+  QuBe Sync refuses the key, and warns and exits 0 when QuBe Sync can't be reached or answers 5xx.
+- It needs the qube_sync gem (Ruby 3.3): an app on the kit's inline backend can't run it.
+
 ## Run status
 
 The engine keeps every ending on the run row before your handler runs, under the same lock:

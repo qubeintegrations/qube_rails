@@ -151,7 +151,15 @@ module QubeRails
       run.connection
     end
 
-    # The run's input, from the record. Each operation says how.
+    # The run's input, from the record. Each operation says how. It returns a Hash; with typed
+    # workflow starts (`bin/rails g qube_rails:workflows`, which writes app/qube/qube_workflows.rb),
+    # it can return the workflow's own input method's, whose operation bodies are typed and
+    # documented as the operation's params:
+    #   def input
+    #     QubeWorkflows::AddTransaction.invoice_input({ customer_ref: quickbooks_ref(...), ... })
+    #   end
+    # whose RBS type is QubeWorkflows::AddTransaction::invoice_input (the workflow's module, then
+    # <branch>_input, or input for a workflow whose input has no branches).
     def input
       raise NotImplementedError, "#{self.class.name}#input isn't written yet"
     end

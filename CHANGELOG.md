@@ -55,6 +55,15 @@ into every Rails app, so the app keeps only its own.
   row's, with its webhook URL and name; one with no `created_at` is never adopted.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,
   the engine's migrations and the mount line.
+- `bin/rails g qube_rails:workflows [--drafts] [--check]` writes `app/qube/qube_workflows.rb`
+  (`QubeWorkflows`, autoloaded) and `sig/qube_workflows.rbs` from the app's workflow input types,
+  through qube_sync's renderer: typed start and input methods per workflow and branch, starting
+  runs on `QubeRails.client`. `--check` exits 1 when the file is out of date or the key is refused,
+  and warns and passes when QuBe Sync can't be reached. `QubeRails::Backend` gains
+  `workflow_types`, `render_workflow_types` and `check_workflow_types`.
+- `QubeRails::Operation#input` is documented as able to return a generated input method's Hash
+  (`QubeWorkflows::AddTransaction.invoice_input(...)`, RBS type
+  `QubeWorkflows::AddTransaction::invoice_input`); it still returns a Hash.
 
 ### Changed
 - Needs Ruby 3.3, Rails 7.0 and qube_sync 0.4.0 or later. The source stays Ruby 2.7 and Rails
