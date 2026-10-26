@@ -20,7 +20,8 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["documentation_uri"] = "https://docs.qubesync.com"
-  spec.metadata["changelog_uri"] = "https://qubesync.com"
+  spec.metadata["source_code_uri"] = "https://github.com/qubeintegrations/qube_rails"
+  spec.metadata["changelog_uri"] = "https://github.com/qubeintegrations/qube_rails/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
