@@ -6,6 +6,10 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- `POST qube/runs/:id/redeliver` and the run status partial's "Send its latest news again" for a
+  run that looks stuck (`Run#looks_stuck?`): QuBe Sync sends its latest event again
+  (qube_sync's `redeliver_run`). `SyncStatus` has `:done` for a run that completed and linked
+  nothing, so `:in_quickbooks` always means a link with a `qb_id`.
 - Sync status, derived and never stored: `connection.sync_status(record, operation:)`
   (`QubeRails::SyncStatus`: `:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`, `:failed`,
   `:cancelled`, with `qb_id`, `error`, `retry?`), `SyncStatus.latest`, and the connection's scopes

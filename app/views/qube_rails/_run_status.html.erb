@@ -30,6 +30,11 @@
 <%   if sync.failed? && run.error_detail %>
   <p class="qube-run-error-detail"><%= run.error_detail %></p>
 <%   end %>
+<%   if run&.looks_stuck? %>
+  <p class="qube-run-quiet">No news from QuBe Sync about it for a while.</p>
+  <%= button_to "Send its latest news again", qube_rails.redeliver_path(run), class: "qube-redeliver",
+                form: { class: "qube-redeliver-form" } %>
+<%   end %>
 <%   if sync.unconfirmed? %>
   <%= button_to "Try the start again", qube_rails.retry_start_path(run), class: "qube-retry-start",
                 form: { class: "qube-retry-start-form" } %>

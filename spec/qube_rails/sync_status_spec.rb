@@ -49,9 +49,11 @@ RSpec.describe QubeRails::SyncStatus do
     expect(status).to have_attributes(status: :cancelled, retry?: true)
   end
 
-  it "is in_quickbooks for a run that completed without linking the record" do
-    run_in("completed", outcome: "added", ended_at: Time.now)
-    expect(status).to have_attributes(status: :in_quickbooks, qb_id: nil)
+  it "is done for a run that completed and linked nothing, which a new start may follow" do
+    run_in("completed", outcome: "synced", ended_at: Time.now)
+    expect(status).to have_attributes(status: :done, qb_id: nil, retry?: false)
+    expect(status.in_quickbooks?).to be(false)
+    expect(connection.not_in_quickbooks(Invoice)).to include(invoice)
   end
 
   describe "when the run and the link disagree" do

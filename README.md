@@ -56,6 +56,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
+| `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Send its latest news again" button. Behind your sign-in and CSRF, and `authorize_question`. |
 | `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
 
 The webhook routes verify the signature (401 if it doesn't check out), answer 404 when the row
@@ -454,7 +455,7 @@ and never stored, so your tables need no status column:
 
 ```ruby
 status = connection.sync_status(invoice, operation: "create_invoice")
-status.status       # :not_sent, :sending, :needs_answer, :in_quickbooks, :failed or :cancelled
+status.status       # :not_sent, :sending, :needs_answer, :in_quickbooks, :done, :failed or :cancelled
 status.qb_id        # its QuickBooks id on this connection, when it's linked
 status.error        # a failed run's error
 status.retry?       # whether starting again makes sense (failed or cancelled, and not linked)
@@ -470,8 +471,9 @@ When the run and the link disagree, the newest word wins:
 1. a latest run that hasn't ended: `:sending` (an unconfirmed start too) or `:needs_answer`;
 2. a latest run that failed or was cancelled after the link was made, or with no link:
    `:failed` or `:cancelled`;
-3. a link: `:in_quickbooks`;
-4. a latest run that completed without linking the record: `:in_quickbooks`, with no `qb_id`;
+3. a link: `:in_quickbooks`, always with its `qb_id`;
+4. a latest run that completed and linked nothing (an operation that doesn't link its record):
+   `:done`, which a new start may follow;
 5. otherwise `:not_sent`.
 
 For list pages and filters, the connection has scopes over a model or relation of yours, one query
@@ -495,6 +497,12 @@ refresh, in an app with turbo-rails 2 (Turbo 8) and Action Cable: the partials s
 then once more 5 seconds later (`QubeRails::RefreshJob`, on `config.queue`), for a page that was
 still loading the first time (the redirect after a start, when the question comes at once).
 Without turbo-rails, nothing is sent, and a reload shows it.
+
+A run QuBe Sync confirmed that has had no news for 10 minutes, running or waiting on a question
+this app never received, may have lost a webhook (the app was down longer than QuBe Sync's
+retries). The partial then offers "Send its latest news again", which asks QuBe Sync to send the
+run's latest event again (`client.redeliver_run`); it comes back through the webhook route, and
+one already applied is skipped by its revision.
 
 An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
 answer's data, the start was confirmed meanwhile) goes back to the page with the reason in

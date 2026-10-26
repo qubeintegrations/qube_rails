@@ -48,6 +48,17 @@ RSpec.describe "The run status partial", type: :request do
     expect(status.at_css(".qube-run-error-detail")).to be_nil
   end
 
+  it "offers to send a quiet run's latest news again, and not before" do
+    run = make_run(invoice, connection)
+    run.update!(qube_run_id: "run-q-1")
+    expect(page.at_css("form.qube-redeliver-form")).to be_nil
+
+    run.update_columns(updated_at: 11.minutes.ago)
+    form = page.at_css("form.qube-redeliver-form")
+    expect(form["action"]).to eq("/qube/runs/#{run.id}/redeliver")
+    expect(page.at_css(".qube-run-quiet").text).to eq("No news from QuBe Sync about it for a while.")
+  end
+
   it "shows a completed run without a detail" do
     make_run(invoice, connection).update!(state: "completed", outcome: "added")
 

@@ -15,6 +15,9 @@ QubeRails::Engine.routes.draw do
   # A start QuBe Sync never confirmed, sent again, from the run status partial.
   post "qube/runs/:id/retry_start", to: "runs#retry_start", as: :retry_start
 
+  # A run that looks stuck, its latest event sent again, from the run status partial.
+  post "qube/runs/:id/redeliver", to: "runs#redeliver", as: :redeliver
+
   # Your user's answer to a run's question, from the question partial, and a record field's
   # search.
   post "qube/questions/runs/:id", to: "questions#create", as: :question

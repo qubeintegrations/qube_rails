@@ -7,7 +7,8 @@ module QubeRails
   # and your tables need no status column.
   #
   #   status = connection.sync_status(invoice, operation: "create_invoice")
-  #   status.status    # => :not_sent, :sending, :needs_answer, :in_quickbooks, :failed or :cancelled
+  #   status.status    # => :not_sent, :sending, :needs_answer, :in_quickbooks, :done, :failed or
+  #                    #    :cancelled
   #   status.qb_id     # the record's QuickBooks id on this connection, when it's linked
   #   status.error     # a failed run's error ({ "message" => ..., ... }), else nil
   #   status.retry?    # whether starting it again makes sense
@@ -20,12 +21,12 @@ module QubeRails
   #    unconfirmed? says so) or :needs_answer (awaiting input), whatever the link says;
   # 2. the latest run failed or was cancelled after the link was made (or there's no link):
   #    :failed or :cancelled;
-  # 3. the record is linked: :in_quickbooks;
-  # 4. the latest run completed without a link (an operation that doesn't link its record):
-  #    :in_quickbooks, with no qb_id;
+  # 3. the record is linked: :in_quickbooks, always with its qb_id;
+  # 4. the latest run completed and linked nothing (an operation that doesn't link its record):
+  #    :done, which a start may follow, since nothing in QuickBooks stands for the record;
   # 5. neither: :not_sent.
   class SyncStatus
-    STATUSES = %i[not_sent sending needs_answer in_quickbooks failed cancelled].freeze
+    STATUSES = %i[not_sent sending needs_answer in_quickbooks done failed cancelled].freeze
 
     attr_reader :status, :run, :link
 
@@ -50,7 +51,8 @@ module QubeRails
     def self.status_of(run, link)
       return in_flight(run) if run && !run.ended?
       return stopped(run) if stopped_since_link?(run, link)
-      return :in_quickbooks if link || run&.state == "completed"
+      return :in_quickbooks if link
+      return :done if run&.state == "completed"
 
       :not_sent
     end

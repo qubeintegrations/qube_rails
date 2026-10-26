@@ -82,7 +82,28 @@ module QubeRails
     # How long a start may go unconfirmed before the status says so and offers to send it again.
     UNCONFIRMED_AFTER_SECONDS = 60
 
+    # How long a confirmed run may go without news before the status offers to have QuBe Sync
+    # send its latest event again (QubeRails::RunsController#redeliver).
+    QUIET_AFTER_SECONDS = 10 * 60
+
+    # A run QuBe Sync confirmed that hasn't been heard from for QUIET_AFTER_SECONDS: running,
+    # or waiting on a question this app never received. Its webhook may have been lost (the app
+    # was down longer than QuBe Sync's retries), so the status offers to send it again.
+    def looks_stuck?
+      quiet_since?(Time.now - QUIET_AFTER_SECONDS) && (state == "running" || question_missing?)
+    end
+
     # A start QuBe Sync hasn't confirmed for a minute: send it again with retry_start!.
+    def quiet_since?(time)
+      !qube_run_id.to_s.empty? && !ended? && updated_at && updated_at < time
+    end
+    private :quiet_since?
+
+    def question_missing?
+      state == "awaiting_input" && question.nil?
+    end
+    private :question_missing?
+
     def unconfirmed?
       state == "starting" && created_at && created_at < Time.now - UNCONFIRMED_AFTER_SECONDS
     end
