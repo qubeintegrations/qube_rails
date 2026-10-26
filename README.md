@@ -195,10 +195,6 @@ dropped ...") and returns.
 | `QUBE_URL` | `https://qubesync.com` unless you're told otherwise |
 | `QUBE_WEBHOOK_URL` | the base of each run's and each connection's webhook URL: `qube listen --write-env .env` writes it in development, and in production it's your app's `/webhooks/qube` |
 
-Rails doesn't read `.env` by itself: add `gem "dotenv-rails"` to the Gemfile's development and
-test groups, unless your app already loads it. A setting that's in `.env` but not in the
-environment raises `QubeRails::NotConfigured` saying so.
-
 ## Connections
 
 A `QubeRails::Connection` is one company file: `owner` (your account), `qube_id` (QuBe Sync's
@@ -362,9 +358,12 @@ A start can fail two ways, and they're handled differently:
   `run.retry_start!` (or `QuickbooksDesktop::CreateInvoice.retry_start(run)`), never with a new
   `start`: a new reference would start a second run, and a second invoice.
 
-While the record's last run of the operation on that connection hasn't ended, `start` raises
-`QubeRails::AlreadyRunning` and starts nothing, so a double click doesn't add the invoice twice.
-The check and the new row are made under the connection row's lock.
+While the record's last run of the operation on that connection hasn't ended, `start` starts
+nothing new: it returns that run (`run.reused?` is true), sending its start again first when
+QuBe Sync hasn't confirmed it, with the same reference and the input it was started with. The
+reference is the `Idempotency-Key`, so QuBe Sync answers a repeat with the run it already started,
+and a double click never adds the invoice twice. A new reference is made only once the last run
+has ended. The check and the new row (with its input) are made under the connection row's lock.
 
 `retry_start!` resends the same reference as the `Idempotency-Key`, with the same workflow, input
 and webhook URL. QuBe Sync keys a start by its app and that key, and fingerprints the call
@@ -446,6 +445,17 @@ Its locals are `record` and `operation`. It shows the summary (`.qube-run-summar
 `.qube-run-status.qube-run-<state>`) and, for a failure, the error's detail
 (`.qube-run-error-detail`), and nothing for a record with no runs. Copy it to
 `app/views/qube_rails/_run_status.html.erb` for other markup.
+
+## The page updates itself
+
+When a run's event changes it (a question, an ending), the engine tells the record's pages to
+refresh, in an app with turbo-rails 2 (Turbo 8) and Action Cable: the partials subscribe with
+`turbo_stream_from(record, :qube_rails)`, and the job calls `Turbo::StreamsChannel.broadcast_refresh_to`.
+Without turbo-rails, nothing is sent, and a reload shows it.
+
+An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
+answer's data, the start was confirmed meanwhile) goes back to the page with the reason in
+`flash[:qube_rails_error]`, which the partials show once, so it shows under Turbo too.
 
 ## Questions
 

@@ -35,11 +35,6 @@ module QubeRails
   # is sent, saying which reference and which record.
   class MissingReference < ArgumentError; end
 
-  # Operation.start was asked for a record whose run of that operation hasn't ended on that
-  # connection: a second click, or a second worker. A second run would add the same invoice twice.
-  # A start that got no answer is sent again with run.retry_start!, never a new start.
-  class AlreadyRunning < StandardError; end
-
   class << self
     def config
       @config ||= Configuration.new
@@ -88,6 +83,23 @@ module QubeRails
       when "connection" then connection_event(id, event)
       else raise ArgumentError, "QuBe Sync: a delivery is for a run or a connection, not #{kind.inspect}"
       end
+    end
+
+    # Tells the pages showing record's runs to refresh: the engine's partials subscribe with
+    # turbo_stream_from(record, :qube_rails). Only in an app with turbo-rails 2 (Turbo 8 page
+    # refreshes) and Action Cable; otherwise nothing. A broadcast that fails is logged: the
+    # event is applied either way, and a reload shows it.
+    def broadcast_refresh(record)
+      return unless refresh_broadcasts?
+
+      Turbo::StreamsChannel.broadcast_refresh_to(record, :qube_rails)
+    rescue StandardError => e
+      logger.warn("QuBe Sync: couldn't tell the page for #{record.class.name} #{record.id} to refresh " \
+                  "(#{e.class})")
+    end
+
+    def refresh_broadcasts?
+      defined?(Turbo::StreamsChannel) && Turbo::StreamsChannel.respond_to?(:broadcast_refresh_to)
     end
 
     def logger

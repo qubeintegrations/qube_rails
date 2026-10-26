@@ -15,7 +15,7 @@ module QubeRails
     def retry_start
       run, = authorized_run("a start retry")
       return head(:not_found) unless run
-      return render(plain: NOT_STARTING, status: :conflict) unless run.state == "starting"
+      return back_with_error(NOT_STARTING) unless run.state == "starting"
 
       begin
         run.retry_start!

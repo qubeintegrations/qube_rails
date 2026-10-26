@@ -12,6 +12,16 @@ RSpec.describe QubeRails::Operation do
   end
 
   describe "the job" do
+    it "tells the record's pages to refresh once an event changed the run, and not for one already applied" do
+      channel = class_double("Turbo::StreamsChannel", broadcast_refresh_to: nil)
+      stub_const("Turbo::StreamsChannel", channel)
+
+      run_event("workflow_run.completed", "revision" => 4)
+      run_event("workflow_run.completed", "revision" => 4)
+
+      expect(channel).to have_received(:broadcast_refresh_to).with(invoice, :qube_rails).once
+    end
+
     it "hands a completed run to ended with the record, the run and its connection" do
       run_event("workflow_run.completed", "revision" => 4)
 
@@ -188,25 +198,51 @@ RSpec.describe QubeRails::Operation do
       expect(started.reload).to have_attributes(state: "awaiting_input", qube_run_id: "run-q-1")
     end
 
-    it "refuses a second start while the record's run hasn't ended, and allows one after" do
+    it "returns the record's run that hasn't ended, starting nothing new, and makes a new reference after it ends" do
       stub_request(:post, /workflow-runs/).to_return(json_data("id" => "run-q-1", "state" => "running"))
       first = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+      expect(first.reused?).to be(false)
 
-      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
-        .to raise_error(QubeRails::AlreadyRunning, /Invoice #{invoice.id} already has a create_invoice run .*run #{first.id}, running/)
+      again = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+      expect(again).to eq(first)
+      expect(again.reused?).to be(true)
       expect(QubeRails::Run.count).to eq(1)
       expect(a_request(:post, /workflow-runs/)).to have_been_made.once
 
       first.update!(state: "completed", outcome: "added")
-      expect(QuickbooksDesktop::CreateInvoice.start(invoice, connection)).to be_a(QubeRails::Run)
+      after = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+      expect(after.reference).not_to eq(first.reference)
       expect(QubeRails::Run.count).to eq(2)
     end
 
-    it "points an unconfirmed start at retry_start!" do
-      make_run(invoice, connection).update!(state: "starting")
+    it "sends an unconfirmed start again with its own reference and input, the Idempotency-Key QuBe Sync dedupes on" do
+      stub_request(:post, /workflow-runs/).to_return(status: 503, body: "")
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
+      first = QubeRails::Run.last
+      expect(first).to have_attributes(state: "starting", qube_run_id: nil)
 
-      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
-        .to raise_error(QubeRails::AlreadyRunning, /retry_start!/)
+      invoice.update!(number: "1001-edited") # the record changed since: the resend still sends what the start did
+      replay = stub_request(:post, /workflow-runs/)
+               .with { |req|
+                 req.headers["Idempotency-Key"] == first.reference &&
+                   JSON.parse(req.body)["input"] == { "operation" => "invoice.create", "params" => { "ref_number" => "1001" } }
+               }
+               .to_return(json_data("id" => "run-q-1", "state" => "running"), { headers: { "Idempotent-Replayed" => "true" } })
+
+      again = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+
+      # The first start's three tries and the resend, every one with the same key and input.
+      expect(replay).to have_been_requested.times(4)
+      expect(again).to eq(first)
+      expect(again.reload).to have_attributes(qube_run_id: "run-q-1", state: "running")
+      expect(QubeRails::Run.count).to eq(1)
+    end
+
+    it "leaves a start answered 409 (its key in use by the other click) starting, not failed" do
+      stub_request(:post, /workflow-runs/).to_return(status: 409, body: { errors: "Idempotency-Key is being used by another call: try again" }.to_json)
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
+      expect(QubeRails::Run.last.state).to eq("starting")
     end
 
     it "lets the same record start on another connection" do

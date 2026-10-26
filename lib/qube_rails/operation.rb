@@ -46,24 +46,21 @@ module QubeRails
     # new start, or a run that did start runs twice (two invoices).
     #
     # While record's last run of this operation on connection hasn't ended (completed, failed or
-    # cancelled), it raises QubeRails::AlreadyRunning and starts nothing, so a second click doesn't
-    # add the invoice twice.
+    # cancelled), it starts nothing new: it returns that run (run.reused? is true), sending its
+    # start again first when QuBe Sync hasn't confirmed it, with the same reference and input. The
+    # reference is the Idempotency-Key, so a second click gets the same run back from QuBe Sync,
+    # never a second invoice. A new reference is made only once the last run has ended.
     def self.start(record, connection)
       unless made_by_qube_sync?(connection)
         raise NotConnected, "QuBe Sync: #{name}.start needs a connection QuBe Sync has made (one with a " \
                             "qube_id): the customer finishes onboarding first"
       end
 
-      run = create_run(record, connection)
-      begin
-        # As JSON reads it back, so a retry sends exactly what the first start did.
-        input = JSONCoder.load(JSONCoder.dump(new(record, run).input))
-      rescue StandardError, NotImplementedError # an input not written yet, too
-        mark_failed(run)
-        raise
-      end
-      run.update!(input: input)
-      send_start(run, input)
+      run, input_error = claim_run(record, connection)
+      raise input_error if input_error
+      return retry_start(run) if run.reused?
+
+      send_start(run, run.input)
     end
 
     # Sends a start that got no answer again (run.retry_start! calls it): the same reference as
@@ -80,27 +77,38 @@ module QubeRails
       send_start(run, run.input)
     end
 
-    # The run row, under the connection row's lock, so two starts of one record at once (a
-    # double click) can't both find no run going and both start one.
-    def self.create_run(record, connection)
+    # The record's run that hasn't ended on connection (reused), or a new row with a new reference
+    # and its input, written together under the connection row's lock: two starts of one record at
+    # once (a double click) find the same row, so they send the same reference and input. Returns
+    # [run, error]: the error an input raised, raised once the lock's transaction has kept the row.
+    def self.claim_run(record, connection)
       connection.with_lock do
         going = QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG)
-        raise AlreadyRunning, already_running_message(record, going) if going && !going.ended?
+        next [going.tap { |run| run.reused = true }, nil] if going && !going.ended?
 
-        QubeRails::Run.create!(
-          connection: connection, operation: self::SLUG, record: record,
-          reference: "#{self::SLUG}-#{record.id}-#{SecureRandom.uuid}", state: "starting", revision: 0
-        )
+        new_run(record, connection)
       end
     end
-    private_class_method :create_run
+    private_class_method :claim_run
 
-    def self.already_running_message(record, going)
-      retry_hint = going.state == "starting" ? ", or send its start again with run.retry_start!" : ""
-      "QuBe Sync: #{record.class.name} #{record.id} already has a #{self::SLUG} run on this connection " \
-        "(run #{going.id}, #{going.state}): wait for it to end#{retry_hint}"
+    # [run, nil], or for an input that raises, the run kept as "failed" (nothing was started) and
+    # the error.
+    def self.new_run(record, connection)
+      run = QubeRails::Run.new(
+        connection: connection, operation: self::SLUG, record: record,
+        reference: "#{self::SLUG}-#{record.id}-#{SecureRandom.uuid}", state: "starting", revision: 0
+      )
+      begin
+        # As JSON reads it back, so a retry sends exactly what the first start did.
+        run.input = JSONCoder.load(JSONCoder.dump(new(record, run).input))
+      rescue StandardError, NotImplementedError => e # an input not written yet, too
+        run.update!(state: "failed")
+        return [run, e]
+      end
+      run.save!
+      [run, nil]
     end
-    private_class_method :already_running_message
+    private_class_method :new_run
 
     def self.send_start(run, input)
       started =
@@ -108,13 +116,20 @@ module QubeRails
           QubeRails.client.start_run(run.connection.qube_id, self::WORKFLOW, input,
                                      reference: run.reference, webhook_url: run.webhook_url)
         rescue Backend::APIError => e
-          mark_failed(run) if e.status.between?(400, 499) # refused: nothing started
+          mark_failed(run) if refused?(e)
           raise
         end
       record_start(run, started.is_a?(Hash) ? started : {})
       run
     end
     private_class_method :send_start
+
+    # A 4xx: nothing started. But 409, the Idempotency-Key in use by another call still in flight
+    # (the other click of a double click): that start may land, so the run stays "starting".
+    def self.refused?(error)
+      error.status.between?(400, 499) && error.status != 409
+    end
+    private_class_method :refused?
 
     def self.mark_failed(run)
       run.update_columns(state: "failed", updated_at: Time.now)
@@ -198,8 +213,14 @@ module QubeRails
     # It holds the run row's lock while it does (with_lock, which reads it again), so two workers
     # never apply one run's events at once, and what a handler writes is saved with the revision
     # or not at all.
+    #
+    # Once an event has changed the run, pages showing record's run (the engine's partials) are
+    # told to refresh (QubeRails.broadcast_refresh), so a new question or an ending shows without
+    # a reload in an app with turbo-rails.
     def handle(event)
+      before = run.revision
       run.with_lock { apply(event) }
+      QubeRails.broadcast_refresh(record) unless run.revision == before
     end
 
     # A question the run asks: kept whole on the run, with its links (where to answer it, and

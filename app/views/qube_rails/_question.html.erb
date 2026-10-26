@@ -11,7 +11,13 @@
 <%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
 <% end %>
 <% run = QubeRails::Run.latest_for(record, operation) %>
+<%# Refreshed when the run's next event comes, in an app with turbo-rails (QubeRails.broadcast_refresh). %>
+<%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
 <% question = run && run.open_question %>
+<% if (error = flash[:qube_rails_error]) %>
+<%   flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
+<p class="qube-error"><%= error %></p>
+<% end %>
 <% if question %>
 <%   action = qube_rails.question_path(run) %>
 <section class="qube-question">

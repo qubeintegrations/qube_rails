@@ -22,13 +22,14 @@ module QubeRails
     before_action :find_question
 
     # Posts your user's choice, with what they filled in for its fields, to the question's
-    # links.decisions, and sends them back to the page. The question is forgotten once it's
+    # links.decisions, and sends them back to the page; when it can't, back with why (the
+    # partial shows it). The question is forgotten once it's
     # answered, or once QuBe Sync says it was answered or asked again since (a 409, or a 400 such
     # as not_awaiting_input); the run's next webhook says what came of it.
     def create
       choices = Array(@question && @question["choices"])
       choice = choices.find { |c| c["id"] == params[:choice] }
-      return render(plain: CHANGED, status: :conflict) unless choice && @links["decisions"]
+      return back_with_error(CHANGED) unless choice && @links["decisions"]
 
       QubeRails.client.answer(@links["decisions"], choice: choice["id"], data: answer_data(choice))
       @operation.answered(@question["token"])
@@ -36,10 +37,10 @@ module QubeRails
     rescue Backend::APIError => e
       raise unless [400, 409, 422].include?(e.status)
       # A field QuBe Sync couldn't take: its errors.detail says which.
-      return render(plain: refusal(e), status: 422) if e.status == 422
+      return back_with_error(refusal(e)) if e.status == 422
 
       @operation.answered(@question["token"])
-      render plain: CHANGED, status: :conflict
+      back_with_error(CHANGED)
     end
 
     # The matches for a record field, for what your user typed: [{value, label, detail}], at most

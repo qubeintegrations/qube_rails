@@ -67,29 +67,30 @@ RSpec.describe "The question routes", type: :request do
       expect(answered).to have_been_requested
     end
 
-    it "answers 409 for a choice the question doesn't have" do
+    it "sends them back saying it changed, for a choice the question doesn't have" do
       answer(choice: "delete_everything")
 
-      expect(response).to have_http_status(:conflict)
-      expect(response.body).to eq("This question has changed; reload.")
+      expect(response).to have_http_status(:see_other)
+      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
-    it "forgets the question and answers 409 when QuBe Sync says it was answered or asked again" do
+    it "forgets the question and says it changed when QuBe Sync says it was answered or asked again" do
       stub_request(:post, decisions).to_return(api_error(409, "errors" => { "code" => "prompt_changed" }))
 
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:conflict)
+      expect(response).to have_http_status(:see_other)
+      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
       expect(run.reload.question).to be_nil
     end
 
-    it "forgets the question and answers 409 for a 400 not_awaiting_input" do
+    it "forgets the question and says it changed for a 400 not_awaiting_input" do
       stub_request(:post, decisions).to_return(api_error(400, "errors" => { "code" => "not_awaiting_input" }))
 
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:conflict)
+      expect(response).to have_http_status(:see_other)
       expect(run.reload.question).to be_nil
     end
 
@@ -99,8 +100,8 @@ RSpec.describe "The question routes", type: :request do
 
       answer(choice: "add", data: { count: "3" })
 
-      expect(response).to have_http_status(422)
-      expect(response.body).to eq("QuBe Sync couldn't take that answer: count must be a whole number")
+      expect(response).to have_http_status(:see_other)
+      expect(flash[:qube_rails_error]).to eq("QuBe Sync couldn't take that answer: count must be a whole number")
       expect(run.reload.question).to eq(question)
     end
 
@@ -180,19 +181,20 @@ RSpec.describe "The question routes", type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
-    it "answers 409 for a run that has stopped asking" do
+    it "sends them back saying it changed, for a run that has stopped asking" do
       run.update!(question: nil, links: nil)
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:conflict)
+      expect(response).to have_http_status(:see_other)
+      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
     end
 
-    it "forgets the question and answers 409 for any other 400" do
+    it "forgets the question and says it changed for any other 400" do
       stub_request(:post, decisions).to_return(api_error(400, "errors" => { "code" => "bad_request" }))
 
       answer(choice: "use:1")
 
-      expect(response).to have_http_status(:conflict)
+      expect(response).to have_http_status(:see_other)
       expect(run.reload.question).to be_nil
     end
 

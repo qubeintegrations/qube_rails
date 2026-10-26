@@ -37,12 +37,13 @@ RSpec.describe "POST /qube/runs/:id/retry_start", type: :request do
     expect(run.reload.state).to eq("failed")
   end
 
-  it "answers 409 for a run that isn't starting" do
+  it "sends them back saying why, for a run that isn't starting" do
     run.update!(state: "running")
 
     post "/qube/runs/#{run.id}/retry_start", headers: signed_in
 
-    expect(response).to have_http_status(:conflict)
+    expect(response).to have_http_status(:see_other)
+    expect(flash[:qube_rails_error]).to eq("This run isn't waiting for its start to be confirmed.")
     expect(a_request(:post, start_url)).not_to have_been_made
   end
 

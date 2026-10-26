@@ -25,6 +25,17 @@ RSpec.describe "The run status partial", type: :request do
     expect(status.at_css(".qube-run-error-detail").text).to eq("Add the customer first.")
   end
 
+  it "shows why a retry or an answer didn't go through, once, on the page it came back to" do
+    run = make_run(invoice, connection)
+    post "/qube/runs/#{run.id}/retry_start",
+         headers: { "X-Account" => account.id.to_s, "Referer" => "http://www.example.com/invoices/#{invoice.id}" }
+    expect(response).to redirect_to("http://www.example.com/invoices/#{invoice.id}")
+
+    errors = page.css(".qube-error")
+    expect(errors.map(&:text)).to eq(["This run isn't waiting for its start to be confirmed."])
+    expect(page.css(".qube-error")).to be_empty # shown once
+  end
+
   it "shows a completed run without a detail" do
     make_run(invoice, connection).update!(state: "completed", outcome: "added")
 

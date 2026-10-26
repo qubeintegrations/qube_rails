@@ -25,6 +25,14 @@ module QubeRails
 
     ENDED_STATES = %w[completed failed cancelled].freeze
 
+    # Set by Operation.start when it returned this run, one that hadn't ended, rather than starting
+    # another: the record's run already on its way. Not saved.
+    attr_writer :reused
+
+    def reused?
+      @reused == true
+    end
+
     # record's newest run of operation, or nil: the one whose question the partial shows.
     def self.latest_for(record, operation)
       type, id = key_for(record)
