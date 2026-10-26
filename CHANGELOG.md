@@ -6,6 +6,8 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- A changed question's message no longer asks for a reload: "This question changed since the
+  page showed it, so that answer was not sent: the page now shows where it stands."
 - `POST qube/runs/:id/redeliver` and the run status partial's "Send its latest news again" for a
   run that looks stuck (`Run#looks_stuck?`): QuBe Sync sends its latest event again
   (qube_sync's `redeliver_run`). `SyncStatus` has `:done` for a run that completed and linked

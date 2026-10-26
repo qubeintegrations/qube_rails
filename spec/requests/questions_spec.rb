@@ -71,7 +71,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "delete_everything")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
+      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
@@ -81,7 +81,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
+      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
       expect(run.reload.question).to be_nil
     end
 
@@ -186,7 +186,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question has changed; reload.")
+      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
     end
 
     it "forgets the question and says it changed for any other 400" do

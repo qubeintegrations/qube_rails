@@ -15,7 +15,8 @@ module QubeRails
   # Behind your sign-in, as your ApplicationController (config.parent_controller) is. The answers
   # come from forms, so they carry your CSRF token, as the partial writes it.
   class QuestionsController < QubeRails.config.parent_controller.constantize
-    CHANGED = "This question has changed; reload."
+    CHANGED = "This question changed since the page showed it, so that answer was not sent: " \
+              "the page now shows where it stands."
 
     include RunAuthorization
 
