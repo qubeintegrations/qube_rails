@@ -6,6 +6,8 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- `QubeRails::MissingReference`, which the kit's mapped operations raise from `input` when a
+  reference QuickBooks requires has no link and no name, so the start fails before anything is sent.
 - Engine tables and models, from `bin/rails qube_rails:install:migrations`:
   `QubeRails::Connection` (`qube_connections`: an account can have any number, one per company
   file), `QubeRails::Run` (`qube_runs`: each run's reference, revision, state and question) and

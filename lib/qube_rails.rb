@@ -29,6 +29,12 @@ module QubeRails
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
   class NotConnected < ArgumentError; end
 
+  # An operation's input has no value for a reference QuickBooks requires (an invoice's
+  # customer_ref): the record has no QuickBooks link on the run's connection and no name to look
+  # it up by. The kit's mapped operations raise it from input, so the start fails, before anything
+  # is sent, saying which reference and which record.
+  class MissingReference < ArgumentError; end
+
   class << self
     def config
       @config ||= Configuration.new
