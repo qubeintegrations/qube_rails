@@ -110,6 +110,33 @@ RSpec.describe "Onboarding", type: :request do
       expect { post "/quickbooks/connections", headers: signed_in }
         .to raise_error(QubeRails::NotConfigured, %r{current_account.*config/initializers/qube_rails\.rb})
     end
+
+    it "with simulated=1, makes a new row and a simulated connection for it, and goes back to the page" do
+      make_connection(account, qube_id: "conn-q-pending", status: "pending")
+      created = stub_request(:post, api_url("/connections"))
+                .with { |req| JSON.parse(req.body)["type"] == "simulated" }
+                .to_return(json_data("id" => "conn-q-sim", "type" => "simulated"))
+
+      post "/quickbooks/connections", params: { simulated: "1", name: "Test file" },
+                                      headers: signed_in.merge("Referer" => "http://www.example.com/account")
+
+      row = QubeRails::Connection.find_by(qube_id: "conn-q-sim")
+      expect(created).to have_been_requested
+      expect(a_request(:post, api_url("/connections"))
+        .with(body: { webhook_url: row.webhook_url, name: "Test file", type: "simulated" })).to have_been_made
+      expect(row).to have_attributes(owner: account, status: "pending", name: "Test file")
+      expect(response).to redirect_to("http://www.example.com/account")
+    end
+
+    it "refuses simulated=1 in production, making nothing" do
+      allow(Rails.env).to receive(:production?).and_return(true)
+
+      post "/quickbooks/connections", params: { simulated: "1" }, headers: signed_in
+
+      expect(response).to have_http_status(:not_found)
+      expect(QubeRails::Connection.count).to eq(0)
+      expect(a_request(:post, api_url("/connections"))).not_to have_been_made
+    end
   end
 
   describe "POST /quickbooks/connections/:id/onboarding" do

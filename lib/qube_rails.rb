@@ -35,6 +35,11 @@ module QubeRails
   # is sent, saying which reference and which record.
   class MissingReference < ArgumentError; end
 
+  # Operation.start was asked for a record whose run of that operation hasn't ended on that
+  # connection: a second click, or a second worker. A second run would add the same invoice twice.
+  # A start that got no answer is sent again with run.retry_start!, never a new start.
+  class AlreadyRunning < StandardError; end
+
   class << self
     def config
       @config ||= Configuration.new

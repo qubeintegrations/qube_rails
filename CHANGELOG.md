@@ -6,6 +6,16 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- `QubeRails::AlreadyRunning`: `Operation.start` refuses a record whose last run of that operation
+  on the connection hasn't ended, checked under the connection row's lock, so a double click
+  doesn't add an invoice twice.
+- Connect with `simulated=1`, outside production: a connection to a simulated QuickBooks company
+  file, connected as it's made, for testing with no Windows computer (qube_sync's
+  `create_connection(type: "simulated")`).
+- `QubeRails::NotConfigured` for a setting that's in `.env` but not in the environment says that
+  nothing loads `.env` (dotenv-rails), reading only the names in it. A refused webhook's log line
+  names its path and what to check (the webhook secret, the clock, or a sender that isn't QuBe
+  Sync).
 - `QubeRails::MissingReference`, which the kit's mapped operations raise from `input` when a
   reference QuickBooks requires has no link and no name, so the start fails before anything is sent.
 - Engine tables and models, from `bin/rails qube_rails:install:migrations`:

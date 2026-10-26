@@ -18,9 +18,15 @@ module QubeRails
     # written first, so the connection's webhook URL names it; if QuBe Sync doesn't answer, the
     # row is left without a qube_id and the next click picks it up. Until connection.connected
     # comes, show it as waiting for QuickBooks: the setup doesn't come back here.
+    #
+    # With simulated=1, outside production, it connects a simulated QuickBooks company file
+    # instead, for testing with no Windows computer: a new row whose QuBe Sync connection is
+    # connected as it's made, so connection.connected comes at once, and back to the page the
+    # button was on rather than to setup.
     def create
       account = signed_in_account
       return head(:unauthorized) unless account
+      return connect_simulated(account) if simulated_requested?
 
       connection = QubeRails::Connection.owned_by(account).never_connected.first unless params[:new].to_s == "1"
       return send_to_setup(connection) if connection
@@ -50,6 +56,21 @@ module QubeRails
         QubeRails.logger.warn("QuBe Sync: refused a connect: config.current_account found no signed-in account")
       end
       account
+    end
+
+    def simulated_requested?
+      params[:simulated].to_s == "1"
+    end
+
+    # Never in production: a customer's user can't make a connection to a fake company file.
+    def connect_simulated(account)
+      return head(:not_found) if Rails.env.production?
+
+      connection = QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending")
+      made = QubeRails.client.create_connection(webhook_url: connection.webhook_url, name: connection.name,
+                                                type: "simulated")
+      connection.update!(qube_id: made["id"])
+      redirect_back fallback_location: "/", status: :see_other
     end
 
     def connection_name

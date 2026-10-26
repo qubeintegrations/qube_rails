@@ -242,7 +242,29 @@ module QubeRails
 
     def env_not_set(setting, env_name)
       raise NotConfigured, "QuBe Sync: #{setting} isn't set yet. Set #{env_name} in the " \
-                           "environment, or config.#{setting} in QubeRails.configure, in #{FILE}."
+                           "environment, or config.#{setting} in QubeRails.configure, in #{FILE}." \
+                           "#{dotenv_hint(env_name)}"
+    end
+
+    # `qube env --write .env` writes the settings to .env, which Rails doesn't read by itself.
+    # Reads only the names in it, never a value.
+    def dotenv_hint(env_name)
+      return "" unless written_to_dotenv?(env_name)
+
+      " It's in .env, but nothing loads .env into the environment: add gem \"dotenv-rails\" to " \
+        "the Gemfile's development and test groups, or export it."
+    end
+
+    def written_to_dotenv?(env_name)
+      path = dotenv_path
+      return false unless path&.file?
+
+      path.each_line.any? { |line| line.match?(/\A\s*(export\s+)?#{Regexp.escape(env_name)}\s*=/) }
+    end
+
+    # The app's .env, or nil outside a Rails app.
+    def dotenv_path
+      Rails.root&.join(".env") if defined?(Rails) && Rails.respond_to?(:root)
     end
   end
 end

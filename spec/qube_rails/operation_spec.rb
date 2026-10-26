@@ -188,6 +188,36 @@ RSpec.describe QubeRails::Operation do
       expect(started.reload).to have_attributes(state: "awaiting_input", qube_run_id: "run-q-1")
     end
 
+    it "refuses a second start while the record's run hasn't ended, and allows one after" do
+      stub_request(:post, /workflow-runs/).to_return(json_data("id" => "run-q-1", "state" => "running"))
+      first = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::AlreadyRunning, /Invoice #{invoice.id} already has a create_invoice run .*run #{first.id}, running/)
+      expect(QubeRails::Run.count).to eq(1)
+      expect(a_request(:post, /workflow-runs/)).to have_been_made.once
+
+      first.update!(state: "completed", outcome: "added")
+      expect(QuickbooksDesktop::CreateInvoice.start(invoice, connection)).to be_a(QubeRails::Run)
+      expect(QubeRails::Run.count).to eq(2)
+    end
+
+    it "points an unconfirmed start at retry_start!" do
+      make_run(invoice, connection).update!(state: "starting")
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::AlreadyRunning, /retry_start!/)
+    end
+
+    it "lets the same record start on another connection" do
+      make_run(invoice, connection)
+      other = make_connection(account, qube_id: "conn-q-other")
+      stub_request(:post, api_url("/connections/conn-q-other/workflow-runs"))
+        .to_return(json_data("id" => "run-q-2", "state" => "running"))
+
+      expect(QuickbooksDesktop::CreateInvoice.start(invoice, other).connection).to eq(other)
+    end
+
     it "refuses a connection QuBe Sync hasn't made yet" do
       pending_connection = make_connection(account, qube_id: nil, status: "pending")
 

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+
 RSpec.describe QubeRails::Configuration do
   subject(:config) { described_class.new }
 
@@ -24,6 +26,20 @@ RSpec.describe QubeRails::Configuration do
         expect(error.message).to include(named, "config/initializers/qube_rails.rb")
       }
     end
+  end
+
+  it "says when an unset key is in a .env nothing loaded, never reading its value" do
+    root = Pathname.new(Dir.mktmpdir)
+    root.join(".env").write("export QUBE_API_KEY=key-in-dotenv\n")
+    allow(Rails).to receive(:root).and_return(root)
+
+    expect { config.api_key }.to raise_error(QubeRails::NotConfigured) { |error|
+      expect(error.message).to include("It's in .env, but nothing loads .env", "dotenv-rails")
+      expect(error.message).not_to include("key-in-dotenv")
+    }
+    expect { config.webhook_secret }.to raise_error(QubeRails::NotConfigured) { |error|
+      expect(error.message).not_to include(".env, but")
+    }
   end
 
   it "reads the environment at first use" do

@@ -44,16 +44,17 @@ module QubeRails
     # start gets no answer (a timeout, a 5xx, a dropped connection) it may have started, so the
     # row stays "starting" and the error is raised: send it again with run.retry_start!, never a
     # new start, or a run that did start runs twice (two invoices).
+    #
+    # While record's last run of this operation on connection hasn't ended (completed, failed or
+    # cancelled), it raises QubeRails::AlreadyRunning and starts nothing, so a second click doesn't
+    # add the invoice twice.
     def self.start(record, connection)
       unless made_by_qube_sync?(connection)
         raise NotConnected, "QuBe Sync: #{name}.start needs a connection QuBe Sync has made (one with a " \
                             "qube_id): the customer finishes onboarding first"
       end
 
-      run = QubeRails::Run.create!(
-        connection: connection, operation: self::SLUG, record: record,
-        reference: "#{self::SLUG}-#{record.id}-#{SecureRandom.uuid}", state: "starting", revision: 0
-      )
+      run = create_run(record, connection)
       begin
         # As JSON reads it back, so a retry sends exactly what the first start did.
         input = JSONCoder.load(JSONCoder.dump(new(record, run).input))
@@ -78,6 +79,28 @@ module QubeRails
 
       send_start(run, run.input)
     end
+
+    # The run row, under the connection row's lock, so two starts of one record at once (a
+    # double click) can't both find no run going and both start one.
+    def self.create_run(record, connection)
+      connection.with_lock do
+        going = QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG)
+        raise AlreadyRunning, already_running_message(record, going) if going && !going.ended?
+
+        QubeRails::Run.create!(
+          connection: connection, operation: self::SLUG, record: record,
+          reference: "#{self::SLUG}-#{record.id}-#{SecureRandom.uuid}", state: "starting", revision: 0
+        )
+      end
+    end
+    private_class_method :create_run
+
+    def self.already_running_message(record, going)
+      retry_hint = going.state == "starting" ? ", or send its start again with run.retry_start!" : ""
+      "QuBe Sync: #{record.class.name} #{record.id} already has a #{self::SLUG} run on this connection " \
+        "(run #{going.id}, #{going.state}): wait for it to end#{retry_hint}"
+    end
+    private_class_method :already_running_message
 
     def self.send_start(run, input)
       started =

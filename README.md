@@ -50,7 +50,7 @@ Relative to where the engine is mounted (`"/"` above):
 
 | Route | What it does |
 | --- | --- |
-| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. |
+| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
@@ -71,9 +71,19 @@ Two buttons cover it: Connect, for an account setting up its first company file 
 setup it started), and, once it has one, Connect another company file:
 
 ```erb
-<%= button_to "Connect QuickBooks Desktop", qube_rails.connections_path %>
-<%= button_to "Connect another company file", qube_rails.connections_path, params: { new: 1, name: "Second file" } %>
+<%= button_to "Connect QuickBooks Desktop", qube_rails.connections_path,
+              form: { data: { turbo: false } } %>
+<%= button_to "Connect another company file", qube_rails.connections_path,
+              params: { new: 1, name: "Second file" }, form: { data: { turbo: false } } %>
+<% if Rails.env.development? %>
+  <%= button_to "Connect a simulated QuickBooks (for testing)", qube_rails.connections_path,
+                params: { simulated: 1 } %>
+<% end %>
 ```
+
+Connect redirects to QuBe Sync's setup, on another site, so its forms need `data-turbo="false"`
+in an app with Turbo (Rails 7 and later): Turbo submits a form with `fetch`, which the browser
+won't follow to another origin, and the button would do nothing.
 
 ## Settings
 
@@ -184,6 +194,10 @@ dropped ...") and returns.
 | `QUBE_WEBHOOK_SECRET` | your app's webhook secret; `qube env --write .env` writes it |
 | `QUBE_URL` | `https://qubesync.com` unless you're told otherwise |
 | `QUBE_WEBHOOK_URL` | the base of each run's and each connection's webhook URL: `qube listen --write-env .env` writes it in development, and in production it's your app's `/webhooks/qube` |
+
+Rails doesn't read `.env` by itself: add `gem "dotenv-rails"` to the Gemfile's development and
+test groups, unless your app already loads it. A setting that's in `.env` but not in the
+environment raises `QubeRails::NotConfigured` saying so.
 
 ## Connections
 
@@ -347,6 +361,10 @@ A start can fail two ways, and they're handled differently:
   `starting`, with its reference and input, and the error is raised. Send it again with
   `run.retry_start!` (or `QuickbooksDesktop::CreateInvoice.retry_start(run)`), never with a new
   `start`: a new reference would start a second run, and a second invoice.
+
+While the record's last run of the operation on that connection hasn't ended, `start` raises
+`QubeRails::AlreadyRunning` and starts nothing, so a double click doesn't add the invoice twice.
+The check and the new row are made under the connection row's lock.
 
 `retry_start!` resends the same reference as the `Idempotency-Key`, with the same workflow, input
 and webhook URL. QuBe Sync keys a start by its app and that key, and fingerprints the call

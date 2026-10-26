@@ -51,7 +51,8 @@ module QubeRails
     rescue Backend::SignatureError => e
       # Its reason (missing, malformed, stale or mismatch) is safe to log: never the secret, the
       # signature or the body.
-      QubeRails.logger.warn("QuBe Sync: refused a webhook: #{e.reason}")
+      QubeRails.logger.warn("QuBe Sync: refused a webhook: #{e.reason} (#{request.path}): " \
+                            "#{SIGNATURE_HINTS[e.reason]}")
       head :unauthorized
     rescue Backend::ParseError => e
       # Signed, but not a JSON object: nothing a job could take.
@@ -73,6 +74,17 @@ module QubeRails
                              "answered 503 so QuBe Sync sends it again")
       false
     end
+
+    # What to check for each reason a signature is refused, for the developer reading the log.
+    SIGNATURE_HINTS = {
+      mismatch: "it isn't signed with QUBE_WEBHOOK_SECRET (config.webhook_secret). Set that to this " \
+                "app's webhook secret, which `qube env --write .env` writes, and restart; QuBe Sync " \
+                "sends it again",
+      stale: "its signature's time is over 5 minutes from this server's clock. Check the clock",
+      missing: "it has no X-Qube-Signature header, so it isn't from QuBe Sync",
+      malformed: "its X-Qube-Signature header isn't t=<seconds>,v1=<hex>, so it isn't from QuBe Sync"
+    }.freeze
+    private_constant :SIGNATURE_HINTS
 
     def too_large
       QubeRails.logger.warn("QuBe Sync: refused a webhook: its body is over #{MAX_BODY_BYTES} bytes")

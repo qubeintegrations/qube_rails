@@ -97,7 +97,8 @@ RSpec.describe "QuBe Sync's webhooks", type: :request do
 
         expect(response).to have_http_status(:unauthorized)
         expect(QubeRails::WebhookJob).not_to have_been_enqueued
-        expect(log_output).to include("QuBe Sync: refused a webhook: #{reason}")
+        expect(log_output).to include("QuBe Sync: refused a webhook: #{reason} (/webhooks/qube/runs/#{run.id})")
+        expect(log_output).to include("QUBE_WEBHOOK_SECRET") if reason == :mismatch
         expect(log_output).not_to include(QubeRailsHelpers::SECRET)
         expect(log_output).not_to include(run.reference)
         expect(log_output).not_to include(sent.split("v1=").last) if sent
