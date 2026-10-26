@@ -120,7 +120,7 @@ config.authorize_question = ->(controller, record, run) {
 }
 ```
 
-A notification (a sync's page, say) is taken once per run by its `delivery_id`. By default the id
+A notification (e.g. one page of a sync) is taken once per run by its `delivery_id`. By default the id
 goes in `qube_notifications` inside the run row's lock and the same transaction as your
 `notification` handler: a redelivery finds the row and is skipped, and a handler that raises rolls
 its row back with its own writes, so the retry runs it again. `QubeRails::CacheDedupe` keeps the
@@ -203,7 +203,8 @@ QuBe Sync's connection made with the row's webhook URL and keeps its id, or rais
 without an id (a crash between the create and the save), so one row never gets two connections.
 
 Adopting lists the app's connections (`GET /api/v2/connections`, which isn't paged) and takes
-only the one with the row's webhook URL that has never connected (`last_connected_at` is null),
+only the one with the row's webhook URL that has never connected (`last_connected_at` is null,
+or it's simulated, since a simulated connection connects as it's made),
 was made at or after the row (its `created_at`, with five minutes allowed for clock difference),
 and has the row's name when the row has one; if two qualify it takes neither. A connection with no
 `created_at` (from a server before it sent one) is never adopted, and that's logged.

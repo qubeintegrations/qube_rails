@@ -51,7 +51,7 @@ into every Rails app, so the app keeps only its own.
   `qube_rails/run_status` partial. A completed run on a `cancelled` outcome reads as cancelled; a
   start unconfirmed for a minute reads "Not confirmed by QuBe Sync yet", with a "Try the start
   again" button posting to `POST qube/runs/:id/retry_start`.
-- Adoption takes only a never-connected QuBe Sync connection whose `created_at` is at or after the
+- Adoption takes only a never-connected (or simulated) QuBe Sync connection whose `created_at` is at or after the
   row's, with its webhook URL and name; one with no `created_at` is never adopted.
 - `rails g qube_rails:install`: the initializer, the app's `QuickbooksDesktop::ConnectionEvents`,
   the engine's migrations and the mount line.

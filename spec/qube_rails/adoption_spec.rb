@@ -40,6 +40,12 @@ RSpec.describe "Adopting QuBe Sync's connection for a row without a qube_id" do
     expect(row.adopt_qube_connection).to be_nil
   end
 
+  it "adopts a simulated one, which connects as it's made" do
+    listing(qube_connection_for(row, "type" => "simulated", "last_connected_at" => Time.now.utc.iso8601))
+
+    expect(row.adopt_qube_connection).to eq("conn-q-lost")
+  end
+
   it "skips one whose name isn't the row's" do
     listing(qube_connection_for(row, "name" => "Another file"))
 

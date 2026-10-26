@@ -60,9 +60,9 @@ module QubeRails
     # save). Saves and returns the id, or nil, so a second connection is never made for one row.
     #
     # It lists the app's connections (GET /api/v2/connections, which isn't paged) and adopts one
-    # only when exactly one has this row's webhook URL, has never connected (last_connected_at is
-    # null), was made at or after this row (its created_at), and has the row's name when the row
-    # has one. So a row id used again (MySQL 5.7 after a restart, a restored database) never takes
+    # only when exactly one has this row's webhook URL, is unclaimed (it has never connected, or
+    # it's simulated: a simulated connection connects as it's made), was made at or after this row
+    # (its created_at), and has the row's name when the row has one. So a row id used again (MySQL 5.7 after a restart, a restored database) never takes
     # an old connection. A connection with no created_at (a server from before v2 sent it) is
     # never adopted. The listing only runs for a row without an id, which is rare.
     def adopt_qube_connection
@@ -187,13 +187,19 @@ module QubeRails
     def made_for_this_row?(made)
       return false if made["id"].to_s.empty?
       return false unless same_url?(made)
-      return false unless made["last_connected_at"].nil?
+      return false unless unclaimed?(made)
       return false unless name.to_s.empty? || made["name"] == name
 
       made_at = parse_time(made["created_at"])
       return false unless made_at && created_at
 
       made_at >= created_at - CLOCK_SKEW_SECONDS
+    end
+
+    # Nobody can have set it up: it has never connected, or it's simulated and connected itself
+    # when it was made. Either way, only the lost answer to the create carried its setup link.
+    def unclaimed?(made)
+      made["last_connected_at"].nil? || made["type"] == "simulated"
     end
 
     def parse_time(value)
