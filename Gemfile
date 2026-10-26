@@ -31,6 +31,12 @@ else
   gem "sqlite3", ">= 2.1"
 end
 
+# The specs run on SQLite; DB=postgres or DB=mysql (with DATABASE_URL) runs them on that database.
+case ENV["DB"]
+when "postgres" then gem "pg"
+when "mysql" then gem "mysql2"
+end
+
 gem "rake"
 gem "rspec-rails"
 gem "webmock"

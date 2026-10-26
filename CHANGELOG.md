@@ -11,7 +11,10 @@ into every Rails app, so the app keeps only its own.
   `:cancelled`, with `qb_id`, `error`, `retry?`), `SyncStatus.latest`, and the connection's scopes
   `in_quickbooks`, `not_in_quickbooks`, `needing_answer` and `sending`. A migration adds the
   indexes they use (`bin/rails qube_rails:install:migrations` again). The run status partial reads
-  it, and takes `connection:`.
+  it, and takes `connection:`. Tested on SQLite, PostgreSQL and MySQL (whose cast takes the
+  column's collation).
+- A record's pages are told to refresh once more 5 seconds after an event (`QubeRails::RefreshJob`),
+  for a page that was still loading the first time.
 - `Operation.start` returns the record's run that hasn't ended on that connection (`run.reused?`),
   sending its start again with the same reference and input when it's unconfirmed, rather than
   starting another: the reference is the Idempotency-Key, so a double click can't add an invoice

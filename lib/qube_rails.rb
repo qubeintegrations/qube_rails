@@ -36,6 +36,9 @@ module QubeRails
   # is sent, saying which reference and which record.
   class MissingReference < ArgumentError; end
 
+  # Seconds after an event before a record's pages are told to refresh once more.
+  REFRESH_AGAIN = 5
+
   class << self
     def config
       @config ||= Configuration.new
@@ -88,9 +91,20 @@ module QubeRails
 
     # Tells the pages showing record's runs to refresh: the engine's partials subscribe with
     # turbo_stream_from(record, :qube_rails). Only in an app with turbo-rails 2 (Turbo 8 page
-    # refreshes) and Action Cable; otherwise nothing. A broadcast that fails is logged: the
-    # event is applied either way, and a reload shows it.
+    # refreshes) and Action Cable; otherwise nothing. Once now, and once more REFRESH_AGAIN
+    # later (QubeRails::RefreshJob), for a page that was still loading the first time. A
+    # broadcast that fails is logged: the event is applied either way, and a reload shows it.
     def broadcast_refresh(record)
+      return unless refresh_broadcasts?
+
+      broadcast_refresh_now(record)
+      QubeRails::RefreshJob.set(wait: REFRESH_AGAIN).perform_later(record)
+    rescue StandardError => e
+      logger.warn("QuBe Sync: couldn't tell the page for #{record.class.name} #{record.id} to refresh again " \
+                  "(#{e.class})")
+    end
+
+    def broadcast_refresh_now(record)
       return unless refresh_broadcasts?
 
       Turbo::StreamsChannel.broadcast_refresh_to(record, :qube_rails)

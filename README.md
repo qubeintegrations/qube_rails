@@ -491,7 +491,9 @@ with `connection:` when the page is about one company file.
 
 When a run's event changes it (a question, an ending), the engine tells the record's pages to
 refresh, in an app with turbo-rails 2 (Turbo 8) and Action Cable: the partials subscribe with
-`turbo_stream_from(record, :qube_rails)`, and the job calls `Turbo::StreamsChannel.broadcast_refresh_to`.
+`turbo_stream_from(record, :qube_rails)`, and the job calls `Turbo::StreamsChannel.broadcast_refresh_to`,
+then once more 5 seconds later (`QubeRails::RefreshJob`, on `config.queue`), for a page that was
+still loading the first time (the redirect after a start, when the question comes at once).
 Without turbo-rails, nothing is sent, and a reload shows it.
 
 An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
@@ -551,6 +553,7 @@ or drop.
 
 ```sh
 bundle install && bundle exec rspec     # RAILS_VERSION=7.0 for the oldest Rails
+DB=postgres DATABASE_URL=postgres://... bundle exec rspec   # or DB=mysql: the scopes' SQL there
 bin/syntax-check-2.7                     # every shipped file parses on Ruby 2.7
 ```
 

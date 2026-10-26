@@ -20,6 +20,10 @@ RSpec.describe QubeRails::Operation do
       run_event("workflow_run.completed", "revision" => 4)
 
       expect(channel).to have_received(:broadcast_refresh_to).with(invoice, :qube_rails).once
+      # And once more a few seconds later, for a page that was still loading the first time.
+      expect(QubeRails::RefreshJob).to have_been_enqueued.with(invoice).once
+      perform_enqueued_jobs(only: QubeRails::RefreshJob)
+      expect(channel).to have_received(:broadcast_refresh_to).with(invoice, :qube_rails).twice
     end
 
     it "hands a completed run to ended with the record, the run and its connection" do

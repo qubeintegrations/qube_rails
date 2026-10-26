@@ -240,7 +240,7 @@ module QubeRails
     def linked_here(scope)
       model = scope.all.klass
       QuickbooksRecord.where(connection_id: id, record_type: model.base_class.name)
-                      .where("qube_quickbooks_records.record_id = #{id_as_text(model)}")
+                      .where("qube_quickbooks_records.record_id = #{id_as_text(model, QuickbooksRecord)}")
                       .arel.exists
     end
 
@@ -250,17 +250,27 @@ module QubeRails
       model = scope.all.klass
       Run.where(connection_id: id, operation: operation.to_s, record_type: model.base_class.name,
                 state: states)
-         .where("qube_runs.record_id = #{id_as_text(model)}")
+         .where("qube_runs.record_id = #{id_as_text(model, Run)}")
          .arel.exists
     end
 
-    # The app's primary key as the text the engine keeps ids as (integer or UUID alike). MySQL
-    # casts only to CHAR; elsewhere VARCHAR, which compares without padding.
-    def id_as_text(model)
-      column = "#{model.connection.quote_table_name(model.table_name)}." \
-               "#{model.connection.quote_column_name(model.primary_key)}"
-      type = model.connection.adapter_name.match?(/mysql|trilogy/i) ? "CHAR" : "VARCHAR(255)"
-      "CAST(#{column} AS #{type})"
+    # The app's primary key as the text the engine keeps ids as (integer or UUID alike), to
+    # compare with engine_model's record_id. Elsewhere a VARCHAR, which compares without padding.
+    # MySQL casts only to CHAR, in the connection's collation, which can differ from the
+    # column's (an "illegal mix of collations"), so it's given the column's.
+    def id_as_text(model, engine_model)
+      db = model.connection
+      column = "#{db.quote_table_name(model.table_name)}.#{db.quote_column_name(model.primary_key)}"
+      return "CAST(#{column} AS VARCHAR(255))" unless mysql?(db)
+
+      collation = engine_model.columns_hash["record_id"].collation
+      return "CAST(#{column} AS CHAR)" unless collation
+
+      "CONVERT(CAST(#{column} AS CHAR) USING #{collation.split("_").first}) COLLATE #{collation}"
+    end
+
+    def mysql?(db)
+      db.adapter_name.match?(/mysql|trilogy/i)
     end
 
     def only_one(scope, what)
