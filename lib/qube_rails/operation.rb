@@ -45,7 +45,7 @@ module QubeRails
     # row stays "starting" and the error is raised: send it again with run.retry_start!, never a
     # new start, or a run that did start runs twice (two invoices).
     def self.start(record, connection)
-      unless connection.is_a?(QubeRails::Connection) && !connection.qube_id.to_s.empty?
+      unless made_by_qube_sync?(connection)
         raise NotConnected, "QuBe Sync: #{name}.start needs a connection QuBe Sync has made (one with a " \
                             "qube_id): the customer finishes onboarding first"
       end
@@ -111,6 +111,12 @@ module QubeRails
       end
     end
     private_class_method :record_start
+
+    # A QubeRails::Connection QuBe Sync has made: one with a qube_id.
+    def self.made_by_qube_sync?(connection)
+      connection.is_a?(QubeRails::Connection) && !connection.qube_id.to_s.empty?
+    end
+    private_class_method :made_by_qube_sync?
 
     # Your record, by the id its run keeps (a String). Leave it out and the run finds it by its
     # record_type (run.record); write it to load what input and the handlers read with it:
@@ -256,8 +262,7 @@ module QubeRails
     # Only a run's events and its notifications carry a reference: any other event posted to this
     # URL is skipped with the rest that aren't this run's.
     def apply(event)
-      qube_id = run.connection.qube_id
-      unless event.reference && event.reference == run.reference && qube_id && event["connection_id"] == qube_id
+      unless this_run?(event)
         QubeRails.logger.warn("QuBe Sync: #{self.class.name} run #{run.id} skipped #{event.event} for " \
                               "#{event.reference.inspect} on #{event["connection_id"].inspect}: not this run")
         return
@@ -275,7 +280,7 @@ module QubeRails
       # whatever the handler does: state, outcome, and a failure's error or a cancel's reason.
       run.state = event.run_state || run_state_for(event)
       run.outcome = event.outcome
-      if event.failed? || event.cancelled? || event.completed?
+      if ended?(event)
         run.ended_at ||= Time.now
         run.error = event.error if event.failed?
         run.cancel_reason = event.cancel_reason if event.cancelled?
@@ -285,7 +290,7 @@ module QubeRails
         question(event)
       elsif event.completed?
         ended(event)
-      elsif event.failed? || event.cancelled?
+      elsif stopped?(event)
         failed(event)
       end
       # A newer event that isn't a question: the one saved was answered, or the run ended.
@@ -295,6 +300,30 @@ module QubeRails
       end
       run.revision = event.revision
       run.save!
+    end
+
+    # The event names this run: its reference, on its connection.
+    def this_run?(event)
+      same_reference?(event) && on_this_connection?(event)
+    end
+
+    def same_reference?(event)
+      !event.reference.nil? && event.reference == run.reference
+    end
+
+    def on_this_connection?(event)
+      qube_id = run.connection.qube_id
+      !qube_id.nil? && event["connection_id"] == qube_id
+    end
+
+    # The run is over: completed, failed or cancelled.
+    def ended?(event)
+      event.completed? || stopped?(event)
+    end
+
+    # The run ended without completing: failed or cancelled, which the failed handler takes.
+    def stopped?(event)
+      event.failed? || event.cancelled?
     end
 
     def run_state_for(event)
@@ -340,7 +369,7 @@ module QubeRails
       detail = event.dig("prompt", "id") || event["name"] || event["outcome"]
       line = "QuBe Sync: #{self.class.name} #{record.id} (run #{run.id}): #{event.event} #{detail} " \
              "(#{event.reference})"
-      if event.type == "workflow_run" && (event.failed? || event.cancelled?)
+      if event.type == "workflow_run" && stopped?(event)
         QubeRails.logger.warn(line)
       else
         QubeRails.logger.info(line)

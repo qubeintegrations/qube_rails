@@ -141,7 +141,7 @@ module QubeRails
     # answers once(run, delivery_id) { } (running the block unless it's taken), or seen?(key) and
     # remember(key), as QubeRails::CacheDedupe (Rails.cache, not transactional) does.
     def dedupe=(store)
-      unless store.respond_to?(:once) || (store.respond_to?(:seen?) && store.respond_to?(:remember))
+      unless dedupe_store?(store)
         raise ArgumentError, "dedupe needs once(run, delivery_id) { }, or seen?(key) and remember(key), in #{FILE}"
       end
 
@@ -192,6 +192,11 @@ module QubeRails
     alias to_s inspect
 
     private
+
+    # Answers once(run, delivery_id) { }, or seen?(key) and remember(key).
+    def dedupe_store?(store)
+      store.respond_to?(:once) || (store.respond_to?(:seen?) && store.respond_to?(:remember))
+    end
 
     # The default authorize_question: the signed-in account owns the run's connection. Compared
     # by type and id, as the connection keeps them, so a nil or unsaved account never matches.

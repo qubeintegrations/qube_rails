@@ -9,6 +9,17 @@ RSpec.describe QubeRails::Connection do
     expect(connection.webhook_url).to eq("https://app.example/webhooks/qube/connections/#{connection.id}")
   end
 
+  it "is not checking in only when stalled for that reason" do
+    connection.update!(status: "stalled", stall_reason: "not_checking_in")
+    expect(connection).to be_not_checking_in
+
+    connection.update!(stall_reason: "quickbooks_unavailable")
+    expect(connection).not_to be_not_checking_in
+
+    connection.update!(status: "connected", stall_reason: nil)
+    expect(connection).not_to be_not_checking_in
+  end
+
   it "links a record's QuickBooks id by kind, and reads it back both ways" do
     row = connection.link(customer, kind: "customer", qb_id: "80000001-1", edit_sequence: "171", name: "Riverbend Electric")
 

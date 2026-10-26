@@ -46,6 +46,12 @@ module QubeRails
       status == "connected"
     end
 
+    # Stalled because the Web Connector isn't checking in (the QuickBooks computer is off, or
+    # the Web Connector closed), rather than because it can't open QuickBooks.
+    def not_checking_in?
+      status == "stalled" && stall_reason == "not_checking_in"
+    end
+
     # Clock difference allowed between this app and QuBe Sync.
     CLOCK_SKEW_SECONDS = 5 * 60
 
@@ -103,12 +109,12 @@ module QubeRails
         transaction(requires_new: true) do
           taken = quickbooks_records.lock.find_by(list: family, qb_id: qb_id)
           mine = quickbooks_records.lock.find_by(kind: kind, record_type: type, record_id: id)
-          if taken && mine && taken.id != mine.id
+          if replaced?(mine, by: taken)
             QubeRails.logger.info("QuBe Sync: connection #{self.id}: #{type} #{id}'s #{kind} " \
                                   "#{mine.qb_id} replaced by #{qb_id}")
             mine.destroy!
           end
-          if taken && taken.record_id && [taken.record_type, taken.record_id] != [type, id]
+          if moved?(taken, to: [type, id])
             QubeRails.logger.warn("QuBe Sync: connection #{self.id}: #{kind} #{qb_id} moved from " \
                                   "#{taken.record_type} #{taken.record_id} to #{type} #{id}")
           end
@@ -163,6 +169,16 @@ module QubeRails
     end
 
     private
+
+    # The record's own link is a different row from the one holding this qb_id, so it gives way.
+    def replaced?(mine, by:)
+      !mine.nil? && !by.nil? && by.id != mine.id
+    end
+
+    # This qb_id was linked to another of your records.
+    def moved?(taken, to:)
+      !taken.nil? && !taken.record_id.nil? && [taken.record_type, taken.record_id] != to
+    end
 
     def same_url?(made)
       made["webhook_url"].to_s.chomp("/") == webhook_url

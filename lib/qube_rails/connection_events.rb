@@ -93,8 +93,7 @@ module QubeRails
     # skipped as not its connection.
     def apply(event)
       connection_id = event.type == "connection" ? event.connection_id : nil
-      qube_id = connection.qube_id
-      unless connection_id && qube_id && connection_id == qube_id
+      unless this_connection?(connection_id)
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id} skipped #{event.event} for " \
                               "#{connection_id.inspect}: not this connection")
         return
@@ -132,6 +131,11 @@ module QubeRails
       else
         QubeRails.logger.info(line)
       end
+    end
+
+    # The event is about this connection: its connection_id is the one QuBe Sync made it.
+    def this_connection?(connection_id)
+      !connection_id.nil? && connection_id == connection.qube_id
     end
   end
 end

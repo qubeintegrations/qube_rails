@@ -49,7 +49,7 @@ module QubeRails
       q = params[:q].to_s.strip
       field = params[:field].to_s
       return render(json: [], status: :conflict) unless @links["search"]
-      return render(json: []) unless q.length.between?(2, 100) && field.length.between?(1, 100)
+      return render(json: []) unless searchable?(q, field)
 
       render json: QubeRails.client.search(@links["search"], field: field, q: q)
     rescue Backend::APIError => e
@@ -59,6 +59,11 @@ module QubeRails
     end
 
     private
+
+    # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
+    def searchable?(q, field)
+      q.length.between?(2, 100) && field.length.between?(1, 100)
+    end
 
     def find_question
       run, operation, record = authorized_run("an answer or search")
