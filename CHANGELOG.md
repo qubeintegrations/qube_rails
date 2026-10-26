@@ -6,6 +6,12 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- Sync status, derived and never stored: `connection.sync_status(record, operation:)`
+  (`QubeRails::SyncStatus`: `:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`, `:failed`,
+  `:cancelled`, with `qb_id`, `error`, `retry?`), `SyncStatus.latest`, and the connection's scopes
+  `in_quickbooks`, `not_in_quickbooks`, `needing_answer` and `sending`. A migration adds the
+  indexes they use (`bin/rails qube_rails:install:migrations` again). The run status partial reads
+  it, and takes `connection:`.
 - `Operation.start` returns the record's run that hasn't ended on that connection (`run.reused?`),
   sending its start again with the same reference and input when it's unconfirmed, rather than
   starting another: the reference is the Idempotency-Key, so a double click can't add an invoice

@@ -8,6 +8,7 @@ require "qube_rails/cache_dedupe"
 require "qube_rails/database_dedupe"
 require "qube_rails/json_coder"
 require "qube_rails/operation"
+require "qube_rails/sync_status"
 require "qube_rails/connection_events"
 
 # QuBe Sync's Rails engine: the code that's the same in every Rails app's integration. Your app

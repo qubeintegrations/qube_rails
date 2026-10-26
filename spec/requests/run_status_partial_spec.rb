@@ -36,6 +36,18 @@ RSpec.describe "The run status partial", type: :request do
     expect(page.css(".qube-error")).to be_empty # shown once
   end
 
+  it "says the record is in QuickBooks when its link is newer than its failed run, and nothing before it's sent" do
+    expect(page.at_css(".qube-run-status")).to be_nil # not sent
+
+    travel_to(1.hour.ago) { make_run(invoice, connection).update!(state: "failed", ended_at: Time.now) }
+    connection.link(invoice, kind: "invoice", qb_id: "1F2-1")
+    status = page.at_css(".qube-run-status")
+
+    expect(status["data-qube-sync-status"]).to eq("in_quickbooks")
+    expect(status.at_css(".qube-run-summary").text).to eq("In QuickBooks")
+    expect(status.at_css(".qube-run-error-detail")).to be_nil
+  end
+
   it "shows a completed run without a detail" do
     make_run(invoice, connection).update!(state: "completed", outcome: "added")
 

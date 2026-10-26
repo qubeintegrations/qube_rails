@@ -151,6 +151,34 @@ module QubeRails
       row && row.qb_id
     end
 
+    # Where record stands with QuickBooks on this connection for operation (its SLUG): a
+    # QubeRails::SyncStatus, worked out from its runs and its link, never stored.
+    def sync_status(record, operation:)
+      SyncStatus.for(self, record, operation: operation)
+    end
+
+    # Your records in scope (a model or a relation) with a QuickBooks link on this connection, or
+    # without one: for list pages and filters, one query each. They join on
+    # qube_quickbooks_records' record index, by your table's primary key as text.
+    def in_quickbooks(scope)
+      scope.where(linked_here(scope))
+    end
+
+    def not_in_quickbooks(scope)
+      scope.where.not(linked_here(scope))
+    end
+
+    # Your records in scope whose run of operation on this connection is waiting for your user's
+    # answer, or still on its way (starting or running): their latest run, since a start returns
+    # the run that hasn't ended rather than starting another.
+    def needing_answer(scope, operation:)
+      scope.where(run_here(scope, operation, %w[awaiting_input]))
+    end
+
+    def sending(scope, operation:)
+      scope.where(run_here(scope, operation, %w[starting running]))
+    end
+
     # Your record linked to that QuickBooks id, or nil.
     def find_linked(qb_id, kind: nil)
       row = quickbooks_record(qb_id, kind: kind)
@@ -206,6 +234,33 @@ module QubeRails
       Time.iso8601(value.to_s)
     rescue ArgumentError
       nil
+    end
+
+    # EXISTS a link on this connection for each row of scope's table.
+    def linked_here(scope)
+      model = scope.all.klass
+      QuickbooksRecord.where(connection_id: id, record_type: model.base_class.name)
+                      .where("qube_quickbooks_records.record_id = #{id_as_text(model)}")
+                      .arel.exists
+    end
+
+    # EXISTS a run of operation on this connection, in one of states, for each row of scope's
+    # table.
+    def run_here(scope, operation, states)
+      model = scope.all.klass
+      Run.where(connection_id: id, operation: operation.to_s, record_type: model.base_class.name,
+                state: states)
+         .where("qube_runs.record_id = #{id_as_text(model)}")
+         .arel.exists
+    end
+
+    # The app's primary key as the text the engine keeps ids as (integer or UUID alike). MySQL
+    # casts only to CHAR; elsewhere VARCHAR, which compares without padding.
+    def id_as_text(model)
+      column = "#{model.connection.quote_table_name(model.table_name)}." \
+               "#{model.connection.quote_column_name(model.primary_key)}"
+      type = model.connection.adapter_name.match?(/mysql|trilogy/i) ? "CHAR" : "VARCHAR(255)"
+      "CAST(#{column} AS #{type})"
     end
 
     def only_one(scope, what)

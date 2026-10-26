@@ -446,6 +446,47 @@ Its locals are `record` and `operation`. It shows the summary (`.qube-run-summar
 (`.qube-run-error-detail`), and nothing for a record with no runs. Copy it to
 `app/views/qube_rails/_run_status.html.erb` for other markup.
 
+## Sync status
+
+Where one of your records stands with QuickBooks, per connection and operation, worked out from
+the engine's own rows (the record's runs in `qube_runs`, its link in `qube_quickbooks_records`)
+and never stored, so your tables need no status column:
+
+```ruby
+status = connection.sync_status(invoice, operation: "create_invoice")
+status.status       # :not_sent, :sending, :needs_answer, :in_quickbooks, :failed or :cancelled
+status.qb_id        # its QuickBooks id on this connection, when it's linked
+status.error        # a failed run's error
+status.retry?       # whether starting again makes sense (failed or cancelled, and not linked)
+status.unconfirmed? # a start QuBe Sync hasn't confirmed: run.retry_start!
+status.summary_text # "In QuickBooks", "Waiting for your answer", "Failed: ..."
+```
+
+Per connection, since an invoice can be in one company file and not another.
+`QubeRails::SyncStatus.latest(record, operation:)` reads it on the connection the latest run went
+out on, for a page that doesn't say which.
+
+When the run and the link disagree, the newest word wins:
+1. a latest run that hasn't ended: `:sending` (an unconfirmed start too) or `:needs_answer`;
+2. a latest run that failed or was cancelled after the link was made, or with no link:
+   `:failed` or `:cancelled`;
+3. a link: `:in_quickbooks`;
+4. a latest run that completed without linking the record: `:in_quickbooks`, with no `qb_id`;
+5. otherwise `:not_sent`.
+
+For list pages and filters, the connection has scopes over a model or relation of yours, one query
+each (an `EXISTS` on the engine's indexes, by your primary key as text):
+
+```ruby
+connection.not_in_quickbooks(account.invoices)
+connection.in_quickbooks(Invoice)
+connection.needing_answer(Invoice, operation: "create_invoice")
+connection.sending(Invoice, operation: "create_invoice")
+```
+
+The `qube_rails/run_status` partial shows it (`data-qube-sync-status`, `qube-sync-<status>`),
+with `connection:` when the page is about one company file.
+
 ## The page updates itself
 
 When a run's event changes it (a question, an ending), the engine tells the record's pages to
