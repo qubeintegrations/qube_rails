@@ -5,7 +5,7 @@
     "choices": [
       {
         "description": null,
-        "detail": "similar name",
+        "detail": "similar name · ap@riverbend.example · 512-555-0142",
         "fields": [],
         "id": "use:1",
         "label": "Riverbend Electric"
@@ -60,7 +60,7 @@
       {
         "value": "80000001-1700000000",
         "label": "Riverbend Electric",
-        "detail": "Customer"
+        "detail": "Customer · Riverbend Electric LLC · ap@riverbend.example · 512-555-0142 · Austin 78701"
       },
       {
         "value": "80000002-1700000000",
