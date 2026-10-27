@@ -822,7 +822,7 @@ layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, 
 with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
 kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
-name clash, a lost answer, records not in QuickBooks yet, and a refused answer). Each screen is a section with
+name clash, a lost answer, a missing customer, records not in QuickBooks yet, and a refused answer). Each screen is a section with
 the screen on a flat canvas, with a note and its "Override files" (the partials to override for it, each with a
 Copy button); the canvas can be shown as your page is, light or dark. The list of screens links to
 each one. `GET /qube/storyboard/<screen>` shows one.

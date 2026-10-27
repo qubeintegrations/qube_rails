@@ -1,6 +1,6 @@
 {
   "title": "A near match",
-  "note": "resolve's ask: QuickBooks has no record with exactly that name. The similar ones are choices (detail says why), then a search for another one, none of these, or cancel.",
+  "note": "resolve's ask: QuickBooks has no record with exactly that name. The similar ones are choices (detail says why), then a search for another one, none of these, or cancel. With an add from the caller, \"None of these\" says the record is added as new (adds: true); without one it reads just \"None of these\".",
   "prompt": {
     "choices": [
       {
@@ -30,7 +30,7 @@
         "detail": null,
         "fields": [],
         "id": "none",
-        "label": "None of these"
+        "label": "None of these: add \"Riverbend\" as new"
       },
       {
         "description": null,

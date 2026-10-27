@@ -22,10 +22,10 @@ RSpec.describe "The storyboard", type: :request do
     expect(panels.map { |p| p["data-qube-storyboard"] }).to eq(QubeRails::Storyboard.screens.map(&:key))
     expect(panels.map { |p| p["data-qube-storyboard"] }).to include(
       *%w[not_sent starting unconfirmed running needs_answer looks_stuck in_quickbooks done failed cancelled error],
-      *%w[near_match record_search choose enum_select number_boolean name_clash ask_about_add rows refusal]
+      *%w[near_match record_search choose enum_select number_boolean name_clash ask_about_add missing_record rows refusal]
     )
     expect(shown.css(".qube-run-status").size).to eq(9) # not_sent renders nothing
-    expect(shown.css(".qube-question").size).to eq(9)
+    expect(shown.css(".qube-question").size).to eq(10)
     expect([QubeRails::Run.count, QubeRails::Connection.count]).to eq(rows_before)
 
     panel = ->(key) { shown.at_css("[data-qube-storyboard='#{key}']") }
@@ -35,6 +35,9 @@ RSpec.describe "The storyboard", type: :request do
     expect(panel.call("error").at_css(".qube-error")).not_to be_nil
     expect(panel.call("refusal").at_css(".qube-question .qube-error").text).to include("couldn't be used")
     expect(panel.call("rows").css("[data-qube-row][data-qube-values]").size).to eq(3)
+    expect(panel.call("missing_record").css("[data-qube-row][data-qube-values]").size).to eq(1)
+    expect(panel.call("missing_record").text).to include("Create it", "Use an existing one")
+    expect(panel.call("near_match").text).to include('None of these: add "Riverbend" as new')
     expect(panel.call("near_match").at_css("[data-qube-search]")["data-qube-search"]).to eq("/qube/storyboard/near_match/search")
     expect(panel.call("failed").at_css(".qube-storyboard-files").text)
       .to include("app/views/qube_rails/run_status/_status.html.erb", "app/views/qube_rails/run_status/_detail.html.erb")

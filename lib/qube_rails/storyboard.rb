@@ -12,7 +12,7 @@ module QubeRails
 
     Screen = Struct.new(:key, :group, :title, :note, :partials, :kind, :sample)
 
-    QUESTIONS = %w[near_match record_search choose enum_select number_boolean name_clash ask_about_add rows
+    QUESTIONS = %w[near_match record_search choose enum_select number_boolean name_clash ask_about_add missing_record rows
                    refusal].freeze
 
     # key, title, SyncStatus status, the run's attributes (ages in seconds), extra pieces, note.
