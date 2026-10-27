@@ -7,7 +7,8 @@ into every Rails app, so the app keeps only its own.
 
 ### Added
 - `DELETE quickbooks/connections/:id` (`connection_path`) disconnects a connection: QuBe Sync's,
-  then the row with its runs and links (`Connection#disconnect!`). The `qube_rails/error` partial
+  then the row with its runs and links (`Connection#disconnect!`), after
+  `ConnectionEvents#disconnected`, where the app deletes its own rows that point at it. The `qube_rails/error` partial
   shows a route's message on a page without the run partials.
 - A changed question's message no longer asks for a reload: "This question changed since the
   page showed it, so that answer was not sent: the page now shows where it stands."

@@ -36,6 +36,7 @@ module QubeRails
     # QuBe Sync no longer has. ConnectionsController#destroy deletes QuBe Sync's first.
     def disconnect!
       transaction do
+        QubeRails.config.connection_events_class.new(self).disconnected
         runs.find_each(&:destroy!)
         QubeRails::QuickbooksRecord.where(connection_id: id).delete_all
         destroy!

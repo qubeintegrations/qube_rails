@@ -87,6 +87,10 @@ module QubeRails
       log_event(event)
     end
 
+    # The account disconnected it (DELETE quickbooks/connections/:id): delete your rows that
+    # point at it. Runs in the transaction that deletes it, before its runs and links go.
+    def disconnected; end
+
     private
 
     # Only a connection event carries a connection: any other event posted to this URL is

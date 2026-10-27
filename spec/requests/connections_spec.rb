@@ -210,6 +210,20 @@ RSpec.describe "Onboarding", type: :request do
       expect(QubeRails::QuickbooksRecord.where(connection_id: connection.id)).to be_empty
     end
 
+    it "tells the app's ConnectionEvents first, inside the delete" do
+      connection = make_connection(account)
+      stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_return(status: 204)
+      seen = nil
+      allow_any_instance_of(QuickbooksDesktop::ConnectionEvents).to receive(:disconnected) do |events|
+        seen = QubeRails::Connection.exists?(events.connection.id)
+      end
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(seen).to be(true)
+      expect(QubeRails::Connection.exists?(connection.id)).to be(false)
+    end
+
     it "takes one QuBe Sync already deleted, and one it never made" do
       gone = make_connection(account, qube_id: "conn-q-gone")
       stub_request(:delete, api_url("/connections/conn-q-gone")).to_return(status: 404, body: "{}")
