@@ -5,8 +5,10 @@ module QubeRails
   # stable across versions (README, "Styling"). status is QubeRails::SyncStatus's (:not_sent,
   # :sending, :needs_answer, :in_quickbooks, :done, :failed, :cancelled); state the latest run's
   # ("starting", "running", "awaiting_input", "completed", "failed" or "cancelled"), or nil.
+  # summary is a few words for the pill; reason, why it failed or was cancelled, as a sentence
+  # below it; detail, what to do about a failure.
   class RunStatusView
-    attr_reader :status, :state, :summary, :detail, :quiet_text, :retry_url, :redeliver_url, :error, :stall,
+    attr_reader :status, :state, :summary, :reason, :detail, :quiet_text, :retry_url, :redeliver_url, :error, :stall,
                 :stall_text
 
     # The stall reasons with words of their own (status.stalled.<reason>); any other is "other".
@@ -19,12 +21,13 @@ module QubeRails
     def self.from_sync(sync, urls, error: nil, connection: nil)
       run = sync.run
       state = run && (run.cancelled? ? "cancelled" : run.state)
+      reason = run && (sync.failed? || run.cancelled?) ? run.reason_text : nil
       detail = sync.failed? && run ? run.error_detail : nil
       connection ||= run && run.connection
       stall = sync.status == :sending ? stall_of(connection) : nil
       stuck = run && !stall ? run.looks_stuck? : false
       new(status: sync.status, state: state,
-          summary: stall ? QubeRails.t("status.waiting_for_quickbooks") : sync.summary_text, detail: detail,
+          summary: stall ? QubeRails.t("status.waiting_for_quickbooks") : sync.summary_text, reason: reason, detail: detail,
           quiet_text: stuck ? QubeRails.t("status.quiet") : nil,
           retry_url: sync.unconfirmed? ? urls.retry_start_path(run) : nil,
           redeliver_url: stuck ? urls.redeliver_path(run) : nil, error: error, stall: stall)
@@ -38,11 +41,12 @@ module QubeRails
       reason.empty? ? :other : reason.to_sym
     end
 
-    def initialize(status:, state: nil, summary: nil, detail: nil, quiet_text: nil, retry_url: nil,
+    def initialize(status:, state: nil, summary: nil, reason: nil, detail: nil, quiet_text: nil, retry_url: nil,
                    redeliver_url: nil, error: nil, stall: nil)
       @status = status.to_sym
       @state = state
       @summary = summary
+      @reason = reason
       @detail = detail
       @quiet_text = quiet_text
       @retry_url = retry_url

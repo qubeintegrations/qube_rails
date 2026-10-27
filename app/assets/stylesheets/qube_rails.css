@@ -387,10 +387,8 @@
 }
 
 :where(.qube-search-result) {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 2px;
   min-height: 36px;
   padding: 7px 10px;
   font: inherit;
@@ -408,7 +406,7 @@
 }
 
 :where(.qube-search-result [data-qube-search-detail]) {
-  flex-shrink: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9286em;
   color: var(--qube-muted-color);
 }
@@ -715,6 +713,11 @@
 
 :where(.qube-sync-cancelled .qube-run-summary) {
   --qube-dot-color: var(--qube-muted-color);
+}
+
+:where(.qube-run-reason) {
+  max-width: 65ch;
+  margin: 0;
 }
 
 :where(.qube-run-error-detail, .qube-run-quiet) {

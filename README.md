@@ -504,9 +504,10 @@ message and detail), a cancel's `cancel_reason`, and `ended_at`. So a run's resu
 whether or not your `ended` and `failed` handlers write anything; those are for your own records.
 `run.ended?`, `run.failed?` and `run.cancelled?` say which (a run that completed on a
 `cancelled` outcome, where your app chose to stop, counts as cancelled), and `run.summary_text`
-says it in a sentence for your user: "Added to QuickBooks", "Done", "Couldn't sync: <message>",
-"Cancelled: <reason>", "Needs your answer", "Sending to QuickBooks", "Still waiting for QuickBooks"
-or "Syncing with QuickBooks" (the words are I18n's: see [Wording and translations](#wording-and-translations)).
+says it in a sentence for your user: "Added to QuickBooks", "Done", "Couldn't sync",
+"Cancelled", "Needs your answer", "Sending to QuickBooks", "Still waiting for QuickBooks"
+or "Syncing with QuickBooks" (the words are I18n's: see [Wording and translations](#wording-and-translations)). `run.reason_text` says why it failed or was cancelled, as a sentence (the error's message, or
+the reason your app gave), and nil otherwise.
 
 A start QuBe Sync hasn't confirmed for a minute (`run.unconfirmed?`: still `starting`, after a
 start that got no answer) reads "Still waiting for QuickBooks", and the partial offers a "Try
@@ -539,7 +540,8 @@ status.qb_id        # its QuickBooks id on this connection, when it's linked
 status.error        # a failed run's error
 status.retry?       # whether starting again makes sense (failed or cancelled, and not linked)
 status.unconfirmed? # a start QuBe Sync hasn't confirmed: run.retry_start!
-status.summary_text # "In QuickBooks", "Needs your answer", "Couldn't sync: ..."
+status.summary_text # "In QuickBooks", "Needs your answer", "Couldn't sync"
+status.run&.reason_text # why it failed or was cancelled, as a sentence, or nil
 ```
 
 Per connection, since an invoice can be in one company file and not another.
@@ -753,7 +755,7 @@ versions:
   (that value, read-only), `when`, `when_json`, `hidden?`, `required` (the column's; a hidden field
   isn't required until shown), `segmented?`.
 - `QubeRails::RunStatusView`: `status` (`:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`,
-  `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary`, `detail`, `quiet_text`,
+  `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary` (a few words, for the pill), `reason` (why it failed or was cancelled, a sentence), `detail`, `quiet_text`,
   `retry_url` and `redeliver_url` (nil when the button doesn't apply; post to them), `error`,
   `stall` (the stalled connection's reason as a Symbol, such as `:not_checking_in` or
   `:quickbooks_unavailable`, while a `:sending` status waits on it; else nil), `stall_text`,
@@ -868,9 +870,9 @@ en:
 | `status.in_quickbooks` | In QuickBooks | the status, linked |
 | `status.added` | Added to QuickBooks | the status, an add that completed |
 | `status.done`, `status.done_with` | Done; Done: %{outcome} | the status, completed |
-| `status.failed`, `status.failed_with` | Couldn't sync; Couldn't sync: %{message} | the status, failed |
+| `status.failed` | Couldn't sync | the status, failed (why is `reason_text`, below it) |
 | `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |
-| `status.cancelled`, `status.cancelled_with` | Cancelled; Cancelled: %{reason} | the status, cancelled |
+| `status.cancelled` | Cancelled | the status, cancelled (the reason, if any, below it) |
 | `status.cancel_reason` | it was stopped before it finished | `Run#cancel_reason_text` with no reason |
 | `status.needs_answer` | Needs your answer | the status, asking a question |
 | `status.starting` | Sending to QuickBooks | the status, just started |

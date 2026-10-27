@@ -34,14 +34,15 @@ RSpec.describe QubeRails::Run do
       expect(run).to be_failed
       expect(run.error).to eq("code" => "no_such_customer", "message" => "No customer named Riverbend",
                               "detail" => "Add the customer, then start again.")
-      expect(run.summary_text).to eq("Couldn't sync: No customer named Riverbend")
+      expect(run.summary_text).to eq("Couldn't sync")
+      expect(run.reason_text).to eq("No customer named Riverbend.")
       expect(run.error_detail).to eq("Add the customer, then start again.")
     end
 
     it "takes an error that's a sentence" do
       run_event("workflow_run.failed", "revision" => 2)
 
-      expect(run.summary_text).to start_with("Couldn't sync: Five renames were tried")
+      expect(run.reason_text).to start_with("Five renames were tried")
       expect(run.error_detail).to be_nil
     end
 
@@ -50,7 +51,8 @@ RSpec.describe QubeRails::Run do
 
       expect(run).to be_cancelled
       expect(run.cancel_reason).to eq("The customer was merged in our CRM.")
-      expect(run.summary_text).to eq("Cancelled: The customer was merged in our CRM.")
+      expect(run.summary_text).to eq("Cancelled")
+      expect(run.reason_text).to eq("The customer was merged in our CRM.")
     end
 
     it "keeps an ending even when the app's handler writes nothing" do
@@ -70,7 +72,7 @@ RSpec.describe QubeRails::Run do
     run.update!(state: "completed", outcome: "used_existing")
     expect(run.summary_text).to eq("Done: Used existing")
     run.update!(state: "failed", outcome: nil, ended_at: nil, error: nil)
-    expect(run.summary_text).to eq("Couldn't sync: it couldn't be sent")
+    expect(run.reason_text).to eq("It couldn't be sent.")
     run.update!(state: "cancelled", cancel_reason: nil)
     expect(run.summary_text).to eq("Cancelled")
   end
@@ -83,7 +85,7 @@ RSpec.describe QubeRails::Run do
     expect(run).not_to be_failed
     expect(run.summary_text).to eq("Cancelled")
     run.update!(cancel_reason: "Merged in the CRM")
-    expect(run.summary_text).to eq("Cancelled: Merged in the CRM")
+    expect(run.reason_text).to eq("Merged in the CRM.")
   end
 
   it "says a start QuBe Sync hasn't confirmed for a minute is unconfirmed, and a younger one is starting" do

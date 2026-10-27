@@ -114,7 +114,8 @@ RSpec.describe "The view-models" do
       make_run(invoice, connection).update!(state: "failed", ended_at: Time.now,
                                             error: { "message" => "No customer", "detail" => "Add it first." })
 
-      expect([view.status, view.state, view.summary, view.detail]).to eq([:failed, "failed", "Couldn't sync: No customer", "Add it first."])
+      expect([view.status, view.state, view.summary, view.reason, view.detail])
+        .to eq([:failed, "failed", "Couldn't sync", "No customer.", "Add it first."])
       expect(view.css_class).to eq("qube-run-status qube-sync-failed qube-run-failed")
       expect([view.retry_url, view.redeliver_url]).to eq([nil, nil])
     end

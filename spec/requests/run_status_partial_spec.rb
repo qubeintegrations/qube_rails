@@ -20,7 +20,8 @@ RSpec.describe "The run status partial", type: :request do
     status = page.at_css(".qube-run-status")
 
     expect(status["class"]).to include("qube-run-failed")
-    expect(status.at_css(".qube-run-summary").text).to eq("Couldn't sync: No customer <b>named</b> Riverbend")
+    expect(status.at_css(".qube-run-summary").text).to eq("Couldn't sync")
+    expect(status.at_css(".qube-run-reason").text).to eq("No customer <b>named</b> Riverbend.")
     expect(status.at_css(".qube-run-summary b")).to be_nil # escaped
     expect(status.at_css(".qube-run-error-detail").text).to eq("Add the customer first.")
   end

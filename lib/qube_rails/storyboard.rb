@@ -45,9 +45,9 @@ module QubeRails
        "Completed, linking nothing (an operation that doesn't link its record)."],
       ["failed", "Failed", :failed,
        { state: "failed", ended: true,
-         error: { "message" => "QuickBooks refused the invoice: the customer is inactive",
+         error: { "message" => "QuickBooks refused the invoice because Riverbend Electric is inactive",
                   "detail" => "Make Riverbend Electric active in QuickBooks, then send it again." } },
-       ["run_status/detail"], "A failure: its message, then its detail."],
+       ["run_status/detail"], "A failure: the pill says it couldn't sync; below it, why (the error's message) and what to do (its detail)."],
       ["cancelled", "Cancelled", :cancelled,
        { state: "cancelled", ended: true, cancel_reason: "The order was cancelled in the app." }, [],
        "Cancelled by your app, with its reason."]

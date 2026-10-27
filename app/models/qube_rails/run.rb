@@ -115,15 +115,12 @@ module QubeRails
       state == "starting" && created_at && created_at < Time.now - UNCONFIRMED_AFTER_SECONDS
     end
 
-    # Where it stands, in one plain sentence for a person: "Added to QuickBooks", "Done",
-    # "Couldn't sync: <message>", "Cancelled: <reason>", "Needs your answer", "Sending to
-    # QuickBooks", "Still waiting for QuickBooks" (a start unconfirmed for a minute) or "Syncing
-    # with QuickBooks". The words are I18n's, under qube_rails.status (QubeRails.t).
+    # Where it stands, in a few words for a person: "Added to QuickBooks", "Done", "Couldn't
+    # sync", "Cancelled", "Needs your answer", "Sending to QuickBooks", "Still waiting for
+    # QuickBooks" (a start unconfirmed for a minute) or "Syncing with QuickBooks". Why it failed
+    # or was cancelled is reason_text. The words are I18n's, under qube_rails.status.
     def summary_text
-      if cancelled?
-        reason = cancel_reason.to_s.strip
-        return reason.empty? ? QubeRails.t("status.cancelled") : QubeRails.t("status.cancelled_with", reason: reason)
-      end
+      return QubeRails.t("status.cancelled") if cancelled?
 
       case state
       when "starting"
@@ -134,12 +131,22 @@ module QubeRails
         when "", "completed" then QubeRails.t("status.done")
         else QubeRails.t("status.done_with", outcome: humanize(outcome))
         end
-      when "failed"
-        message = error_message
-        message ? QubeRails.t("status.failed_with", message: message) : QubeRails.t("status.failed")
+      when "failed" then QubeRails.t("status.failed")
       when "awaiting_input" then QubeRails.t("status.needs_answer")
       else QubeRails.t("status.running")
       end
+    end
+
+    # Why it failed (its error message) or was cancelled (the reason it carried), as a sentence,
+    # or nil.
+    def reason_text
+      text = if cancelled? then cancel_reason.to_s.strip
+             elsif state == "failed" then error_message.to_s.strip
+             end
+      return nil if text.nil? || text.empty?
+
+      text = text[0].upcase + text[1..]
+      text.match?(/[.!?]\z/) ? text : "#{text}."
     end
 
     # Why it was cancelled: the reason it carried, else what a cancelled outcome means.
