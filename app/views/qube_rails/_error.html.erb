@@ -1,0 +1,4 @@
+<%# A message a QuBe Sync route went back with, shown once: for a page without the run partials. %>
+<% if (error = flash.delete(:qube_rails_error)) %>
+<p class="qube-error"><%= error %></p>
+<% end %>

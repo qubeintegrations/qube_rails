@@ -190,4 +190,62 @@ RSpec.describe "Onboarding", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
   end
+
+  describe "DELETE /quickbooks/connections/:id" do
+    let(:invoice) { Invoice.create!(number: "1001", account: account) }
+
+    it "deletes QuBe Sync's connection, then the row with its runs and links" do
+      connection = make_connection(account)
+      run = make_run(invoice, connection)
+      run.update!(state: "completed")
+      connection.link(invoice, kind: "invoice", qb_id: "TXN-1")
+      deleted = stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_return(status: 204)
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(deleted).to have_been_requested
+      expect(response).to have_http_status(:see_other)
+      expect(QubeRails::Connection.exists?(connection.id)).to be(false)
+      expect(QubeRails::Run.exists?(run.id)).to be(false)
+      expect(QubeRails::QuickbooksRecord.where(connection_id: connection.id)).to be_empty
+    end
+
+    it "takes one QuBe Sync already deleted, and one it never made" do
+      gone = make_connection(account, qube_id: "conn-q-gone")
+      stub_request(:delete, api_url("/connections/conn-q-gone")).to_return(status: 404, body: "{}")
+      never = make_connection(account, qube_id: nil, status: "pending")
+
+      delete "/quickbooks/connections/#{gone.id}", headers: signed_in
+      delete "/quickbooks/connections/#{never.id}", headers: signed_in
+
+      expect(QubeRails::Connection.where(id: [gone.id, never.id])).to be_empty
+    end
+
+    it "is refused while a run hasn't ended, and when QuBe Sync doesn't answer" do
+      connection = make_connection(account)
+      run = make_run(invoice, connection)
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in, env: { "HTTP_REFERER" => "/account" }
+
+      expect(response).to redirect_to("/account")
+      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::RUNS_GOING)
+      expect(a_request(:delete, api_url("/connections/#{connection.qube_id}"))).not_to have_been_made
+
+      run.update!(state: "failed")
+      stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_timeout
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::NO_ANSWER)
+      expect(QubeRails::Connection.exists?(connection.id)).to be(true)
+    end
+
+    it "answers 404 for another account's connection" do
+      other = make_connection(Account.create!(name: "Other"))
+
+      delete "/quickbooks/connections/#{other.id}", headers: signed_in
+
+      expect(response).to have_http_status(:not_found)
+      expect(QubeRails::Connection.exists?(other.id)).to be(true)
+    end
+  end
 end

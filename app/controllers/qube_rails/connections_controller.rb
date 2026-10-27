@@ -48,7 +48,44 @@ module QubeRails
       send_to_setup(connection)
     end
 
+    RUNS_GOING = "It has a run that hasn't ended: wait for it, or answer its question, first."
+    NO_ANSWER = "QuBe Sync didn't answer: try disconnecting again in a minute."
+
+    # DELETE /quickbooks/connections/:id: disconnects one of the signed-in account's
+    # connections. QuBe Sync deletes its connection (the Web Connector stops syncing that
+    # company file), then the row goes, with its runs and its QuickBooks links. Refused while a
+    # run hasn't ended. Another account's connection answers 404.
+    def destroy
+      account = signed_in_account
+      return head(:unauthorized) unless account
+
+      connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
+      return head(:not_found) unless connection
+      return back_with_error(RUNS_GOING) if connection.runs.where.not(state: QubeRails::Run::ENDED_STATES).exists?
+
+      delete_on_qube(connection)
+      connection.disconnect!
+      redirect_back fallback_location: "/", status: :see_other
+    rescue *QubeRails::Backend::NETWORK_ERRORS
+      back_with_error(NO_ANSWER)
+    end
+
     private
+
+    # Already gone there (404) is gone.
+    def delete_on_qube(connection)
+      return if connection.qube_id.to_s.empty?
+
+      QubeRails.client.delete_connection(connection.qube_id)
+    rescue QubeRails::Backend::APIError => e
+      raise unless e.status == 404
+    end
+
+    # The engine's partials show the message once.
+    def back_with_error(message)
+      flash[:qube_rails_error] = message
+      redirect_back fallback_location: "/", status: :see_other
+    end
 
     def signed_in_account
       account = QubeRails.config.current_account.call(self)

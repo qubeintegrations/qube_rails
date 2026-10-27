@@ -32,6 +32,16 @@ module QubeRails
     validates :status, inclusion: { in: STATUSES }
 
     # The connections owner has, whatever its key's type.
+    # The row, with its runs (and their notifications) and its QuickBooks links: a connection
+    # QuBe Sync no longer has. ConnectionsController#destroy deletes QuBe Sync's first.
+    def disconnect!
+      transaction do
+        runs.find_each(&:destroy!)
+        QubeRails::QuickbooksRecord.where(connection_id: id).delete_all
+        destroy!
+      end
+    end
+
     def self.owned_by(owner)
       type, id = key_for(owner)
       where(owner_type: type, owner_id: id)

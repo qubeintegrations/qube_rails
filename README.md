@@ -52,6 +52,7 @@ Relative to where the engine is mounted (`"/"` above):
 | --- | --- |
 | `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
+| `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs and QuickBooks links. Refused while a run hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
@@ -66,7 +67,8 @@ connection id against the row.
 
 Onboarding and the question routes inherit your `ApplicationController` (the `parent_controller`
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
-engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`.
+engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`,
+`qube_rails.connection_path(connection)` (with `method: :delete`).
 
 Two buttons cover it: Connect, for an account setting up its first company file (or finishing a
 setup it started), and, once it has one, Connect another company file:
@@ -533,8 +535,13 @@ Rows go with their run: deleting a run deletes its notifications. Runs themselve
 prune once you no longer need them, for instance from a scheduled job:
 
 ```ruby
-QubeRails::Run.where(state: %w[completed failed cancelled]).where("ended_at < ?", 90.days.ago).in_batches.destroy_all
+QubeRails::Run.where(state: %w[completed failed cancelled])
+              .where("COALESCE(ended_at, updated_at) < ?", 90.days.ago).in_batches.destroy_all
 ```
+
+Only ended runs, and not the day they end: a webhook for a deleted run answers 404, which QuBe
+Sync retries for hours. A run that failed before it started has no `ended_at`, hence
+`updated_at`. Never prune `qube_quickbooks_records`: they hold the QuickBooks ids.
 
 
 `qube_runs.question` and `qube_runs.links` are JSON kept as text (`QubeRails::JSONCoder`), not a
