@@ -28,7 +28,7 @@ RSpec.describe "The question routes", type: :request do
   let(:connection) { make_connection(account) }
   let(:run) do
     make_run(invoice, connection, revision: 6).tap do |r|
-      r.update!(question: question, links: { "decisions" => decisions, "search" => search_url })
+      r.update!(state: "awaiting_input", question: question, links: { "decisions" => decisions, "search" => search_url })
     end
   end
   let(:signed_in) { { "X-Account" => account.id.to_s } }
@@ -55,6 +55,9 @@ RSpec.describe "The question routes", type: :request do
       expect(response).to have_http_status(:see_other)
       expect(response).to redirect_to("/invoices/#{invoice.id}")
       expect(run.reload.question).to be_nil
+      # Running again at once, not waiting on an answer until the Web Connector next polls.
+      expect(run.state).to eq("running")
+      expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
     end
 
     it "sends an unticked checkbox as false, and a number it can't read as typed" do

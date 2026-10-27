@@ -332,7 +332,7 @@ RSpec.describe QubeRails::Operation do
 
   describe "#answered" do
     it "forgets the question only when its token is the one answered" do
-      run.update!(question: { "token" => "t-1" }, links: { "decisions" => "x" })
+      run.update!(state: "awaiting_input", question: { "token" => "t-1" }, links: { "decisions" => "x" })
       operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
 
       operation.answered("t-0")
@@ -340,6 +340,14 @@ RSpec.describe QubeRails::Operation do
 
       operation.answered("t-1")
       expect(run.reload.question).to be_nil
+      expect(run.state).to eq("awaiting_input") # without taken: the next webhook says
+    end
+
+    it "runs again once QuBe Sync took the answer" do
+      run.update!(state: "awaiting_input", question: { "token" => "t-1" }, links: { "decisions" => "x" })
+      QuickbooksDesktop::CreateInvoice.new(invoice, run).answered("t-1", taken: true)
+
+      expect(run.reload).to have_attributes(state: "running", question: nil)
     end
   end
 

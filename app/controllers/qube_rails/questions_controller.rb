@@ -33,7 +33,7 @@ module QubeRails
       return back_with_error(CHANGED) unless choice && @links["decisions"]
 
       QubeRails.client.answer(@links["decisions"], choice: choice["id"], data: answer_data(choice))
-      @operation.answered(@question["token"])
+      @operation.answered(@question["token"], taken: true)
       redirect_back fallback_location: "/", status: :see_other
     rescue Backend::APIError => e
       raise unless [400, 409, 422].include?(e.status)
