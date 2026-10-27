@@ -63,7 +63,7 @@ RSpec.describe "The view-models" do
   describe QubeRails::RowsView do
     let(:rows) { question(sample("rows")).choices.first.fields.first.rows }
 
-    it "has the columns, a row per record, and a cell per column" do
+    it "has the columns, a row per record, and a cell per column it asks or has a value for" do
       expect(rows.columns.map(&:name)).to eq(%w[action list_id item_type entity_type income_account asset_account cogs_account])
       expect(rows.rows.map(&:key)).to eq(%w[customer_ref invoice_line_add.0.item_ref invoice_line_add.1.item_ref])
 
@@ -73,7 +73,9 @@ RSpec.describe "The view-models" do
         .to eq(["select", "data[records][customer_ref][action]", :cell, { "qube-rows-input" => "" }])
       list_id = customer.cells[1].field
       expect([list_id.type, list_id.search_field, list_id.row_key]).to eq(%w[search records.list_id customer_ref])
-      expect(customer.cells[2].field).to be_nil # a column the row doesn't ask
+      expect(customer.cells.map(&:column)).to eq(%w[action list_id]) # only the columns it asks
+      expect(action).to be_segmented # two options
+      expect(list_id.dom_id).to eq("qube-data-records-0-list_id")
     end
 
     it "shows a value the row already has by its label, and hides a cell whose when doesn't hold yet" do
@@ -87,12 +89,14 @@ RSpec.describe "The view-models" do
       expect([asset.field.disabled, asset.when_json]).to eq([true, { "action" => ["create"], "item_type" => ["item_inventory"] }.to_json])
     end
 
-    it "has a Set selected control for an enum column and a record column of one kind, and none for the rest" do
-      bulk = rows.bulk.map { |cell| [cell.column, cell.field && cell.field.type] }
-
-      expect(bulk).to include(%w[action select], %w[income_account search], ["list_id", nil])
-      expect(rows.bulk.first.field.form_attribute).to eq("")
-      expect(rows.bulk.first.field.input_name).to be_nil
+    it "sets all by the first short enum column two rows ask, and isn't required while hidden" do
+      expect(rows.set_all.name).to eq("action")
+      expect(rows.set_all.options.map(&:label)).to eq(["Create it", "Use an existing one"])
+      vinyl = rows.rows[1]
+      income = vinyl.cells.find { |c| c.column == "income_account" }
+      expect([income.hidden?, income.required, income.field.required, income.field.disabled]).to eq([true, true, false, true])
+      item_type = vinyl.cells.find { |c| c.column == "item_type" }
+      expect(item_type.field).not_to be_segmented # four options: a select
     end
   end
 

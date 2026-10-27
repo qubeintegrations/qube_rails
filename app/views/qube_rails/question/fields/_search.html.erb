@@ -4,11 +4,11 @@
     data-qube-text-* attributes are its words (I18n's qube_rails.question.*). %>
 <% inputs = capture do %>
   <%= tag.input(type: "search", id: field.dom_id, class: qube_classes(:input, "qube-search-input"), maxlength: 100,
-                autocomplete: "off", required: field.required, disabled: field.disabled, form: field.form_attribute,
+                autocomplete: "off", required: field.required, disabled: field.disabled,
                 role: "combobox", "aria-autocomplete": "list", "aria-expanded": "false",
                 "aria-label": (field.labelled? ? nil : field.label), data: { "qube-search-input" => "" }) %>
-  <%= tag.input(type: "hidden", name: field.input_name, disabled: field.disabled, form: field.form_attribute,
-                class: ["qube-search-value", field.cell? ? "qube-rows-input" : nil, field.bulk? ? "qube-bulk-value" : nil].compact.join(" "),
+  <%= tag.input(type: "hidden", name: field.input_name, disabled: field.disabled,
+                class: ["qube-search-value", field.cell? ? "qube-rows-input" : nil].compact.join(" "),
                 data: field.data.merge("qube-search-value" => "")) %>
   <div class="<%= qube_classes(:search_results, "qube-search-results") %>" data-qube-search-results aria-live="polite"></div>
 <% end %>

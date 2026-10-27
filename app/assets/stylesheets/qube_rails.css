@@ -203,7 +203,7 @@
   flex-basis: 100%;
 }
 
-:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy) {
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy) {
   display: inline-flex;
   align-items: center;
   justify-self: start;
@@ -231,11 +231,11 @@
 }
 
 /* Pressing gives way a little */
-:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy):where(:active:not(:disabled)) {
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy):where(:active:not(:disabled)) {
   transform: scale(0.97);
 }
 
-:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply):where(:disabled) {
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button):where(:disabled) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -255,7 +255,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :where(.qube-choice-button, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy):where(:hover:not(:disabled)) {
+  :where(.qube-choice-button, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy):where(:hover:not(:disabled)) {
     background: color-mix(in srgb, currentColor 6%, var(--qube-solid-color));
   }
 
@@ -342,7 +342,7 @@
   opacity: 0.5;
 }
 
-:where(.qube-checkbox, .qube-rows-all, .qube-rows-pick) {
+:where(.qube-checkbox) {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -420,194 +420,253 @@
   color: var(--qube-muted-color);
 }
 
-/* ---- The rows table: a rounded frame that scrolls sideways (fading at the edge while there's
-   more), a sticky header and record column, and "Set selected" while rows are ticked */
+/* ---- A rows field: a block per record, its fields stacked. Nothing scrolls sideways: each
+   record's name sits beside its fields when there's room, above them when there isn't. */
 
-:where(.qube-rows) {
+:where(.qube-rows-field) {
+  gap: 12px;
+}
+
+:where(.qube-rows-set-all) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-}
-
-:where(.qube-rows-frame) {
-  border: 1px solid var(--qube-border-color);
-  border-radius: var(--qube-radius-size);
-  background: var(--qube-solid-color);
-  overflow: hidden;
-}
-
-:where(.qube-rows-scroll) {
-  max-width: 100%;
-  max-height: var(--qube-rows-height, min(70vh, 36rem));
-  overflow: auto;
-  overscroll-behavior-x: contain;
-}
-
-:where(.qube-rows-scroll[data-qube-overflow~="end"]) {
-  -webkit-mask-image: linear-gradient(to left, transparent, #000 40px);
-  mask-image: linear-gradient(to left, transparent, #000 40px);
-}
-
-:where(.qube-rows-table) {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-:where(.qube-rows-table th, .qube-rows-table td) {
-  padding: 8px 12px;
-  text-align: left;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--qube-border-color);
-  background: var(--qube-solid-color);
-}
-
-/* The row's line, under a hidden cell too */
-:where(.qube-rows-table tbody tr) {
-  background: linear-gradient(to top, var(--qube-border-color) 1px, var(--qube-solid-color) 1px);
-}
-
-:where(.qube-rows-table tbody tr:last-child) {
-  background: var(--qube-solid-color);
-}
-
-:where(.qube-rows-table tbody tr:last-child > *) {
-  border-bottom: 0;
-}
-
-:where(.qube-rows-table thead tr:first-child th) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   font-size: 0.9286em;
-  font-weight: 500;
-  white-space: nowrap;
+}
+
+:where(.qube-rows-set-all-label) {
   color: var(--qube-muted-color);
 }
 
-:where(.qube-rows-table tbody th) {
+:where(.qube-set-all-button) {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+:where(.qube-rows) {
+  display: grid;
+  container-type: inline-size;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-row) {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-row-header) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+:where(.qube-row-label) {
   font-weight: 500;
 }
 
-/* The tick column, then the record's name, stay put while the rest scrolls sideways */
-:where(.qube-rows-table .qube-rows-pick-cell) {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  width: 40px;
-  padding: 4px;
-  text-align: center;
+:where(.qube-row-detail) {
+  color: var(--qube-muted-color);
 }
 
-:where(.qube-rows-table .qube-rows-name) {
-  position: sticky;
-  left: 48px;
-  z-index: 1;
-  min-width: min(12rem, 36vw);
-  box-shadow: inset -1px 0 0 var(--qube-border-color);
+:where(.qube-row-body) {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
-:where(.qube-rows-table thead tr:first-child :is(.qube-rows-pick-cell, .qube-rows-name)) {
-  z-index: 3;
+:where(.qube-row-fields) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 12px 16px;
 }
 
-/* A 40px target around each checkbox */
-:where(.qube-rows-hit) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
+/* Nothing to show yet (no choice made): no gap for it */
+:where(.qube-row-fields:not(:has(> .qube-row-cell:not([hidden])))) {
+  display: none;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  :where(.qube-rows-table tbody tr:hover > *) {
-    background: color-mix(in srgb, currentColor 3%, var(--qube-solid-color));
+@container (min-width: 36rem) {
+  :where(.qube-row) {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    gap: 12px 24px;
+    align-items: start;
+  }
+
+  :where(.qube-row-header) {
+    flex-direction: column;
+    padding-top: 9px;
   }
 }
 
-:where(.qube-rows-table tr[data-qube-picked] > *) {
-  background: color-mix(in srgb, var(--qube-accent-color) 6%, var(--qube-solid-color));
-}
-
-:where(.qube-rows-table .qube-input, .qube-rows-table .qube-select, .qube-rows-table .qube-search-input) {
-  width: 100%;
-  min-width: 10rem;
-  min-height: 36px;
-}
-
-/* In the table the matches push the row down, so the frame never clips them */
-:where(.qube-rows-table .qube-search-results) {
-  position: static;
-  margin-top: 4px;
-  box-shadow: none;
-}
-
-:where(.qube-rows-detail) {
-  display: block;
+:where(.qube-row .qube-label) {
   font-size: 0.9286em;
-  font-weight: 400;
-  color: var(--qube-muted-color);
 }
 
-/* A cell whose "when" doesn't hold yet fades out, keeping its space so the table doesn't jump */
-:where(.qube-rows-table [data-qube-col]) {
-  transition: opacity 150ms var(--qube-ease-out), visibility 150ms;
+:where(.qube-row-fields) :where(.qube-input, .qube-select, .qube-search-input, .qube-search) {
+  max-width: none;
+  min-width: 0;
 }
 
-:where(.qube-rows-table [data-qube-hidden]) {
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* "Set selected": a tinted toolbar row under the header, while rows are ticked */
-:where(.qube-rows-bulk > td) {
-  background: color-mix(in srgb, var(--qube-accent-color) 7%, var(--qube-solid-color));
-  border-bottom-color: color-mix(in srgb, var(--qube-accent-color) 22%, transparent);
+/* A field that starts to apply fades in; one that stops is gone at once (hidden) */
+:where(.qube-row-cell) {
+  min-width: 0;
   transition: opacity 150ms var(--qube-ease-out);
 }
 
 @starting-style {
-  :where(.qube-rows-bulk > td) {
+  :where(.qube-row-cell) {
     opacity: 0;
   }
 }
 
-:where(.qube-rows-bulk td[data-qube-bulk]) {
+/* What the record already has: read-only */
+:where(.qube-row-preset) {
+  gap: 6px;
+}
+
+:where(.qube-row-preset-value) {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+/* The record's choice (create it, or use one QuickBooks has): a segmented control */
+:where(.qube-segmented-field) {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+:where(.qube-visually-hidden) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
-:where(.qube-rows-bulk .qube-search, .qube-rows-bulk .qube-select) {
-  display: inline-block;
-  width: auto;
-  min-width: 9rem;
-  vertical-align: middle;
+:where(.qube-segmented) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border-radius: calc(var(--qube-control-radius) + 2px);
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  box-sizing: border-box;
 }
 
-:where(.qube-rows-bulk .qube-bulk-apply) {
+:where(.qube-segment) {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
   min-height: 36px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-:where(.qube-rows-count) {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-:where(.qube-rows-bulk-label) {
-  display: block;
-  font-size: 0.9286em;
+  padding: 0 14px;
+  font-weight: 500;
   color: var(--qube-muted-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 160ms var(--qube-ease-out),
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
 }
 
-/* Cells "Set selected" just filled: a tint that fades out */
+:where(.qube-segment-input) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+:where(.qube-segment:has(:checked)) {
+  color: inherit;
+  background: var(--qube-solid-color);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 0 1px var(--qube-border-color);
+}
+
+:where(.qube-segment:active) {
+  transform: scale(0.97);
+}
+
+:where(.qube-segment:has(:focus-visible)) {
+  outline: 2px solid var(--qube-accent-color);
+  outline-offset: 2px;
+}
+
+:where(.qube-segment:has(:disabled)) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-segment:hover) {
+    color: inherit;
+  }
+}
+
+@container (max-width: 24rem) {
+  :where(.qube-segmented) {
+    width: 100%;
+  }
+}
+
+/* "Use for all N": a text button under a filled field */
+:where(.qube-use-for-all) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 2px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.9286em;
+  font-weight: 500;
+  color: var(--qube-accent-color);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: transform 160ms var(--qube-ease-out);
+}
+
+:where(.qube-use-for-all[hidden]) {
+  display: none;
+}
+
+:where(.qube-use-for-all:active) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-use-for-all:hover) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* What "Set all to" or "Use for all" just filled: a tint that fades out */
 @keyframes qube-filled {
   from {
     background-color: color-mix(in srgb, var(--qube-accent-color) 22%, var(--qube-solid-color));
   }
 }
 
-:where(.qube-rows-table [data-qube-filled]) {
+:where([data-qube-filled]) :where(.qube-input, .qube-select, .qube-search-input, .qube-segmented) {
   animation: qube-filled 600ms ease-out;
 }
 
@@ -704,7 +763,7 @@
 /* ---- Reduced motion: fades stay, movement goes */
 
 @media (prefers-reduced-motion: reduce) {
-  :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy, .qube-pick):where(:active) {
+  :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy, .qube-pick):where(:active) {
     transform: none;
   }
 
@@ -712,6 +771,10 @@
     :where(.qube-search-results, .qube-error) {
       transform: none;
     }
+  }
+
+  :where(.qube-segment, .qube-use-for-all):where(:active) {
+    transform: none;
   }
 }
 

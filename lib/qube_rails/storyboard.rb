@@ -133,7 +133,7 @@ module QubeRails
           list << "question/fields/#{type}"
           next unless type == "rows"
 
-          list.concat(%w[question/rows/cell question/rows/bulk])
+          list.concat(%w[question/rows/row question/rows/cell question/rows/segmented question/field])
           Array(field["columns"]).each { |c| list << "question/fields/#{FieldView.type_of(c, record_type: "search")}" }
         end
         list.uniq

@@ -1,11 +1,24 @@
-<%# One cell (a QubeRails::CellView): its control, or what the row already has. data-qube-hidden
-    marks a column whose "when" doesn't hold yet (its input disabled, so it isn't sent). %>
+<%# One field of a row (a QubeRails::CellView): a segmented choice, a field with its label (and,
+    for a search or a select, "Use for all"), or what the row already has, read-only.
+    hidden / data-qube-hidden mark a field whose "when" doesn't hold yet (its input disabled and
+    not required, so it isn't sent); data-qube-required says to require it once shown. %>
 <% content = capture do %>
-<%   if cell.field %>
+<%   if cell.segmented? %>
+  <%= render "qube_rails/question/rows/segmented", field: cell.field %>
+<%   elsif cell.field %>
   <%= render cell.field.partial, field: cell.field %>
+<%     if %w[search select].include?(cell.field.type) %>
+  <button type="button" class="<%= qube_classes(:use_for_all, "qube-use-for-all") %>" data-qube-use-for-all hidden></button>
+<%     end %>
 <%   else %>
-  <%= cell.preset %>
+  <div class="qube-field qube-row-preset">
+    <span class="<%= qube_classes(:label, "qube-label") %>"><%= cell.label %></span>
+    <span class="qube-row-preset-value"><%= cell.preset %></span>
+  </div>
 <%   end %>
 <% end %>
-<%= content_tag :td, content, data: { "qube-col" => cell.column, "qube-when" => cell.when_json,
-                                      "qube-hidden" => (cell.hidden? ? "" : nil) }.compact %>
+<%= content_tag :div, content, class: ["qube-row-cell", cell.segmented? ? "qube-row-cell-segmented" : nil].compact.join(" "),
+                               hidden: cell.hidden?,
+                               data: { "qube-col" => cell.column, "qube-when" => cell.when_json,
+                                       "qube-hidden" => (cell.hidden? ? "" : nil),
+                                       "qube-required" => (cell.required ? "" : nil) }.compact %>

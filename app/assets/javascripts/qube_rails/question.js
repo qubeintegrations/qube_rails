@@ -1,4 +1,4 @@
-// qube_rails: the behaviour of a QuickBooks question (search boxes, the rows table) and the
+// qube_rails: the behaviour of a QuickBooks question (search boxes, a rows field) and the
 // storyboard's copy buttons. Listeners sit on document and key only on data-qube-* attributes, so
 // any markup carrying them works, after Turbo navigation too. Plain JavaScript, no build. README,
 // "Styling", has the attribute contract.
@@ -220,19 +220,20 @@
     });
   };
 
-  // ---- Rows: [data-qube-rows] holds rows ([data-qube-row][data-qube-values]), their cells
-  // ([data-qube-col], with data-qube-when) and inputs ([data-qube-rows-input]), the row picks
-  // ([data-qube-rows-pick], [data-qube-rows-all]), the "Set selected" row ([data-qube-rows-bulk],
-  // its count [data-qube-rows-count]) and its cells ([data-qube-bulk]).
+  // ---- Rows: [data-qube-rows] holds records ([data-qube-row][data-qube-values]), their fields
+  // ([data-qube-col], with data-qube-when, data-qube-required) and inputs ([data-qube-rows-input]),
+  // the "Set all to:" line ([data-qube-rows-set-all="<column>"] with [data-qube-set-all="<value>"]
+  // buttons) and each field's "Use for all" ([data-qube-use-for-all]).
 
-  var rowsOf = function (table) {
-    return table.querySelectorAll("[data-qube-row][data-qube-values]");
+  var rowsOf = function (list) {
+    return list.querySelectorAll("[data-qube-row][data-qube-values]");
   };
 
-  // A row's answers so far: its preset values, then its inputs.
+  // A row's answers so far: its preset values, then its shown inputs (a radio when it's checked).
   var answers = function (row) {
     var values = JSON.parse(row.getAttribute("data-qube-values") || "{}");
     each(row.querySelectorAll("[data-qube-col] [data-qube-rows-input]"), function (input) {
+      if (input.disabled || (input.type === "radio" && !input.checked)) return;
       if (input.value) values[input.closest("[data-qube-col]").getAttribute("data-qube-col")] = input.value;
     });
     return values;
@@ -242,95 +243,135 @@
     return Object.keys(when).every(function (k) { return when[k].indexOf(values[k]) !== -1; });
   };
 
-  // The stylesheet fades it (opacity, then visibility); without it, visibility alone hides it.
+  // Shows or hides a field: hidden, its inputs disabled and not required, so it's neither sent nor
+  // asked for. The stylesheet fades it in.
   var showCell = function (cell, shown) {
+    if (shown === !cell.hidden) return false;
+    cell.hidden = !shown;
     if (shown) cell.removeAttribute("data-qube-hidden");
     else cell.setAttribute("data-qube-hidden", "");
-    cell.style.visibility = shown ? "" : "hidden";
+    var required = cell.hasAttribute("data-qube-required");
+    each(cell.querySelectorAll("input, select, textarea"), function (input) {
+      input.disabled = !shown;
+      if (required && input.type !== "hidden") input.required = shown;
+    });
+    return true;
   };
 
-  // Shows a cell while its "when" holds; a hidden one sends nothing and isn't required.
+  // Shows each field while its "when" holds, until nothing changes (a field shown or hidden can
+  // change what the others see).
   var refresh = function (row) {
-    var values = answers(row);
-    each(row.querySelectorAll("[data-qube-col]"), function (cell) {
-      var shown = holds(JSON.parse(cell.getAttribute("data-qube-when") || "{}"), values);
-      showCell(cell, shown);
-      each(cell.querySelectorAll("input, select, textarea"), function (input) { input.disabled = !shown; });
-    });
-  };
-
-  // The ticks: select-all (indeterminate when some are), each row marked, and "Set selected"
-  // shown with its count while any is ticked.
-  var picked = function (table) {
-    var picks = table.querySelectorAll("[data-qube-rows-pick]");
-    var ticked = 0;
-    each(picks, function (box) {
-      var row = box.closest("[data-qube-row]");
-      if (box.checked) ticked++;
-      if (row && box.checked) row.setAttribute("data-qube-picked", "");
-      else if (row) row.removeAttribute("data-qube-picked");
-    });
-    var all = table.querySelector("[data-qube-rows-all]");
-    if (all) {
-      all.checked = ticked > 0 && ticked === picks.length;
-      all.indeterminate = ticked > 0 && ticked < picks.length;
-    }
-    var bulk = table.querySelector("[data-qube-rows-bulk]");
-    if (bulk) bulk.hidden = ticked === 0;
-    var count = table.querySelector("[data-qube-rows-count]");
-    if (count) {
-      var text = table.getAttribute(ticked === 1 ? "data-qube-selected-one" : "data-qube-selected-other");
-      count.textContent = (text || "%{count} selected").replace("%{count}", ticked);
+    for (var round = 0; round < 5; round++) {
+      var values = answers(row);
+      var changed = false;
+      each(row.querySelectorAll("[data-qube-col]"), function (cell) {
+        var shown = holds(JSON.parse(cell.getAttribute("data-qube-when") || "{}"), values);
+        if (showCell(cell, shown)) changed = true;
+      });
+      if (!changed) return;
     }
   };
 
-  // A tint on a cell Apply just filled, fading out (the stylesheet's animation).
+  // A tint on what was just filled for the person, fading out (the stylesheet's animation).
   var filled = function (cell) {
     cell.removeAttribute("data-qube-filled");
-    void cell.offsetWidth; // restarts it for a second Apply
+    void cell.offsetWidth; // restarts it
     cell.setAttribute("data-qube-filled", "");
   };
 
-  // Fills a column on every ticked row that asks it.
-  var apply = function (button) {
-    var bulk = button.closest("[data-qube-bulk]");
-    var table = bulk.closest("[data-qube-rows]");
-    var col = bulk.getAttribute("data-qube-bulk");
-    var source = bulk.querySelector("[data-qube-bulk-value]");
-    var shownLabel = bulk.querySelector("[data-qube-search-input]");
-    if (!source || !source.value) return;
-    each(rowsOf(table), function (row) {
-      var ticked = row.querySelector("[data-qube-rows-pick]");
-      if (!ticked || !ticked.checked) return;
-      var cell = row.querySelector('[data-qube-col="' + col + '"]');
-      var input = cell && cell.querySelector("[data-qube-rows-input]");
-      if (!input || input.disabled) return;
-      input.value = source.value;
+  // A field's value and, for a search, the text it shows.
+  var valueOf = function (cell) {
+    var hidden = cell.querySelector("[data-qube-search-value]");
+    if (hidden) {
+      var text = cell.querySelector("[data-qube-search-input]");
+      return { value: hidden.value, label: text ? text.value : hidden.value };
+    }
+    var select = cell.querySelector("select[data-qube-rows-input]");
+    return { value: select ? select.value : "", label: null };
+  };
+
+  var setValue = function (cell, value) {
+    var hidden = cell.querySelector("[data-qube-search-value]");
+    if (hidden) {
+      hidden.value = value.value;
       var text = cell.querySelector("[data-qube-search-input]");
       if (text) {
-        text.value = shownLabel ? shownLabel.value : source.value;
+        text.value = value.label || value.value;
         text.setCustomValidity("");
+      }
+      return;
+    }
+    var select = cell.querySelector("select[data-qube-rows-input]");
+    if (select) select.value = value.value;
+  };
+
+  // The other rows' shown, empty fields of the same column.
+  var targets = function (list, cell) {
+    var col = cell.getAttribute("data-qube-col");
+    var row = cell.closest("[data-qube-row]");
+    return Array.prototype.filter.call(list.querySelectorAll("[data-qube-row] [data-qube-col]"), function (other) {
+      return other.getAttribute("data-qube-col") === col && other !== cell && !other.hidden &&
+        other.closest("[data-qube-row]") !== row && other.querySelector("[data-qube-use-for-all]") &&
+        !valueOf(other).value;
+    });
+  };
+
+  // "Use for all N" under each filled field that other rows could take.
+  var offers = function (list) {
+    var template = list.getAttribute("data-qube-text-use-for-all") || "Use for all %{count}";
+    each(list.querySelectorAll("[data-qube-use-for-all]"), function (button) {
+      var cell = button.closest("[data-qube-col]");
+      var n = !cell || cell.hidden || !valueOf(cell).value ? 0 : targets(list, cell).length;
+      button.hidden = n === 0;
+      if (n) button.textContent = template.replace("%{count}", n);
+    });
+  };
+
+  var useForAll = function (button) {
+    var cell = button.closest("[data-qube-col]");
+    var list = cell.closest("[data-qube-rows]");
+    var value = valueOf(cell);
+    targets(list, cell).forEach(function (other) {
+      setValue(other, value);
+      refresh(other.closest("[data-qube-row]"));
+      filled(other);
+    });
+    offers(list);
+  };
+
+  // Sets the column on every row that offers that value.
+  var setAll = function (button) {
+    var list = button.closest("[data-qube-rows]");
+    var col = button.closest("[data-qube-rows-set-all]").getAttribute("data-qube-rows-set-all");
+    var value = button.getAttribute("data-qube-set-all");
+    each(rowsOf(list), function (row) {
+      var cell = row.querySelector('[data-qube-col="' + col + '"]');
+      if (!cell || cell.hidden) return;
+      var radio = Array.prototype.find.call(cell.querySelectorAll('input[type="radio"]'), function (r) {
+        return r.value === value;
+      });
+      var select = cell.querySelector("select[data-qube-rows-input]");
+      if (radio && !radio.disabled) {
+        if (radio.checked) return;
+        radio.checked = true;
+      } else if (select && !select.disabled && Array.prototype.some.call(select.options, function (o) { return o.value === value; })) {
+        if (select.value === value) return;
+        select.value = value;
+      } else {
+        return;
       }
       refresh(row);
       filled(cell);
     });
+    offers(list);
   };
 
-  // The rows table's scroller fades its edge while there's more to the right.
-  var edges = function (scroller) {
-    var more = scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 1;
-    if (more) scroller.setAttribute("data-qube-overflow", "end");
-    else scroller.removeAttribute("data-qube-overflow");
-  };
-
-  // Server-rendered hidden cells, hidden without the stylesheet too; the ticks and edges as the
-  // page has them.
+  // Each rows field as the page has it.
   var sweep = function () {
-    each(document.querySelectorAll("[data-qube-rows] [data-qube-hidden]"), function (cell) {
-      cell.style.visibility = "hidden";
+    each(document.querySelectorAll("[data-qube-rows]"), function (list) {
+      each(rowsOf(list), refresh);
+      offers(list);
     });
-    each(document.querySelectorAll("[data-qube-rows]"), picked);
-    each(document.querySelectorAll("[data-qube-rows-scroll]"), edges);
     each(document.querySelectorAll('[data-qube-choice-kind="form"]'), gate);
   };
 
@@ -354,6 +395,8 @@
     if (box) {
       search(box);
       gate(box.closest("form"));
+      var list = box.closest("[data-qube-rows]");
+      if (list) offers(list);
     }
   });
 
@@ -390,8 +433,10 @@
     });
     var result = event.target.closest("[data-qube-search-result]");
     if (result) return pick(result);
-    var button = event.target.closest("[data-qube-bulk-apply]");
-    if (button) return apply(button);
+    var setAllButton = event.target.closest("[data-qube-set-all]");
+    if (setAllButton) return setAll(setAllButton);
+    var forAll = event.target.closest("[data-qube-use-for-all]");
+    if (forAll) return useForAll(forAll);
     var copyButton = event.target.closest("[data-qube-copy]");
     if (copyButton) copy(copyButton);
   });
@@ -399,30 +444,10 @@
   document.addEventListener("change", function (event) {
     var target = event.target;
     if (!target.closest) return;
-    if (target.matches("[data-qube-rows-all]")) {
-      var table = target.closest("[data-qube-rows]");
-      each(table.querySelectorAll("[data-qube-rows-pick]"), function (box) {
-        box.checked = target.checked;
-      });
-      picked(table);
-      return;
-    }
-    if (target.matches("[data-qube-rows-pick]")) {
-      picked(target.closest("[data-qube-rows]"));
-      return;
-    }
     var row = target.closest("[data-qube-rows] [data-qube-row][data-qube-values]");
-    if (row && !target.closest("[data-qube-bulk]")) refresh(row);
-  });
-
-  // Scroll doesn't bubble: caught on the way down.
-  document.addEventListener("scroll", function (event) {
-    var scroller = event.target.closest && event.target.closest("[data-qube-rows-scroll]");
-    if (scroller === event.target) edges(scroller);
-  }, true);
-
-  window.addEventListener("resize", function () {
-    each(document.querySelectorAll("[data-qube-rows-scroll]"), edges);
+    if (!row) return;
+    refresh(row);
+    offers(row.closest("[data-qube-rows]"));
   });
 
   ["DOMContentLoaded", "turbo:load", "turbo:render", "turbo:frame-load"].forEach(function (name) {

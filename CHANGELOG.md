@@ -6,6 +6,14 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- A rows field is a block per record, not a table: the record's choice as a segmented control (an
+  enum of up to three options), then only the fields its answers call for, stacked; never scrolling
+  sideways. "Set all to:" and "Use for all N" replace the checkboxes and "Set selected": the
+  `table` and `bulk` `ui_classes` keys, `RowsView#bulk`, `FieldView#bulk?` / `#form_attribute` and
+  `qube_rails/question/rows/_bulk` are gone; new pieces `rows/_row` and `rows/_segmented`, keys `rows`,
+  `row`, `row_header`, `segmented`, `segment`, `row_fields`, `use_for_all`. A hidden field is neither
+  required nor enabled, so the browser points at the first missing shown one. Posted names are
+  unchanged.
 - A question's choices show by kind (`ChoiceView#kind`, `#style`; `QuestionView#picks`, `#forms`,
   `#exits`, `#plain?`): picks as option rows, each form choice its own section ("or" between) with
   the one filled button, exits in a footer row with cancel as a ghost; never more than one filled
@@ -26,15 +34,10 @@ into every Rails app, so the app keeps only its own.
   is the primary action and cancel the quietest; the status as a pill with a coloured dot; calm
   inline errors; buttons that give on press; the search box as a full combobox (arrows, Enter,
   Escape, closes on blur, `aria-expanded` / `aria-activedescendant` / `listbox` / `option`, a quiet
-  "Searching…" only for a slow answer, its words from `data-qube-text-*`); the rows table with a
-  sticky header and record column, an edge fade while it scrolls, "Set selected" shown with its
-  count only while rows are ticked, select-all's indeterminate state, fading columns and a tint on
-  cells it fills; 40px touch targets; short transform/opacity motion that respects reduced motion.
+  "Searching…" only for a slow answer, its words from `data-qube-text-*`); 40px touch targets; short transform/opacity motion that respects reduced motion.
   The storyboard is a gallery: a sticky list of screens by group, each screen a card on a canvas
   (as your page, light or dark) with its override files behind a disclosure, each copyable. Every
-  `data-qube-*` attribute, posted name, route and view-model field is unchanged; new markup
-  (`data-qube-rows-bulk`, `data-qube-rows-count`, `data-qube-rows-scroll`, `.qube-rows-frame`) is
-  additive.
+  `data-qube-*` attribute, posted name, route and view-model field is unchanged.
 - Styling (README, "Styling"). The question and run status partials are made of small pieces
   (`qube_rails/question/*`, `qube_rails/question/fields/*`, `qube_rails/question/rows/*`,
   `qube_rails/run_status/*`, `qube_rails/_error`), each overridable at its path, rendered from
@@ -43,7 +46,7 @@ into every Rails app, so the app keeps only its own.
   and `render "qube_rails/run_status"` and the posted names are unchanged.
 - `config.ui_classes`: your CSS framework's classes by piece, beside the `qube-` classes; an unknown
   piece raises.
-- The behaviour script `qube_rails/question.js` (search boxes, the rows table), served by the app's
+- The behaviour script `qube_rails/question.js` (search boxes, a rows field), served by the app's
   asset pipeline and keyed only on `data-qube-*` attributes, so it works on any markup, after Turbo
   navigation, with no CSP nonce. The inline scripts are gone: add `<%= qube_rails_assets %>` to your
   layout (`rails g qube_rails:install` does). The search route and hidden-input contract are
@@ -52,8 +55,8 @@ into every Rails app, so the app keeps only its own.
   (`:where()`), themed by `--qube-*` variables, no global styles.
 - The storyboard, `GET qube/storyboard(/:screen)` (`config.storyboard`, on in development): every
   screen from sample data in your layout, with each piece's override path; nothing is sent or saved.
-- The question partial shows a rows field as a table: the columns each row asks, a search per record
-  column with its row, "Set selected" for many rows; a fixed list (`enum`) as a select.
+- The question partial shows a rows field: the columns each row asks, a search per record column with
+  its row; a fixed list (`enum`) as a select.
 - Onboarding makes realtime connections (`config.connection_type`, `"realtime"` by default): workflows run
   only on realtime connections. A start QuBe Sync refuses as `realtime_required` raises
   `QubeRails::RealtimeRequired`, its message saying how to upgrade.

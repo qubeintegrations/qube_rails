@@ -599,14 +599,17 @@ record's page:
 Its locals are `record` and `operation` (the slug). It shows the open question of that record's
 latest run of that operation, and nothing when that run isn't asking. Each choice is a form
 posting to the run's question route with your CSRF token, and a record field's box searches
-through your app, so the API key never reaches the browser. Its search boxes and rows table need
+through your app, so the API key never reaches the browser. Its search boxes and rows fields need
 the behaviour script (`qube_rails_assets` in your layout). Its pieces are `qube_rails/question/*`:
 see [Styling](#styling) to restyle or replace any of them.
 
 A rows field (`add_transaction`'s one question for every record QuickBooks doesn't have) shows as a
-table: a row per record with the columns it asks, a column shown only while its `when` holds,
-a search per record column (sent with the row), and a "Set selected" bar that fills a column on
-every ticked row. Its answer is `{"records": {row key => {column => value}}}`.
+block per record, never a table and never scrolling sideways: the record's name, its choice (an enum
+column of up to three options, such as create or use, as a segmented control), then only the fields
+its answers so far call for (each column shown while its `when` holds), stacked in a grid, a search
+per record column (sent with the row). "Set all to:" sets that choice on every record, and "Use for
+all N" under a filled search or select copies it to the other records that ask it and are still
+empty. Its answer is `{"records": {row key => {column => value}}}`.
 
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
 goes back to the page with a message; the run's next webhook says what came of it.
@@ -646,9 +649,8 @@ element around the screens:
   --qube-error: #c2410c;
   --qube-success: #15803d;     /* the status dot once it's in QuickBooks */
   --qube-warning: #b45309;     /* the status dot while it needs an answer */
-  --qube-surface: #fff;        /* cards, inputs, the matches, the table; default: Canvas */
+  --qube-surface: #fff;        /* cards, inputs, the matches; default: Canvas */
   --qube-max-width: 52rem;     /* the question card */
-  --qube-rows-height: 36rem;   /* the rows table, before it scrolls */
 }
 ```
 
@@ -659,8 +661,8 @@ so `prefers-color-scheme` carries through. An app whose dark mode is a class sho
 
 Motion is short and only where it says something: a button gives way on press (`scale(0.97)`),
 the search box's matches drop in from the input (150ms; they close at once, and moving through them
-with the keyboard is instant), a rows column that stops applying fades rather than jumping, cells
-"Set selected" fills flash a tint, and a one-shot error fades in. All of it is transform and
+with the keyboard is instant), a rows field's field fades in as it starts to apply, what "Set all to"
+or "Use for all" fills flashes a tint, and a one-shot error fades in. All of it is transform and
 opacity, on `cubic-bezier(0.23, 1, 0.32, 1)`; with `prefers-reduced-motion: reduce` the fades stay
 and the movement goes. Hover effects apply only on devices with a fine pointer.
 
@@ -672,7 +674,7 @@ and the movement goes. Hover effects apply only on devices with a fine pointer.
 # Bootstrap
 config.ui_classes = {
   button: "btn btn-primary", button_secondary: "btn btn-outline-secondary", input: "form-control",
-  select: "form-select", checkbox: "form-check-input", label: "form-label", table: "table table-sm",
+  select: "form-select", checkbox: "form-check-input", label: "form-label",
   error: "alert alert-danger", status: "alert alert-light", search_result: "list-group-item list-group-item-action"
 }
 # Tailwind
@@ -691,7 +693,9 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `field`, `label` | a field's wrapper and its label (and the rows field's) |
 | `input`, `select`, `checkbox` | text, number and search inputs; selects; checkboxes |
 | `search`, `search_results`, `search_result` | a search box's wrapper, its matches' container, each match (made by the script) |
-| `table`, `bulk` | the rows table, its "Set selected" row |
+| `rows`, `row`, `row_header`, `row_fields` | a rows field's list of records, each record, its name, its fields' grid |
+| `segmented`, `segment` | a record's choice as a segmented control, each option |
+| `use_for_all` | the "Use for all N" button under a field |
 | `status`, `summary`, `detail` | the run status, its sentence, a failure's detail |
 | `error` | a one-shot error |
 
@@ -712,7 +716,9 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/_footer` | `question` | the exits' row |
 | `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
 | `qube_rails/question/fields/_text`, `_number`, `_boolean`, `_select`, `_search`, `_rows` | `field` | one field, by `field.type` |
-| `qube_rails/question/rows/_cell`, `_bulk` | `cell` | a rows table's cell; a "Set selected" cell |
+| `qube_rails/question/rows/_row` | `rows`, `row` | one record: its name, its choice, its fields |
+| `qube_rails/question/rows/_cell` | `cell` | one field of a record (shown while its `when` holds), or what it already has |
+| `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_retry`, `_redeliver` | `run_status` | each part |
 | `qube_rails/_error` | `message` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
@@ -728,13 +734,15 @@ versions:
 - `QubeRails::FieldView`: `name`, `input_name` (post your value under it), `dom_id`, `type` (`text`,
   `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
   each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
-  `when`, `rows` (a `RowsView`), `disabled`, `partial`, and `labelled?` / `cell?` / `bulk?` for where
-  it sits.
+  `when`, `rows` (a `RowsView`), `disabled`, `partial`, and `labelled?`, `cell?` (a rows field's) and
+  `segmented?` (a cell's enum of up to three options).
 - `QubeRails::RowsView`: `name`, `label`, `input_name`, `search_url`, `columns` (FieldViews), `rows`,
-  `bulk` (a CellView per column, its `field` nil when the column has no bulk control).
-  `QubeRails::RowView`: `key`, `label`, `detail`, `values`, `values_json`, `cells`.
-  `QubeRails::CellView`: `column`, `field` (nil for a column the row doesn't ask), `preset` (what the
-  row already has), `when`, `when_json`, `hidden?`, `bulk`.
+  `set_all` (the column "Set all to:" sets, or nil).
+  `QubeRails::RowView`: `key`, `label`, `detail`, `values`, `values_json`, `index`, `cells` (the
+  columns it asks or already has a value for), `segmented_cells`, `field_cells`.
+  `QubeRails::CellView`: `column`, `label`, `field` (nil for a value the row already has), `preset`
+  (that value, read-only), `when`, `when_json`, `hidden?`, `required` (the column's; a hidden field
+  isn't required until shown), `segmented?`.
 - `QubeRails::RunStatusView`: `status` (`:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`,
   `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary`, `detail`, `quiet_text`,
   `retry_url` and `redeliver_url` (nil when the button doesn't apply; post to them), `error`,
@@ -768,16 +776,16 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   `data-qube-open` while they show, and the input `aria-expanded` and `aria-activedescendant`. Until a
   match is picked, the text input is invalid, so the form isn't sent. Its words come from the box's
   `data-qube-text-no-matches`, `-searching`, `-search-failed` and `-pick-a-match` (English without).
-- A rows table: `data-qube-rows` around it; each row `data-qube-row` with `data-qube-values` (JSON);
-  each cell `data-qube-col="<column>"` and `data-qube-when` (JSON); each input `data-qube-rows-input`;
-  the row checkboxes `data-qube-rows-pick` and `data-qube-rows-all`; each "Set selected" cell
-  `data-qube-bulk="<column>"` with its value `data-qube-bulk-value` and button `data-qube-bulk-apply`.
-  A cell whose `when` doesn't hold gets `data-qube-hidden` and its inputs disabled, so it isn't sent.
-  Optional: a row `data-qube-rows-bulk` shown only while a row is ticked, with a
-  `data-qube-rows-count` the script fills from `data-qube-selected-one` / `-other` on the table
-  (`%{count} selected`); a scroller `data-qube-rows-scroll`, which gets `data-qube-overflow="end"`
-  while there's more to its right. Ticked rows get `data-qube-picked`, cells Apply fills
-  `data-qube-filled` (for the stylesheet's tint).
+- A rows field: `data-qube-rows` around it; each record `data-qube-row` with `data-qube-values` (JSON);
+  each field `data-qube-col="<column>"` with `data-qube-when` (JSON) and, for a required column,
+  `data-qube-required`; each input `data-qube-rows-input` (a radio counts when checked). A field
+  whose `when` doesn't hold is `hidden` (and `data-qube-hidden`), its inputs disabled and not
+  required, so it's neither sent nor asked for; the script toggles all three as answers change. Optional:
+  `data-qube-rows-set-all="<column>"` holding buttons `data-qube-set-all="<value>"` (sets that column on
+  every record offering the value), and a button `data-qube-use-for-all` in a field (shown, with the
+  table's `data-qube-text-use-for-all`, "Use for all %{count}", while the field has a value other
+  records' shown fields lack; copies it to them). What either fills gets `data-qube-filled` for the
+  stylesheet's tint.
 - A form choice (`data-qube-choice-kind="form"`) whose required fields are all searches: its submit
   is disabled until each has a pick, and again if the text is edited after (by the script only, so it
   still posts without it).
@@ -814,7 +822,7 @@ layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, 
 with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
 kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
-name clash, a lost answer, the rows table, and a refused answer). Each screen is a section with
+name clash, a lost answer, records not in QuickBooks yet, and a refused answer). Each screen is a section with
 the screen on a flat canvas, with a note and its "Override files" (the partials to override for it, each with a
 Copy button); the canvas can be shown as your page is, light or dark. The list of screens links to
 each one. `GET /qube/storyboard/<screen>` shows one.
@@ -866,10 +874,8 @@ en:
 | `errors.still_syncing` | Something is still syncing with this company file. Let it finish, or answer its question, then disconnect. | a disconnect while work is going |
 | `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
-| `question.select_all`, `question.select_row` | Select all; Select %{label} | the rows table's checkboxes (labels for screen readers) |
-| `question.record` | Record | the rows table's first column |
-| `question.set_selected`, `question.selected.one`, `question.selected.other` | Set selected; %{count} selected | the rows table's "Set selected" row |
-| `question.apply` | Apply | its buttons |
+| `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
+| `question.use_for_all` | Use for all %{count} | under a filled field other records ask too |
 | `question.or` | or | between picks and a form choice |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |

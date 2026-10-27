@@ -1,51 +1,23 @@
-<%# A rows field (field.rows, a QubeRails::RowsView): a row per record with the columns it asks,
-    posted as data[<field>][<row key>][<column>]; a column shows only while its "when" holds,
-    and "Set selected" (shown while rows are ticked) fills a column on every ticked row (the
-    behaviour script). %>
+<%# A rows field (field.rows, a QubeRails::RowsView): a block per record with the fields it asks,
+    posted as data[<field>][<row key>][<column>]. A field shows only while its "when" holds. "Set
+    all to:" sets the segmented column on every row, and "Use for all" copies one row's value to
+    the others (the behaviour script). %>
 <% rows = field.rows %>
-<div class="<%= qube_classes(:field, "qube-field", "qube-rows") %>" data-qube-rows
-     data-qube-selected-one="<%= QubeRails.t("question.selected.one", count: "%{count}") %>"
-     data-qube-selected-other="<%= QubeRails.t("question.selected.other", count: "%{count}") %>">
+<% set_all = rows.set_all %>
+<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
+     data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>">
   <p class="<%= qube_classes(:label, "qube-rows-label") %>"><%= rows.label %></p>
-  <div class="qube-rows-frame">
-  <div class="qube-rows-scroll" data-qube-rows-scroll>
-    <table class="<%= qube_classes(:table, "qube-rows-table") %>">
-      <thead>
-        <tr>
-          <th class="qube-rows-pick-cell"><label class="qube-rows-hit"><input type="checkbox" class="<%= qube_classes(:checkbox, "qube-rows-all") %>" data-qube-rows-all aria-label="<%= QubeRails.t("question.select_all") %>"></label></th>
-          <th scope="col" class="qube-rows-name"><%= QubeRails.t("question.record") %></th>
-<% rows.columns.each do |column| %>
-          <th scope="col"><%= column.label %></th>
-<% end %>
-        </tr>
-        <tr class="<%= qube_classes(:bulk, "qube-rows-bulk") %>" data-qube-rows-bulk hidden>
-          <td class="qube-rows-pick-cell"></td>
-          <td class="qube-rows-name">
-            <span class="qube-rows-count" data-qube-rows-count aria-live="polite"></span>
-            <span class="qube-rows-bulk-label"><%= QubeRails.t("question.set_selected") %></span>
-          </td>
-<% rows.bulk.each do |cell| %>
-          <%= render "qube_rails/question/rows/bulk", cell: cell %>
-<% end %>
-        </tr>
-      </thead>
-      <tbody>
-<% rows.rows.each do |row| %>
-        <tr data-qube-row="<%= row.key %>" data-qube-values="<%= row.values_json %>">
-          <td class="qube-rows-pick-cell"><label class="qube-rows-hit"><input type="checkbox" class="<%= qube_classes(:checkbox, "qube-rows-pick") %>" data-qube-rows-pick aria-label="<%= QubeRails.t("question.select_row", label: row.label) %>"></label></td>
-          <th scope="row" class="qube-rows-name">
-            <%= row.label %>
-<%   if row.detail %>
-            <span class="qube-rows-detail"><%= row.detail %></span>
+<% if set_all %>
+  <div class="qube-rows-set-all" data-qube-rows-set-all="<%= set_all.name %>">
+    <span class="qube-rows-set-all-label"><%= QubeRails.t("question.set_all") %></span>
+<%   set_all.options.each do |option| %>
+    <button type="button" class="<%= qube_classes(:button_secondary, "qube-set-all-button") %>" data-qube-set-all="<%= option.value %>"><%= option.label %></button>
 <%   end %>
-          </th>
-<%   row.cells.each do |cell| %>
-          <%= render "qube_rails/question/rows/cell", cell: cell %>
-<%   end %>
-        </tr>
-<% end %>
-      </tbody>
-    </table>
   </div>
+<% end %>
+  <div class="<%= qube_classes(:rows, "qube-rows") %>" role="list">
+<% rows.rows.each do |row| %>
+    <%= render "qube_rails/question/rows/row", rows: rows, row: row %>
+<% end %>
   </div>
 </div>

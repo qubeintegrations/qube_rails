@@ -33,14 +33,8 @@ en:
       answer_refused: "That answer couldn't be used. Check it and try again."
       answer_refused_with: "That answer couldn't be used: %{detail}"
     question:
-      select_all: "Select all"
-      select_row: "Select %{label}"
-      record: "Record"
-      set_selected: "Set selected"
-      selected:
-        one: "%{count} selected"
-        other: "%{count} selected"
-      apply: "Apply"
+      set_all: "Set all to:"
+      use_for_all: "Use for all %{count}"
       or: "or"
       pick_a_match: "Pick one of the matches."
       no_matches: "No matches"

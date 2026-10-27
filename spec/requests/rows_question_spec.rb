@@ -57,24 +57,43 @@ RSpec.describe "A rows question", type: :request do
     end
   end
 
-  it "shows a table: a row per record, the columns it asks, a search per record column and a bulk bar" do
+  it "shows a block per record: a segmented choice, then only the fields its answers call for, and no table" do
     get "/invoices/#{invoice.id}", headers: signed_in
     page = Nokogiri::HTML(response.body)
-    table = page.at_css(".qube-rows table")
+    field = page.at_css("[data-qube-rows]")
 
-    rows = table.css("tbody tr[data-qube-row]")
+    expect(field.at_css("table")).to be_nil
+    rows = field.css("[data-qube-row][data-qube-values]")
     expect(rows.map { |row| row["data-qube-row"] }).to eq(%w[customer_ref invoice_line_add.0.item_ref invoice_line_add.1.item_ref])
     customer = rows.first
-    expect(customer.css("select[name='data[records][customer_ref][action]']").size).to eq(1)
+    radios = customer.css(".qube-segmented input[type=radio][name='data[records][customer_ref][action]']")
+    expect(radios.map { |r| r["value"] }).to eq(%w[create use])
+    expect(radios.map { |r| r["required"] }).to all(be_present)
+    expect(customer.at_css(".qube-segmented-field legend").text).to eq("What to do")
     expect(customer.css("[name^='data[records][customer_ref][item_type]']")).to be_empty
     search = customer.at_css(".qube-search")
     expect(search["data-qube-field"]).to eq("records.list_id")
     expect(search["data-qube-row"]).to eq("customer_ref")
-    expect(rows[1].at_css('td[data-qube-col="asset_account"]')["data-qube-when"])
+
+    # A field whose "when" doesn't hold: hidden, disabled, not required (required once shown)
+    list_id = customer.at_css('[data-qube-col="list_id"]')
+    expect(list_id["hidden"]).not_to be_nil
+    expect(list_id["data-qube-required"]).not_to be_nil
+    expect(list_id.css("input:not([type=hidden])").map { |i| [i["disabled"].nil?, i["required"].nil?] }).to eq([[false, true]])
+    expect(list_id.at_css("[data-qube-use-for-all][hidden]")).not_to be_nil
+    expect(rows[1].at_css('[data-qube-col="asset_account"]')["data-qube-when"])
       .to eq({ "action" => ["create"], "item_type" => ["item_inventory"] }.to_json)
-    expect(rows[2].at_css('td[data-qube-col="item_type"]').text.strip).to eq("Non-inventory part")
-    expect(table.css(".qube-rows-bulk [data-qube-bulk='income_account'] .qube-bulk-apply").size).to eq(1)
-    expect(table.css(".qube-rows-bulk [data-qube-bulk='list_id'] .qube-bulk-apply")).to be_empty
+    expect(rows[1].css('[data-qube-col="item_type"] input[type=radio]').size).to eq(3) # three options: segmented too
+
+    # What a record already has: read-only text, no input
+    kit_type = rows[2].at_css('[data-qube-col="item_type"]')
+    expect(kit_type.at_css(".qube-row-preset-value").text.strip).to eq("Non-inventory part")
+    expect(kit_type.css("input, select")).to be_empty
+
+    set_all = field.at_css("[data-qube-rows-set-all=action]")
+    expect(set_all.css("button[data-qube-set-all]").map { |b| [b["data-qube-set-all"], b.text.strip] })
+      .to eq([["create", "Create it"], ["use", "Use one"]])
+    expect(field.css("[data-qube-rows-pick], [data-qube-rows-all], [data-qube-bulk]")).to be_empty
   end
 
   it "answers with each row's filled columns, by row key" do

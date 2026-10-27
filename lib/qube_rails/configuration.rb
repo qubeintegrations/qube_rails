@@ -37,13 +37,14 @@ module QubeRails
     # The pieces of the engine's screens config.ui_classes can add classes to.
     UI_PIECES = %i[
       question message details choice choice_detail choice_description field label input select checkbox
-      button button_secondary search search_results search_result table bulk status summary detail error
+      button button_secondary search search_results search_result status summary detail error
+      rows row row_header segmented segment row_fields use_for_all
       picks pick pick_detail button_ghost choice_footer choice_divider
     ].freeze
 
     # Your CSS framework's classes for the engine's screens, by piece, added beside each element's
     # qube- classes (a String, or an Array of them):
-    #   config.ui_classes = { button: "btn btn-primary", input: "form-control", table: "table" }
+    #   config.ui_classes = { button: "btn btn-primary", input: "form-control", select: "form-select" }
     # A piece not in UI_PIECES raises, naming them.
     def ui_classes=(map)
       raise ArgumentError, "ui_classes is a Hash of piece => CSS classes, in #{FILE}" unless map.respond_to?(:each_pair)

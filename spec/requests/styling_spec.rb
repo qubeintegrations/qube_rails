@@ -60,7 +60,7 @@ RSpec.describe "Styling the screens", type: :request do
     asking(rows)
     shown = page
 
-    expect(shown.at_css(".qube-rows table")).not_to be_nil
+    expect(shown.at_css("[data-qube-rows] .qube-rows [data-qube-row]")).not_to be_nil
     expect(shown.css("script:not([src])")).to be_empty
     expect(shown.at_css("script[src*='qube_rails/question']")["defer"]).not_to be_nil
     expect(shown.at_css("link[rel=stylesheet][href*='qube_rails']")).not_to be_nil
@@ -72,7 +72,7 @@ RSpec.describe "Styling the screens", type: :request do
     get shown.at_css("script[src*='qube_rails/question']")["src"]
     expect(response).to have_http_status(:ok)
     expect(response.body).to include('document.addEventListener("input"', "[data-qube-search-input]",
-                                      "[data-qube-rows-pick]", "[data-qube-bulk-apply]")
+                                      "[data-qube-set-all]", "[data-qube-use-for-all]")
     expect(response.body).not_to match(/\.qube-[a-z-]+["']/) # keyed on data-qube-*, not classes
 
     get shown.at_css("link[href*='qube_rails']")["href"]
@@ -82,6 +82,9 @@ RSpec.describe "Styling the screens", type: :request do
     rules = selectors.reject { |s| s.start_with?("@") || %w[from to].include?(s) } # at-rules, keyframe stops
     expect(rules.reject { |s| s.start_with?(":where(") }).to eq([]) # zero specificity throughout
     expect(response.body).not_to match(/transition:\s*all|scale\(0\)/)
+    row_rules = response.body.gsub(%r{/\*.*?\*/}m, "").scan(/([^{}]*)\{([^{}]*)\}/).select { |sel, _| sel.include?("row") }
+    expect(row_rules).not_to be_empty
+    expect(row_rules.map(&:last).grep(/overflow(-x)?:\s*(auto|scroll)/)).to eq([]) # a rows field never scrolls sideways
     %w[--qube-accent --qube-border --qube-radius --qube-gap --qube-font --qube-muted --qube-error --qube-surface].each do |name|
       expect(response.body).to include("var(#{name}")
     end

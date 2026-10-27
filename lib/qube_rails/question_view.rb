@@ -130,7 +130,7 @@ module QubeRails
     end
   end
 
-  # One input: a choice's field, a rows field's cell, or a rows column's "Set selected" control.
+  # One input: a choice's field, or a field of a rows field's row.
   # type is "text", "number", "boolean", "select", "search" or "rows"; partial is the piece that
   # renders it (qube_rails/question/fields/_<type>).
   class FieldView
@@ -169,8 +169,8 @@ module QubeRails
       end
     end
 
-    # context is :choice (a field of its own, labelled), :cell (a rows cell: aria-label only) or
-    # :bulk (a "Set selected" control, posted with nothing).
+    # context is :choice (a choice's field) or :cell (a field of a rows field's row); both show
+    # their label.
     def initialize(name:, type:, label:, input_name: nil, dom_id: nil, required: false, options: [], kind: nil,
                    search_url: nil, search_field: nil, row_key: nil, when_values: nil, rows: nil,
                    context: :choice, disabled: false)
@@ -201,26 +201,19 @@ module QubeRails
       context == :cell
     end
 
-    def bulk?
-      context == :bulk
-    end
-
-    # Whether it's shown with its own label (a choice's field), not inside a table.
+    # Whether it's shown with its own label: always, now that a row's fields stack.
     def labelled?
-      context == :choice
+      true
     end
 
     # The input's data attributes the behaviour script keys on.
     def data
-      if cell? then { "qube-rows-input" => "" }
-      elsif bulk? then { "qube-bulk-value" => "" }
-      else {}
-      end
+      cell? ? { "qube-rows-input" => "" } : {}
     end
 
-    # A "Set selected" control belongs to no form, so the answer doesn't carry it.
-    def form_attribute
-      bulk? ? "" : nil
+    # A select with at most three options in a row shows as a segmented control.
+    def segmented?
+      cell? && type == "select" && options.size.between?(1, 3)
     end
   end
 end

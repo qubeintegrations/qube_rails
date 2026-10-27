@@ -1,11 +1,11 @@
 {
-  "title": "Records QuickBooks doesn't have (a rows table)",
-  "note": "add_transaction's ask_missing: one row per missing record, each asking only its columns; a column shows while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. Tick rows and use Set selected to fill a column on all of them.",
+  "title": "Records not in QuickBooks yet",
+  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. \"Set all to:\" sets every record's choice; \"Use for all\" copies a picked value to the others.",
   "prompt": {
     "id": "add_transaction / ask_missing",
     "kind": "decision",
     "token": "Yj7sW9xCu5RkD7fF",
-    "message": "QuickBooks doesn't have these records the transaction names. Say for each whether to create it or use a record QuickBooks has; then the transaction is added.",
+    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
     "data": {
       "operation": "invoice",
       "missing": [
@@ -50,14 +50,14 @@
     "choices": [
       {
         "id": "proceed",
-        "label": "Create or use these, then add the transaction",
+        "label": "Add the transaction",
         "description": null,
         "detail": null,
         "fields": [
           {
             "name": "records",
             "type": "rows",
-            "label": "Records QuickBooks doesn't have",
+            "label": "Not in QuickBooks yet",
             "required": true,
             "columns": [
               {
@@ -69,11 +69,11 @@
                 "enum": [
                   {
                     "value": "create",
-                    "label": "Create it in QuickBooks"
+                    "label": "Create it"
                   },
                   {
                     "value": "use",
-                    "label": "Use a record QuickBooks has"
+                    "label": "Use an existing one"
                   }
                 ],
                 "when": null
@@ -81,7 +81,7 @@
               {
                 "name": "list_id",
                 "type": "record",
-                "label": "Record to use",
+                "label": "Existing record",
                 "required": true,
                 "kind": null,
                 "enum": null,
