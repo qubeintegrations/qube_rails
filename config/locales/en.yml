@@ -34,6 +34,7 @@ en:
       answer_refused_with: "That answer couldn't be used: %{detail}"
     question:
       set_all: "Set all to:"
+      use_pick: "Use this one"
       use_for_all: "Use for all %{count}"
       or: "or"
       pick_a_match: "Pick one of the matches."

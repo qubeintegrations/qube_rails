@@ -95,7 +95,7 @@
   margin: 0;
 }
 
-/* A pick: a quiet, full-width option row with a chevron */
+/* A pick: a quiet, full-width option row that says what clicking it does */
 :where(.qube-picks) {
   display: grid;
   gap: 8px;
@@ -122,14 +122,12 @@
   transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease;
 }
 
-:where(.qube-pick)::after {
-  content: "";
+:where(.qube-pick-action) {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-top: 1.5px solid var(--qube-muted-color);
-  border-right: 1.5px solid var(--qube-muted-color);
-  transform: rotate(45deg);
+  font-size: 0.9286em;
+  font-weight: 500;
+  color: var(--qube-accent-color);
+  white-space: nowrap;
 }
 
 :where(.qube-pick:active) {

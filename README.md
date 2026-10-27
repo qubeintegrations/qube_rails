@@ -687,7 +687,7 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `message`, `details` | its sentence, its label/value table |
 | `choice` | each choice's `<form>` |
 | `button`, `button_secondary`, `button_ghost` | the one primary button (a form choice's submit, or a plain question's first choice; the retry button), the secondary ones (other exits, later forms, redeliver, Apply), and cancel (`button_ghost`, else `button_secondary`) |
-| `picks`, `pick`, `pick_detail` | the picks' list, each pick's option-row button (never `button`), its detail |
+| `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option-row button (never `button`), its detail, its "Use this one" |
 | `choice_footer`, `choice_divider` | the exits' row; the "or" between picks and a form |
 | `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
 | `field`, `label` | a field's wrapper and its label (and the rows field's) |
@@ -877,6 +877,7 @@ en:
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | Use for all %{count} | under a filled field other records ask too |
 | `question.or` | or | between picks and a form choice |
+| `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
 
