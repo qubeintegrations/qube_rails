@@ -26,9 +26,21 @@ RSpec.describe "A question's choices by kind" do
                                                 ["cancel", :exit, :ghost]])
   end
 
+  it "shows a pick from the records there are as rows, then the search with the one filled submit" do
+    expect(arranged(question("record_search"))).to eq([["use:1", :pick, nil], ["use:2", :pick, nil], ["use:3", :pick, nil],
+                                                       ["use", :form, :primary], ["cancel", :exit, :ghost]])
+  end
+
   it "fills only the first form's submit" do
-    expect(arranged(question("record_search"))).to eq([["use", :form, :primary], ["by_name", :form, :secondary],
-                                                       ["cancel", :exit, :ghost]])
+    field = ->(name) { [{ "name" => name, "type" => "string", "label" => name, "required" => true }] }
+    prompt = { "token" => "t", "message" => "?", "choices" => [
+      { "id" => "narrow", "label" => "Narrow it down", "fields" => field.call("city") },
+      { "id" => "rename", "label" => "Rename it", "fields" => field.call("name") },
+      { "id" => "cancel", "label" => "Cancel", "fields" => [] }
+    ] }
+    view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
+    expect(view.choices.map { |c| [c.id, c.kind, c.style] }).to eq([["narrow", :form, :primary], ["rename", :form, :secondary],
+                                                                    ["cancel", :exit, :ghost]])
   end
 
   it "shows a plain choice before the first form as a pick when there are none (a name clash)" do
