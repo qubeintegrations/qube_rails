@@ -16,14 +16,14 @@
         "fields": [
           {
             "kind": "customer",
-            "label": "The one to use",
+            "label": "Search for a different one",
             "name": "list_id",
             "required": true,
             "type": "record"
           }
         ],
         "id": "use",
-        "label": "Another one…"
+        "label": "Use this one"
       },
       {
         "description": null,

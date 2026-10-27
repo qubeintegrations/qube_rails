@@ -78,14 +78,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Choices: each a form whose button is the choice. The first is the primary action, the
-   others quieter, cancel quietest. A choice with fields or a description takes a line. */
+/* ---- Choices, by kind: picks as option rows, each form choice its own section ("or" between),
+   exits in a footer row. At most one filled button: a form's submit, or in a plain question the
+   first choice. */
 
 :where(.qube-choices) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px;
+  display: grid;
+  gap: 16px;
   padding-top: var(--qube-gap-size);
   border-top: 1px solid var(--qube-border-color);
 }
@@ -96,15 +95,112 @@
   margin: 0;
 }
 
-:where(.qube-choice:has(.qube-field, .qube-choice-description)) {
-  flex-basis: 100%;
+/* A pick: a quiet, full-width option row with a chevron */
+:where(.qube-picks) {
+  display: grid;
+  gap: 8px;
 }
 
-:where(.qube-choice:has(.qube-field)) {
-  padding: 16px;
-  border: 1px solid var(--qube-border-color);
-  border-radius: var(--qube-radius-size);
-  background: var(--qube-tint-color);
+:where(.qube-pick) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: var(--qube-solid-color);
+  border: 1px solid var(--qube-control-border-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+
+:where(.qube-pick)::after {
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid var(--qube-muted-color);
+  border-right: 1.5px solid var(--qube-muted-color);
+  transform: rotate(45deg);
+}
+
+:where(.qube-pick:active) {
+  transform: scale(0.99);
+}
+
+:where(.qube-pick-text) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+:where(.qube-pick-label) {
+  font-weight: 500;
+}
+
+:where(.qube-pick-detail) {
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-pick-description) {
+  flex-basis: 100%;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-pick:hover) {
+    background: color-mix(in srgb, currentColor 4%, var(--qube-solid-color));
+    border-color: color-mix(in srgb, currentColor 34%, transparent);
+  }
+}
+
+/* "or" between picks and a form, or between forms */
+:where(.qube-choice-divider) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8571em;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-choice-divider)::before,
+:where(.qube-choice-divider)::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+/* A form choice: its field's label leads, its submit under it */
+:where(.qube-choice-form .qube-label) {
+  font-size: 1em;
+}
+
+/* The exits: one row under a hairline (no hairline when they're all there is) */
+:where(.qube-choice-footer) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+:where(.qube-picks, .qube-choice-form) + :where(.qube-choice-footer) {
+  padding-top: 16px;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-choice-footer .qube-choice:has(.qube-choice-description)) {
+  flex-basis: 100%;
 }
 
 :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy) {
@@ -130,7 +226,8 @@
     transform 160ms var(--qube-ease-out),
     background-color 150ms ease,
     border-color 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    opacity 150ms ease;
 }
 
 /* Pressing gives way a little */
@@ -139,19 +236,19 @@
 }
 
 :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply):where(:disabled) {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-/* The primary action: the first choice, and the retry */
-:where(.qube-choice:first-child:not([data-qube-choice="cancel"]) .qube-choice-button, .qube-retry-start) {
+/* The one primary action, and the retry */
+:where(.qube-choice-button[data-qube-button="primary"], .qube-retry-start) {
   color: var(--qube-accent-text-color);
   background: var(--qube-accent-color);
   border-color: var(--qube-accent-color);
 }
 
 /* Cancel: no box until hovered */
-:where(.qube-choice[data-qube-choice="cancel"] .qube-choice-button) {
+:where(.qube-choice-button[data-qube-button="ghost"]) {
   color: var(--qube-muted-color);
   background: transparent;
   border-color: transparent;
@@ -162,12 +259,12 @@
     background: color-mix(in srgb, currentColor 6%, var(--qube-solid-color));
   }
 
-  :where(.qube-choice:first-child:not([data-qube-choice="cancel"]) .qube-choice-button, .qube-retry-start):where(:hover:not(:disabled)) {
+  :where(.qube-choice-button[data-qube-button="primary"], .qube-retry-start):where(:hover:not(:disabled)) {
     background: color-mix(in srgb, var(--qube-accent-color) 88%, black);
     border-color: color-mix(in srgb, var(--qube-accent-color) 88%, black);
   }
 
-  :where(.qube-choice[data-qube-choice="cancel"] .qube-choice-button):where(:hover) {
+  :where(.qube-choice-button[data-qube-button="ghost"]):where(:hover) {
     color: inherit;
     background: var(--qube-tint-color);
   }
@@ -595,25 +692,19 @@
 /* ---- Narrow screens: choices stack, full width */
 
 @media (max-width: 30rem) {
-  :where(.qube-choice) {
+  :where(.qube-choice-footer > .qube-choice) {
     flex-basis: 100%;
   }
 
   :where(.qube-choice-button) {
     justify-self: stretch;
   }
-
-  :where(.qube-choice:has(.qube-field)) {
-    padding: 0;
-    border: 0;
-    background: none;
-  }
 }
 
 /* ---- Reduced motion: fades stay, movement goes */
 
 @media (prefers-reduced-motion: reduce) {
-  :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy):where(:active) {
+  :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-bulk-apply, .qube-storyboard-copy, .qube-pick):where(:active) {
     transform: none;
   }
 
@@ -817,7 +908,7 @@
 
 :where(.qube-storyboard-screens) {
   display: grid;
-  gap: 40px;
+  gap: 24px;
   min-width: 0;
 }
 
@@ -825,7 +916,14 @@
   display: grid;
   gap: 12px;
   min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--qube-border-color);
   scroll-margin-top: 72px;
+}
+
+:where(.qube-storyboard-panel:first-child) {
+  padding-top: 0;
+  border-top: 0;
 }
 
 :where(.qube-storyboard-panel-head) {
@@ -875,11 +973,9 @@
 /* Each screen on a neutral canvas */
 :where(.qube-storyboard-canvas) {
   display: grid;
-  padding: clamp(16px, 4vw, 32px);
+  padding: clamp(20px, 5vw, 48px) clamp(16px, 5vw, 48px);
   color: inherit;
-  border: 1px solid var(--qube-border-color);
-  border-radius: calc(var(--qube-radius-size) + 4px);
-  background: color-mix(in srgb, currentColor 3%, transparent);
+  background: color-mix(in srgb, currentColor 2.5%, transparent);
 }
 
 :where(.qube-storyboard:has([data-qube-canvas-theme="light"]:checked) .qube-storyboard-canvas) {

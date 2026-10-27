@@ -38,6 +38,7 @@ module QubeRails
     UI_PIECES = %i[
       question message details choice choice_detail choice_description field label input select checkbox
       button button_secondary search search_results search_result table bulk status summary detail error
+      picks pick pick_detail button_ghost choice_footer choice_divider
     ].freeze
 
     # Your CSS framework's classes for the engine's screens, by piece, added beside each element's

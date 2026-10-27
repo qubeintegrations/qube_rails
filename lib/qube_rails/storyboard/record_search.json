@@ -20,7 +20,7 @@
     "choices": [
       {
         "id": "use",
-        "label": "Another one…",
+        "label": "Use this one",
         "description": null,
         "detail": null,
         "fields": [
@@ -28,7 +28,7 @@
             "name": "list_id",
             "type": "record",
             "kind": "customer",
-            "label": "The one to use",
+            "label": "Search for a different one",
             "required": true
           }
         ]

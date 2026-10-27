@@ -6,6 +6,13 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- A question's choices show by kind (`ChoiceView#kind`, `#style`; `QuestionView#picks`, `#forms`,
+  `#exits`, `#plain?`): picks as option rows, each form choice its own section ("or" between) with
+  the one filled button, exits in a footer row with cancel as a ghost; never more than one filled
+  button. New pieces `qube_rails/question/_picks`, `_pick`, `_footer`; `ui_classes` keys `picks`,
+  `pick`, `pick_detail`, `button_ghost`, `choice_footer`, `choice_divider`. A form choice whose
+  required fields are all searches keeps its submit disabled until they're picked (script only).
+  The storyboard's screens sit on a flat canvas, so the screen's own card is the only card.
 - The screens never name QuBe Sync (or runs, webhooks, revisions or ListIDs) to an app's users, and
   every word they say comes from I18n under `qube_rails.*` (`config/locales/en.yml`, README,
   "Wording and translations"), so an app can reword or translate them; `QubeRails.t`. New wording:

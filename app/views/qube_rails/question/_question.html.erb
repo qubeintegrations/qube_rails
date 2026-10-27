@@ -1,5 +1,6 @@
-<%# A question (a QubeRails::QuestionView): a refusal, its message, what it's about, and a form
-    per choice. %>
+<%# A question (a QubeRails::QuestionView): a refusal, its message, what it's about, then its
+    choices by kind: the picks (option rows), each form choice ("or" between), and the exits in a
+    footer. A question with neither picks nor forms shows its choices in one row. %>
 <section class="<%= qube_classes(:question, "qube-question") %>" data-qube-question="<%= question.token %>">
   <%= render "qube_rails/error", message: question.error %>
   <%= render "qube_rails/question/message", question: question %>
@@ -7,8 +8,17 @@
   <%= render "qube_rails/question/details", question: question %>
 <% end %>
   <div class="qube-choices">
-<% question.choices.each do |choice| %>
+<% if question.picks.any? %>
+    <%= render "qube_rails/question/picks", question: question %>
+<% end %>
+<% question.forms.each_with_index do |choice, n| %>
+<%   if n.positive? || question.picks.any? %>
+    <div class="<%= qube_classes(:choice_divider, "qube-choice-divider") %>" role="separator"><span><%= QubeRails.t("question.or") %></span></div>
+<%   end %>
     <%= render "qube_rails/question/choice", question: question, choice: choice %>
+<% end %>
+<% if question.exits.any? %>
+    <%= render "qube_rails/question/footer", question: question %>
 <% end %>
   </div>
 </section>

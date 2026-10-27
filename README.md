@@ -684,7 +684,9 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `question` | the question's `<section>` |
 | `message`, `details` | its sentence, its label/value table |
 | `choice` | each choice's `<form>` |
-| `button`, `button_secondary` | a choice's button (`cancel` is secondary), the retry button; the redeliver and Apply buttons |
+| `button`, `button_secondary`, `button_ghost` | the one primary button (a form choice's submit, or a plain question's first choice; the retry button), the secondary ones (other exits, later forms, redeliver, Apply), and cancel (`button_ghost`, else `button_secondary`) |
+| `picks`, `pick`, `pick_detail` | the picks' list, each pick's option-row button (never `button`), its detail |
+| `choice_footer`, `choice_divider` | the exits' row; the "or" between picks and a form |
 | `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
 | `field`, `label` | a field's wrapper and its label (and the rows field's) |
 | `input`, `select`, `checkbox` | text, number and search inputs; selects; checkboxes |
@@ -705,7 +707,9 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | --- | --- | --- |
 | `qube_rails/question/_question` | `question` | the section: error, message, details, choices |
 | `qube_rails/question/_message`, `_details` | `question` | the sentence; the label/value rows |
-| `qube_rails/question/_choice` | `question`, `choice` | a form posting `choice` and `data[...]` with your CSRF token |
+| `qube_rails/question/_picks`, `_pick` | `question`; `question`, `choice` | the picks' list; one pick, a form posting `choice` |
+| `qube_rails/question/_choice` | `question`, `choice` | a form or exit choice: a form posting `choice` and `data[...]` with your CSRF token |
+| `qube_rails/question/_footer` | `question` | the exits' row |
 | `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
 | `qube_rails/question/fields/_text`, `_number`, `_boolean`, `_select`, `_search`, `_rows` | `field` | one field, by `field.type` |
 | `qube_rails/question/rows/_cell`, `_bulk` | `cell` | a rows table's cell; a "Set selected" cell |
@@ -716,10 +720,11 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
 versions:
 
-- `QubeRails::QuestionView`: `message`, `details` (each `label`, `value`), `choices`, `token`,
+- `QubeRails::QuestionView`: `picks`, `forms`, `exits`, `plain?` (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
   `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
 - `QubeRails::ChoiceView`: `id`, `label`, `detail`, `description`, `fields`, `index`, `action_url`,
-  `secondary?`.
+  `secondary?` (cancel), `kind` (`:pick`, `:form` or `:exit`), `style` (its button's: `:primary`,
+  `:secondary`, `:ghost`, or nil for a pick) and `button_piece` (its `ui_classes` piece).
 - `QubeRails::FieldView`: `name`, `input_name` (post your value under it), `dom_id`, `type` (`text`,
   `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
   each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
@@ -734,6 +739,15 @@ versions:
   `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary`, `detail`, `quiet_text`,
   `retry_url` and `redeliver_url` (nil when the button doesn't apply; post to them), `error`,
   `visible?`, `css_class`.
+
+Choices show by kind. A pick (an item of a `choose` list: an id ending `:<n>`, no fields) is a quiet
+option row; with no picks, a plain choice before the first form is one too (a name clash's "Use the
+existing record"). Each form choice (one with fields) is its own section, "or" between it and what
+comes before (`question.or`), its field's label leading and its submit the one filled button (only
+the first form's; later ones are secondary). The exits (none of these, cancel) sit in a row under a
+hairline, cancel as a ghost. A question with neither picks nor forms keeps its choices in one row,
+the first primary. So a screen never has more than one filled button. The form gets
+`data-qube-choice-kind`, the button `data-qube-button` (its style).
 
 A field override posts its value as `field.input_name`, so the controller reads it as it reads
 ours: a checkbox `"true"`, a number as typed, a rows cell `data[<field>][<row key>][<column>]`.
@@ -764,6 +778,9 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   (`%{count} selected`); a scroller `data-qube-rows-scroll`, which gets `data-qube-overflow="end"`
   while there's more to its right. Ticked rows get `data-qube-picked`, cells Apply fills
   `data-qube-filled` (for the stylesheet's tint).
+- A form choice (`data-qube-choice-kind="form"`) whose required fields are all searches: its submit
+  is disabled until each has a pick, and again if the text is edited after (by the script only, so it
+  still posts without it).
 - The storyboard: a button `data-qube-copy="<text>"` copies its text.
 
 #### A custom combobox
@@ -797,8 +814,8 @@ layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, 
 with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
 kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
-name clash, a lost answer, the rows table, and a refused answer). Each screen is a card on a
-neutral canvas, with a note and its "Override files" (the partials to override for it, each with a
+name clash, a lost answer, the rows table, and a refused answer). Each screen is a section with
+the screen on a flat canvas, with a note and its "Override files" (the partials to override for it, each with a
 Copy button); the canvas can be shown as your page is, light or dark. The list of screens links to
 each one. `GET /qube/storyboard/<screen>` shows one.
 
@@ -853,6 +870,7 @@ en:
 | `question.record` | Record | the rows table's first column |
 | `question.set_selected`, `question.selected.one`, `question.selected.other` | Set selected; %{count} selected | the rows table's "Set selected" row |
 | `question.apply` | Apply | its buttons |
+| `question.or` | or | between picks and a form choice |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
 

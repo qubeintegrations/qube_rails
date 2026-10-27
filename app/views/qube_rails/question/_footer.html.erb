@@ -1,0 +1,7 @@
+<%# The exits (question.exits: none of these, cancel and the like) in a row; in a plain question
+    (no picks, no forms) every choice, the first primary. %>
+<div class="<%= qube_classes(:choice_footer, "qube-choice-footer") %>"<%= " data-qube-plain" if question.plain? %>>
+<% question.exits.each do |choice| %>
+  <%= render "qube_rails/question/choice", question: question, choice: choice %>
+<% end %>
+</div>

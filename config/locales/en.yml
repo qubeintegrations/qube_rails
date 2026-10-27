@@ -41,6 +41,7 @@ en:
         one: "%{count} selected"
         other: "%{count} selected"
       apply: "Apply"
+      or: "or"
       pick_a_match: "Pick one of the matches."
       no_matches: "No matches"
       searching: "Searching…"

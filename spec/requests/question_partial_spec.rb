@@ -29,7 +29,7 @@ RSpec.describe "The question partial", type: :request do
     forms = shown.css("form.qube-choice")
     expect(forms.map { |f| f["action"] }.uniq).to eq([action])
     expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use none cancel])
-    expect(forms.first.at_css("button.qube-choice-button").text).to include("Riverbend Electric", "similar name")
+    expect(forms.first.at_css("button.qube-pick").text).to include("Riverbend Electric", "similar name")
 
     search = shown.at_css(".qube-search")
     expect(search["data-qube-search"]).to eq("#{action}/search")

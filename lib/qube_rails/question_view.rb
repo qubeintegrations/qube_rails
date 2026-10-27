@@ -30,6 +30,46 @@ module QubeRails
       @choices = Array(prompt["choices"]).select { |c| c.is_a?(Hash) }.each_with_index.map do |choice, n|
         ChoiceView.new(choice, n, self)
       end
+      arrange
+    end
+
+    # The choices by where they show: picks (option rows), forms (a section each, "or" between),
+    # then exits (a footer row). plain? when there's neither a pick nor a form: one row, the first
+    # choice primary.
+    def picks
+      choices.select { |c| c.kind == :pick }
+    end
+
+    def forms
+      choices.select { |c| c.kind == :form }
+    end
+
+    def exits
+      choices.select { |c| c.kind == :exit }
+    end
+
+    def plain?
+      picks.empty? && forms.empty?
+    end
+
+    private
+
+    # Kinds and button styles. With no picks but a form, a plain choice before the first form
+    # (name clash's "Use the existing record") is an option row too. One filled button at most:
+    # the first form's submit, or in a plain question the first choice.
+    def arrange
+      if @choices.none? { |c| c.kind == :pick } && (first_form = @choices.index { |c| c.kind == :form })
+        @choices.first(first_form).each { |c| c.arrange(:pick, nil) unless c.secondary? }
+      end
+      primary = plain? ? @choices.find { |c| !c.secondary? } : forms.first
+      @choices.each do |choice|
+        style = if choice.kind == :pick then nil
+                elsif choice.equal?(primary) then :primary
+                elsif choice.secondary? then :ghost
+                else :secondary
+                end
+        choice.arrange(choice.kind, style)
+      end
     end
   end
 
@@ -42,7 +82,7 @@ module QubeRails
   # One thing the user can pick: a form of its own, posting choice=<id> and data[...] for its
   # fields to the question's action_url.
   class ChoiceView
-    attr_reader :id, :label, :detail, :description, :fields, :index, :action_url
+    attr_reader :id, :label, :detail, :description, :fields, :index, :action_url, :kind, :style
 
     def initialize(choice, index, question)
       @id = choice["id"].to_s
@@ -53,6 +93,27 @@ module QubeRails
       @action_url = question.action_url
       @fields = Array(choice["fields"]).select { |f| f.is_a?(Hash) }.map do |field|
         FieldView.from_prompt(field, question, index)
+      end
+      @kind = if fields.any? then :form
+              elsif @id.match?(/:\d+\z/) then :pick
+              else :exit
+              end
+    end
+
+    # kind is :pick (an option row: an item of a choose list, id "<option>:<n>", no fields), :form
+    # (a choice with fields) or :exit (none, cancel and the like). style is its button's: :primary,
+    # :secondary or :ghost (cancel), nil for a pick. Set by the QuestionView.
+    def arrange(kind, style)
+      @kind = kind
+      @style = style
+    end
+
+    # The ui_classes piece for its button.
+    def button_piece
+      case style
+      when :primary then :button
+      when :ghost then QubeRails.config.ui_classes.key?(:button_ghost) ? :button_ghost : :button_secondary
+      else :button_secondary
       end
     end
 

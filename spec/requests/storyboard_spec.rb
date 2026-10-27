@@ -50,6 +50,21 @@ RSpec.describe "The storyboard", type: :request do
     end
   end
 
+  it "shows each question's choices by kind, at most one filled button, and no submit disabled in the markup" do
+    shown = page
+    panel = ->(key) { shown.at_css("[data-qube-storyboard='#{key}']") }
+    kinds = ->(key) { panel.call(key).css("form[data-qube-choice]").map { |f| [f["data-qube-choice"], f["data-qube-choice-kind"]] } }
+
+    expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[none exit], %w[cancel exit]])
+    expect(panel.call("near_match").at_css(".qube-picks + .qube-choice-divider + form.qube-choice-form")).not_to be_nil
+    expect(panel.call("near_match").at_css(".qube-choice-footer form[data-qube-choice=none]")).not_to be_nil
+    expect(panel.call("choose").css("[data-qube-button=primary]")).to be_empty
+    QubeRails::Storyboard::QUESTIONS.each do |key|
+      expect(panel.call(key).css("[data-qube-button=primary]").size).to be <= 1, key
+    end
+    expect(shown.css(".qube-question button[disabled], .qube-question input[type=submit][disabled]")).to be_empty
+  end
+
   it "shows one screen" do
     shown = page("/qube/storyboard/rows")
 

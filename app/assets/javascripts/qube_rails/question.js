@@ -172,6 +172,7 @@
     check(box, p);
     p.value.dispatchEvent(new Event("change", { bubbles: true }));
     box.dispatchEvent(new CustomEvent("qube:picked", { bubbles: true }));
+    gate(box.closest("form"));
   };
 
   var keys = function (event, box) {
@@ -197,6 +198,26 @@
         close(box);
       }
     }
+  };
+
+  // ---- A form choice whose required fields are all searches: its submit waits for a pick
+  // (disabled here, never in the markup, so it still posts without the script).
+
+  var gated = function (form) {
+    var required = form.querySelectorAll("input[required], select[required], textarea[required]");
+    if (!required.length) return false;
+    return Array.prototype.every.call(required, function (input) { return input.matches("[data-qube-search-input]"); });
+  };
+
+  var gate = function (form) {
+    if (!form || !form.matches('[data-qube-choice-kind="form"]') || !gated(form)) return;
+    var picked = Array.prototype.every.call(form.querySelectorAll("[data-qube-search]"), function (box) {
+      var p = parts(box);
+      return !p.input || !p.input.required || (p.value && p.value.value);
+    });
+    each(form.querySelectorAll('button[type="submit"], input[type="submit"]'), function (button) {
+      button.disabled = !picked;
+    });
   };
 
   // ---- Rows: [data-qube-rows] holds rows ([data-qube-row][data-qube-values]), their cells
@@ -310,6 +331,7 @@
     });
     each(document.querySelectorAll("[data-qube-rows]"), picked);
     each(document.querySelectorAll("[data-qube-rows-scroll]"), edges);
+    each(document.querySelectorAll('[data-qube-choice-kind="form"]'), gate);
   };
 
   // ---- The storyboard: [data-qube-copy] copies its value.
@@ -329,7 +351,10 @@
   document.addEventListener("input", function (event) {
     var input = event.target.closest && event.target.closest("[data-qube-search-input]");
     var box = input && input.closest("[data-qube-search]");
-    if (box) search(box);
+    if (box) {
+      search(box);
+      gate(box.closest("form"));
+    }
   });
 
   document.addEventListener("keydown", function (event) {

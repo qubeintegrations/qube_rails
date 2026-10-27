@@ -29,12 +29,30 @@ RSpec.describe "Styling the screens", type: :request do
     shown = page
 
     expect(shown.at_css("section.qube-question.card")).not_to be_nil
-    expect(shown.css("button.qube-choice-button.btn.btn-primary").size).to eq(3)
+    expect(shown.css("button.btn-primary").size).to eq(1) # the form's submit; a pick is never a `button`
+    expect(shown.at_css("form[data-qube-choice=use] button")["class"]).to eq("qube-choice-button btn btn-primary")
+    expect(shown.at_css("form[data-qube-choice='use:1'] button")["class"]).to eq("qube-pick")
+    expect(shown.at_css("form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("input.qube-search-input.form-control")).not_to be_nil
     expect(shown.at_css("label.qube-label.form-label")).not_to be_nil
     expect(shown.at_css("[data-qube-search]")["data-qube-result-class"]).to eq("qube-search-result list-group-item")
     expect(shown.at_css(".qube-run-status")["class"]).to include("qube-sync-needs_answer", "alert")
+  end
+
+  it "takes the choice pieces' classes: picks, pick, pick_detail, button_ghost, choice_footer, choice_divider" do
+    QubeRails.config.ui_classes = { button: "btn", button_secondary: "btn-2", button_ghost: "btn-link", picks: "list",
+                                    pick: "list-item", pick_detail: "muted", choice_footer: "actions",
+                                    choice_divider: "or" }
+    asking(prompt)
+    shown = page
+
+    expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] button.qube-pick.list-item .qube-pick-detail.muted"))
+      .not_to be_nil
+    expect(shown.at_css(".qube-choice-divider.or")).not_to be_nil
+    expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn-2")
+    expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=cancel] button")["class"])
+      .to eq("qube-choice-button btn-link")
   end
 
   it "leaves no inline script, and includes the behaviour script and the stylesheet from the layout" do
