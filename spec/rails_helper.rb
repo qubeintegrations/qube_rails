@@ -13,6 +13,7 @@ load File.expand_path("dummy/db/schema.rb", __dir__)
 Dir[File.expand_path("../db/migrate/*.rb", __dir__)].sort.each { |file| load file }
 CreateQubeTables.new.migrate(:up)
 AddQubeSyncStatusIndexes.new.migrate(:up)
+CreateQubeSyncMarks.new.migrate(:up)
 
 Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require f }
 

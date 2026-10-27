@@ -6,6 +6,11 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- `config.prune_runs_after` and `QubeRails::PruneRunsJob`: opt-in pruning of ended runs
+  (`Run.prunable`), never within a day of their end; links stay.
+- `qube_sync_marks`: when each connection's last completed run of a workflow started
+  (`Connection#last_synced_at(workflow)`, `Operation#last_synced_at`), a sync's next `since` that
+  outlives pruned runs. Run `bin/rails qube_rails:install:migrations`.
 - `DELETE quickbooks/connections/:id` (`connection_path`) disconnects a connection: QuBe Sync's,
   then the row with its runs and links (`Connection#disconnect!`), after
   `ConnectionEvents#disconnected`, where the app deletes its own rows that point at it. The `qube_rails/error` partial

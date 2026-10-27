@@ -65,6 +65,13 @@ module QubeRails
     end
 
     # Whether it has ended: completed, failed or cancelled.
+    # Ended runs older than older_than (at least a day: a late webhook for a deleted run is
+    # retried for hours). A run that failed before it started has no ended_at.
+    def self.prunable(older_than:)
+      cutoff = [older_than, 1.day].max.ago
+      where(state: ENDED_STATES).where("COALESCE(ended_at, updated_at) < ?", cutoff)
+    end
+
     def ended?
       ENDED_STATES.include?(state)
     end

@@ -531,17 +531,22 @@ forgets the question and answers 409; the run's next webhook says what came of i
 
 ## Storage
 
-Rows go with their run: deleting a run deletes its notifications. Runs themselves are yours to
-prune once you no longer need them, for instance from a scheduled job:
+Rows go with their run: deleting a run deletes its notifications. Runs are kept until you say
+otherwise. To prune ended ones, set `config.prune_runs_after = 90.days` and schedule
+`QubeRails::PruneRunsJob` (Solid Queue's `config/recurring.yml`, say):
 
-```ruby
-QubeRails::Run.where(state: %w[completed failed cancelled])
-              .where("COALESCE(ended_at, updated_at) < ?", 90.days.ago).in_batches.destroy_all
+```yaml
+prune_qube_runs:
+  class: QubeRails::PruneRunsJob
+  schedule: every day at 4am
 ```
 
-Only ended runs, and not the day they end: a webhook for a deleted run answers 404, which QuBe
-Sync retries for hours. A run that failed before it started has no `ended_at`, hence
-`updated_at`. Never prune `qube_quickbooks_records`: they hold the QuickBooks ids.
+It deletes only ended runs (`Run.prunable`), never within a day of their end: a webhook for a
+deleted run answers 404, which QuBe Sync retries for hours. What a record's page shows stays
+right: `in_quickbooks` comes from `qube_quickbooks_records`, which are never pruned, and a sync's
+next `since` from `qube_sync_marks` (`connection.last_synced_at(workflow)`, or
+`last_synced_at` in an operation), which a completed run moves forward. A pruned run's record
+whose run had failed, or completed without a link, shows `not_sent` again.
 
 
 `qube_runs.question` and `qube_runs.links` are JSON kept as text (`QubeRails::JSONCoder`), not a

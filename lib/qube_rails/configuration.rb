@@ -23,6 +23,7 @@ module QubeRails
       @dedupe = nil
       @queue = nil
       @job_attempts = nil
+      @prune_runs_after = nil
       @parent_controller = nil
       @api_key = nil
       @base_url = nil
@@ -133,6 +134,17 @@ module QubeRails
     # The ActiveJob queue QubeRails::WebhookJob runs on.
     def queue
       @queue || :default
+    end
+
+    # How long ended runs are kept before QubeRails::PruneRunsJob deletes them (nil: never).
+    attr_reader :prune_runs_after
+
+    def prune_runs_after=(duration)
+      unless duration.nil? || (duration.respond_to?(:to_i) && duration.to_i >= 1.day.to_i)
+        raise ArgumentError, "prune_runs_after is nil or a duration of a day or more, in #{FILE}"
+      end
+
+      @prune_runs_after = duration
     end
 
     # Where the notification delivery ids each run has taken are kept, so a redelivery runs its

@@ -189,6 +189,12 @@ module QubeRails
       run.connection
     end
 
+    # When this connection's last completed run of WORKFLOW started (nil before one): an
+    # incremental sync's since.
+    def last_synced_at
+      connection.last_synced_at(self.class::WORKFLOW)
+    end
+
     # The run's input, from the record. Each operation says how. It returns a Hash; with typed
     # workflow starts (`bin/rails g qube_rails:workflows`, which writes app/qube/qube_workflows.rb),
     # it can return the workflow's own input method's, whose operation bodies are typed and
@@ -341,6 +347,7 @@ module QubeRails
       if event.awaiting_input?
         question(event)
       elsif event.completed?
+        QubeRails::SyncMark.advance(connection, self.class::WORKFLOW, run.created_at)
         ended(event)
       elsif stopped?(event)
         failed(event)

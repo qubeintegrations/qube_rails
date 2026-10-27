@@ -42,6 +42,10 @@ QubeRails.configure do |config|
   #   MyQueue.push(delivery[:kind], delivery[:id], delivery[:body])
   # }
   # config.queue = :default
+
+  # Delete ended runs after this long, when QubeRails::PruneRunsJob runs (schedule it). Off
+  # until set.
+  # config.prune_runs_after = 90.days
   # How many times QubeRails::WebhookJob runs a delivery whose work raised, with a growing wait,
   # before it logs an error and raises to your adapter. With Sidekiq, whose own retries follow,
   # a smaller number (or 1, to leave retries to Sidekiq) avoids retrying twice over.

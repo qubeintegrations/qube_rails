@@ -43,6 +43,11 @@ module QubeRails
       end
     end
 
+    # When its last completed run of workflow started (nil before one): a sync's next since.
+    def last_synced_at(workflow)
+      QubeRails::SyncMark.find_by(connection_id: id, workflow: workflow.to_s)&.started_at
+    end
+
     def self.owned_by(owner)
       type, id = key_for(owner)
       where(owner_type: type, owner_id: id)
