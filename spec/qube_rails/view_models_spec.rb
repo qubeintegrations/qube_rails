@@ -128,6 +128,42 @@ RSpec.describe "The view-models" do
       expect([view.redeliver_url, view.quiet_text]).to eq(["/qube/runs/#{run.id}/redeliver", "No update from QuickBooks for a while."])
     end
 
+    it "says why a run waits on a stalled connection, offers no redelivery, and clears when it resumes" do
+      run = make_run(invoice, connection).tap { |r| r.update!(state: "running", qube_run_id: "run-q") }
+      run.update_columns(updated_at: 11.minutes.ago) # quiet, but the cause is known
+      connection.update!(status: "stalled", stall_reason: "not_checking_in")
+
+      expect([view.stall, view.summary, view.redeliver_url, view.quiet_text])
+        .to eq([:not_checking_in, "Waiting for QuickBooks", nil, nil])
+      expect(view.stall_text).to start_with("QuickBooks hasn't checked in for a while")
+      expect(view.css_class).to include("qube-connection-stalled")
+      connection.update!(stall_reason: "quickbooks_unavailable")
+      expect(view.stall_text).to start_with("The Web Connector is checking in but can't open QuickBooks")
+      connection.update!(stall_reason: "something_new")
+      expect([view.stall, view.stall_text]).to eq([:something_new, "Syncing with QuickBooks has stopped for now. " \
+                                                                   "Check the computer with QuickBooks and its Web Connector."])
+
+      connection.update!(status: "connected", stall_reason: nil)
+      expect([view.stall, view.stall_text, view.summary]).to eq([nil, nil, "Syncing with QuickBooks"])
+      expect(view.redeliver_url).to eq("/qube/runs/#{run.id}/redeliver")
+    end
+
+    it "leaves a question waiting on the person as it is, stalled or not" do
+      make_run(invoice, connection).update!(state: "awaiting_input", question: { "message" => "?" })
+      connection.update!(status: "stalled", stall_reason: "not_checking_in")
+
+      expect([view.status, view.stall, view.summary]).to eq([:needs_answer, nil, "Needs your answer"])
+    end
+
+    it "takes the connection the page is about" do
+      make_run(invoice, connection).update!(state: "running")
+      other = QubeRails::Connection.create!(owner: account, status: "stalled", stall_reason: "quickbooks_unavailable")
+      sync = QubeRails::SyncStatus.latest(invoice, operation: "create_invoice")
+
+      expect(QubeRails::RunStatusView.from_sync(sync, routes, connection: other).stall).to eq(:quickbooks_unavailable)
+      expect(QubeRails::RunStatusView.from_sync(sync, routes).stall).to be_nil
+    end
+
     it "isn't visible before the record is sent" do
       expect(view.visible?).to be(false)
       expect(view.status).to eq(:not_sent)

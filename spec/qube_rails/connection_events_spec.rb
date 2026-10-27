@@ -31,6 +31,24 @@ RSpec.describe QubeRails::ConnectionEvents do
     ])
   end
 
+  it "tells the pages of records with a run going on it to refresh when it stalls or resumes" do
+    channel = class_double("Turbo::StreamsChannel", broadcast_refresh_to: nil)
+    stub_const("Turbo::StreamsChannel", channel)
+    going = Invoice.create!(account: account, number: "1001")
+    done = Invoice.create!(account: account, number: "1002")
+    make_run(going, connection).update!(state: "running")
+    make_run(done, connection).update!(state: "completed", ended_at: Time.now)
+
+    run_event("connection.connected")
+    expect(channel).not_to have_received(:broadcast_refresh_to)
+
+    run_event("connection.stalled")
+    expect(channel).to have_received(:broadcast_refresh_to).with(going, :qube_rails).once
+    run_event("connection.resumed")
+    expect(channel).to have_received(:broadcast_refresh_to).with(going, :qube_rails).twice
+    expect(channel).not_to have_received(:broadcast_refresh_to).with(done, :qube_rails)
+  end
+
   it "skips an event whose connection id isn't the row's qube_id" do
     run_event("connection.connected", "connection" => { "id" => "someone-elses" })
 

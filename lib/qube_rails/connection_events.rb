@@ -55,7 +55,8 @@ module QubeRails
         end
       end
 
-      connection.with_lock { apply(event) }
+      applied = connection.with_lock { apply(event) }
+      refresh_pages if applied && (event.stalled? || event.resumed?)
     end
 
     # What your app does with each: until you fill them in, each logs.
@@ -100,11 +101,11 @@ module QubeRails
       unless this_connection?(connection_id)
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id} skipped #{event.event} for " \
                               "#{connection_id.inspect}: not this connection")
-        return
+        return false
       end
 
       # Applied already, or older than what was.
-      return unless event.newer_than?(connection.revision)
+      return false unless event.newer_than?(connection.revision)
 
       status = STATUS[event.event]
       if status
@@ -125,6 +126,27 @@ module QubeRails
         log_event(event)
       end
       connection.save!
+      true
+    end
+
+    # At most this many records' pages are told to refresh when the connection stalls or resumes.
+    REFRESH_LIMIT = 200
+
+    # A stall or a resume changes what the run status says on the pages of the records with a run
+    # still going on this connection: tell them to refresh, after the change is committed (by the
+    # connection's runs index, at most REFRESH_LIMIT records).
+    def refresh_pages
+      return unless QubeRails.refresh_broadcasts?
+
+      going = connection.runs.where.not(state: Run::ENDED_STATES).distinct.limit(REFRESH_LIMIT)
+                        .pluck(:record_type, :record_id)
+      going.each do |type, id|
+        model = type.safe_constantize
+        record = model.respond_to?(:find_by) ? model.find_by(model.primary_key => id) : nil
+        QubeRails.broadcast_refresh(record) if record
+      end
+    rescue StandardError => e
+      QubeRails.logger.warn("QuBe Sync: couldn't tell connection #{connection.id}'s pages to refresh (#{e.class})")
     end
 
     # All a handler does until you fill it in.

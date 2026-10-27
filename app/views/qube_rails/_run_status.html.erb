@@ -18,4 +18,5 @@
 <%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
 <% error = flash[:qube_rails_error] %>
 <% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
-<%= render "qube_rails/run_status/status", run_status: QubeRails::RunStatusView.from_sync(sync, qube_rails, error: error) %>
+<%= render "qube_rails/run_status/status", run_status: QubeRails::RunStatusView.from_sync(sync, qube_rails, error: error,
+                                                                                    connection: local_assigns[:connection]) %>

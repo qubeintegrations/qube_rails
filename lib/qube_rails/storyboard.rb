@@ -25,6 +25,14 @@ module QubeRails
        "QuBe Sync hasn't confirmed the start for a minute: the retry button sends it again, same reference."],
       ["running", "Running", :sending, { state: "running", qube_run_id: "run-sample", age: 30 }, [],
        "QuBe Sync confirmed it; the Web Connector is working through it."],
+      ["stalled_not_checking_in", "Waiting: QuickBooks isn't checking in", :sending,
+       { state: "running", qube_run_id: "run-sample", age: 30 * 60, stall: "not_checking_in" }, ["run_status/stall"],
+       "A run going on a connection QuBe Sync says stalled (not_checking_in): the Web Connector hasn't called in. " \
+       "No redeliver button: the cause is known."],
+      ["stalled_quickbooks_unavailable", "Waiting: QuickBooks is closed", :sending,
+       { state: "running", qube_run_id: "run-sample", age: 30 * 60, stall: "quickbooks_unavailable" },
+       ["run_status/stall"],
+       "The same, stalled as quickbooks_unavailable: the Web Connector calls in but can't open the company file."],
       ["needs_answer", "Waiting for an answer", :needs_answer,
        { state: "awaiting_input", qube_run_id: "run-sample", age: 30, question: { "message" => "?" } }, [],
        "The run asks a question: the question partial shows it (below)."],
@@ -149,6 +157,7 @@ module QubeRails
                       cancel_reason: attrs[:cancel_reason], qube_run_id: attrs[:qube_run_id],
                       question: attrs[:question], operation: "storyboard", reference: "storyboard",
                       created_at: created, updated_at: created, ended_at: attrs[:ended] ? now : nil)
+        run.connection = Connection.new(status: attrs[:stall] ? "stalled" : "connected", stall_reason: attrs[:stall])
         SyncStatus.new(sample[:status], run, nil)
       end
     end

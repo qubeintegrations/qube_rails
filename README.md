@@ -583,6 +583,14 @@ retries). The partial then offers "Check for updates", which asks QuBe Sync to s
 run's latest event again (`client.redeliver_run`); it comes back through the webhook route, and
 one already applied is skipped by its revision.
 
+While the connection a record waits on is stalled (`connection.stalled`, kept on the row as
+`status` and `stall_reason`), a status waiting on QuickBooks (`:sending`) reads "Waiting for
+QuickBooks" with a warning dot, says why and what to do (`qube_rails/run_status/_stall`: the Web
+Connector isn't checking in, or it can't open QuickBooks), and offers no "Check for updates": the
+cause is known. A question waiting on your user isn't affected. When the connection stalls or
+resumes, the engine tells the pages of the records with a run still going on it to refresh (by the
+runs' connection index, at most 200), so the status changes without a reload.
+
 An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
 answer's data, the start was confirmed meanwhile) goes back to the page with the reason in
 `flash[:qube_rails_error]`, which the partials show once, so it shows under Turbo too.
@@ -648,7 +656,7 @@ element around the screens:
   --qube-muted: #6b7280;
   --qube-error: #c2410c;
   --qube-success: #15803d;     /* the status dot once it's in QuickBooks */
-  --qube-warning: #b45309;     /* the status dot while it needs an answer */
+  --qube-warning: #d97706;     /* the status dot while it needs an answer or waits on a stalled connection */
   --qube-surface: #fff;        /* cards, inputs, the matches; default: Canvas */
   --qube-max-width: 52rem;     /* the question card */
 }
@@ -697,6 +705,7 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `segmented`, `segment` | a record's choice as a segmented control, each option |
 | `use_for_all` | the "Use for all N" button under a field |
 | `status`, `summary`, `detail` | the run status, its sentence, a failure's detail |
+| `stall` | why it waits on a stalled connection |
 | `error` | a one-shot error |
 
 Values are a String or an Array. An unknown piece raises when the initializer runs, naming these.
@@ -720,7 +729,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_cell` | `cell` | one field of a record (shown while its `when` holds), or what it already has |
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
-| `qube_rails/run_status/_summary`, `_detail`, `_retry`, `_redeliver` | `run_status` | each part |
+| `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
 | `qube_rails/_error` | `message` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
@@ -746,7 +755,11 @@ versions:
 - `QubeRails::RunStatusView`: `status` (`:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`,
   `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary`, `detail`, `quiet_text`,
   `retry_url` and `redeliver_url` (nil when the button doesn't apply; post to them), `error`,
-  `visible?`, `css_class`.
+  `stall` (the stalled connection's reason as a Symbol, such as `:not_checking_in` or
+  `:quickbooks_unavailable`, while a `:sending` status waits on it; else nil), `stall_text`,
+  `visible?`, `css_class` (with `qube-connection-stalled` then; the element also gets
+  `data-qube-stall="<reason>"`). `RunStatusView.from_sync(sync, urls, error:, connection:)` takes the
+  connection the page is about (the partial's `connection:` local), else the latest run's.
 
 Choices show by kind. A pick (an item of a `choose` list: an id ending `:<n>`, no fields) is a quiet
 option row; with no picks, a plain choice before the first form is one too (a name clash's "Use the
@@ -819,7 +832,8 @@ chosen `value` in a hidden input named `name`.
 
 `GET /qube/storyboard` shows every screen your users can meet, from sample data, in your own
 layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, an unconfirmed start
-with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
+with its retry button, running, waiting on a stalled connection (QuickBooks not checking in, or
+closed), waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
 kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
 name clash, a lost answer, a missing customer, records not in QuickBooks yet, and a refused answer). Each screen is a section with
@@ -865,6 +879,10 @@ en:
 | `status.quiet` | No update from QuickBooks for a while. | above the redeliver button |
 | `status.check_for_updates` | Check for updates | the redeliver button |
 | `status.try_again` | Try sending again | the retry button |
+| `status.waiting_for_quickbooks` | Waiting for QuickBooks | the status while its connection is stalled |
+| `status.stalled.not_checking_in` | QuickBooks hasn't checked in for a while, so this is waiting. Make sure the computer with QuickBooks is on and the Web Connector is running. | why, when the Web Connector isn't calling in |
+| `status.stalled.quickbooks_unavailable` | The Web Connector is checking in but can't open QuickBooks. Open the company file in QuickBooks on that computer. | why, when QuickBooks is closed |
+| `status.stalled.other` | Syncing with QuickBooks has stopped for now. Check the computer with QuickBooks and its Web Connector. | any other stall reason |
 | `errors.not_starting` | This was already sent, so there's nothing to try again. | a retry of a start that isn't waiting |
 | `errors.not_quiet` | This was updated recently. Check again in a few minutes. | a redeliver of a run that isn't quiet |
 | `errors.no_update_yet` | There's no update yet. Check again in a few minutes. | a redeliver with nothing to send (409) |

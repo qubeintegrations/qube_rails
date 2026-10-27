@@ -21,6 +21,11 @@ en:
       quiet: "No update from QuickBooks for a while."
       check_for_updates: "Check for updates"
       try_again: "Try sending again"
+      waiting_for_quickbooks: "Waiting for QuickBooks"
+      stalled:
+        not_checking_in: "QuickBooks hasn't checked in for a while, so this is waiting. Make sure the computer with QuickBooks is on and the Web Connector is running."
+        quickbooks_unavailable: "The Web Connector is checking in but can't open QuickBooks. Open the company file in QuickBooks on that computer."
+        other: "Syncing with QuickBooks has stopped for now. Check the computer with QuickBooks and its Web Connector."
     errors:
       not_starting: "This was already sent, so there's nothing to try again."
       not_quiet: "This was updated recently. Check again in a few minutes."

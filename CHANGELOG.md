@@ -6,6 +6,13 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- The run status accounts for a stalled connection: while the connection a `:sending` status waits on
+  is stalled, it reads "Waiting for QuickBooks" (warning dot) and says why and what to do
+  (`RunStatusView#stall`, `#stall_text`; the new piece `qube_rails/run_status/_stall`, class hook
+  `stall`, `data-qube-stall`, `qube-connection-stalled`; I18n `status.waiting_for_quickbooks`,
+  `status.stalled.*`), with no "Check for updates". `RunStatusView.from_sync` takes `connection:`.
+  `connection.stalled` and `connection.resumed` refresh the pages of records with a run going on the
+  connection. The storyboard has both stalls.
 - A rows field is a block per record, not a table: the record's choice as a segmented control (an
   enum of up to three options), then only the fields its answers call for, stacked; never scrolling
   sideways. "Set all to:" and "Use for all N" replace the checkboxes and "Set selected": the

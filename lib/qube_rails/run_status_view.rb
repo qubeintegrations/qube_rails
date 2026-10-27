@@ -6,23 +6,40 @@ module QubeRails
   # :sending, :needs_answer, :in_quickbooks, :done, :failed, :cancelled); state the latest run's
   # ("starting", "running", "awaiting_input", "completed", "failed" or "cancelled"), or nil.
   class RunStatusView
-    attr_reader :status, :state, :summary, :detail, :quiet_text, :retry_url, :redeliver_url, :error
+    attr_reader :status, :state, :summary, :detail, :quiet_text, :retry_url, :redeliver_url, :error, :stall,
+                :stall_text
+
+    # The stall reasons with words of their own (status.stalled.<reason>); any other is "other".
+    STALL_REASONS = %w[not_checking_in quickbooks_unavailable].freeze
 
     # From a QubeRails::SyncStatus. urls answers retry_start_path(run) and redeliver_path(run):
-    # the engine's route proxy (qube_rails) in a view.
-    def self.from_sync(sync, urls, error: nil)
+    # the engine's route proxy (qube_rails) in a view. connection is the one the status is about
+    # (else the latest run's): while it's stalled, a status waiting on QuickBooks (:sending) says
+    # why (stall, stall_text) and offers no redelivery, since the cause is known.
+    def self.from_sync(sync, urls, error: nil, connection: nil)
       run = sync.run
       state = run && (run.cancelled? ? "cancelled" : run.state)
       detail = sync.failed? && run ? run.error_detail : nil
-      stuck = run ? run.looks_stuck? : false
-      new(status: sync.status, state: state, summary: sync.summary_text, detail: detail,
+      connection ||= run && run.connection
+      stall = sync.status == :sending ? stall_of(connection) : nil
+      stuck = run && !stall ? run.looks_stuck? : false
+      new(status: sync.status, state: state,
+          summary: stall ? QubeRails.t("status.waiting_for_quickbooks") : sync.summary_text, detail: detail,
           quiet_text: stuck ? QubeRails.t("status.quiet") : nil,
           retry_url: sync.unconfirmed? ? urls.retry_start_path(run) : nil,
-          redeliver_url: stuck ? urls.redeliver_path(run) : nil, error: error)
+          redeliver_url: stuck ? urls.redeliver_path(run) : nil, error: error, stall: stall)
+    end
+
+    # A stalled connection's reason as a Symbol (:other when it gives none), or nil.
+    def self.stall_of(connection)
+      return nil unless connection && connection.status == "stalled"
+
+      reason = connection.stall_reason.to_s
+      reason.empty? ? :other : reason.to_sym
     end
 
     def initialize(status:, state: nil, summary: nil, detail: nil, quiet_text: nil, retry_url: nil,
-                   redeliver_url: nil, error: nil)
+                   redeliver_url: nil, error: nil, stall: nil)
       @status = status.to_sym
       @state = state
       @summary = summary
@@ -31,6 +48,8 @@ module QubeRails
       @retry_url = retry_url
       @redeliver_url = redeliver_url
       @error = error
+      @stall = stall
+      @stall_text = stall && QubeRails.t("status.stalled.#{STALL_REASONS.include?(stall.to_s) ? stall : "other"}")
     end
 
     # Nothing is shown before the record is sent (the error aside).
@@ -38,9 +57,11 @@ module QubeRails
       status != :not_sent
     end
 
-    # The qube- classes on the status element: qube-sync-<status> and qube-run-<state>.
+    # The qube- classes on the status element: qube-sync-<status>, qube-run-<state>, and
+    # qube-connection-stalled while it waits on a stalled connection.
     def css_class
-      ["qube-run-status", "qube-sync-#{status}", state && "qube-run-#{state}"].compact.join(" ")
+      ["qube-run-status", "qube-sync-#{status}", state && "qube-run-#{state}", stall && "qube-connection-stalled"]
+        .compact.join(" ")
     end
   end
 end

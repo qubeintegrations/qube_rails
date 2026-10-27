@@ -18,7 +18,7 @@
   --qube-muted-color: var(--qube-muted, color-mix(in srgb, currentColor 62%, transparent));
   --qube-error-color: var(--qube-error, #c2410c);
   --qube-success-color: var(--qube-success, #15803d);
-  --qube-warning-color: var(--qube-warning, #b45309);
+  --qube-warning-color: var(--qube-warning, #d97706);
   --qube-surface-color: var(--qube-surface, transparent);
   --qube-solid-color: var(--qube-surface, Canvas);
   font-family: var(--qube-font, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
@@ -31,7 +31,7 @@
     --qube-accent-color: var(--qube-accent, light-dark(#2563eb, #3b82f6));
     --qube-error-color: var(--qube-error, light-dark(#c2410c, #fb923c));
     --qube-success-color: var(--qube-success, light-dark(#15803d, #4ade80));
-    --qube-warning-color: var(--qube-warning, light-dark(#b45309, #fbbf24));
+    --qube-warning-color: var(--qube-warning, light-dark(#d97706, #fbbf24));
   }
 }
 
@@ -701,7 +701,7 @@
   background: var(--qube-dot-color);
 }
 
-:where(.qube-sync-needs_answer .qube-run-summary) {
+:where(.qube-sync-needs_answer .qube-run-summary, .qube-connection-stalled .qube-run-summary) {
   --qube-dot-color: var(--qube-warning-color);
 }
 
@@ -721,6 +721,16 @@
   max-width: 65ch;
   margin: 0;
   color: var(--qube-muted-color);
+}
+
+/* Why it waits: the connection stalled. Calm, like an error, in the warning colour */
+:where(.qube-run-stall) {
+  max-width: 65ch;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--qube-control-radius);
+  background: color-mix(in srgb, var(--qube-warning-color) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--qube-warning-color);
 }
 
 :where(.qube-retry-start-form, .qube-redeliver-form) {

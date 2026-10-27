@@ -21,16 +21,22 @@ RSpec.describe "The storyboard", type: :request do
     expect(shown.at_css("#dummy-nav")).not_to be_nil # the app's layout, its own route helpers working
     expect(panels.map { |p| p["data-qube-storyboard"] }).to eq(QubeRails::Storyboard.screens.map(&:key))
     expect(panels.map { |p| p["data-qube-storyboard"] }).to include(
-      *%w[not_sent starting unconfirmed running needs_answer looks_stuck in_quickbooks done failed cancelled error],
+      *%w[not_sent starting unconfirmed running stalled_not_checking_in stalled_quickbooks_unavailable needs_answer looks_stuck in_quickbooks done failed cancelled error],
       *%w[near_match record_search choose enum_select number_boolean name_clash ask_about_add missing_record rows refusal]
     )
-    expect(shown.css(".qube-run-status").size).to eq(9) # not_sent renders nothing
+    expect(shown.css(".qube-run-status").size).to eq(11) # not_sent renders nothing
     expect(shown.css(".qube-question").size).to eq(10)
     expect([QubeRails::Run.count, QubeRails::Connection.count]).to eq(rows_before)
 
     panel = ->(key) { shown.at_css("[data-qube-storyboard='#{key}']") }
     expect(panel.call("unconfirmed").at_css("form.qube-retry-start-form")["action"]).to eq("/qube/storyboard/unconfirmed/answer")
     expect(panel.call("looks_stuck").at_css("form.qube-redeliver-form")).not_to be_nil
+    stalled = panel.call("stalled_not_checking_in").at_css(".qube-run-status.qube-connection-stalled")
+    expect(stalled["data-qube-stall"]).to eq("not_checking_in")
+    expect(stalled.at_css(".qube-run-summary").text).to eq("Waiting for QuickBooks")
+    expect(stalled.at_css(".qube-run-stall").text).to include("Web Connector is running")
+    expect(stalled.at_css(".qube-redeliver-form, .qube-run-quiet")).to be_nil # stuck, but the cause is known
+    expect(panel.call("stalled_quickbooks_unavailable").at_css(".qube-run-stall").text).to include("can't open QuickBooks")
     expect(panel.call("failed").at_css(".qube-run-error-detail").text).to include("active in QuickBooks")
     expect(panel.call("error").at_css(".qube-error")).not_to be_nil
     expect(panel.call("refusal").at_css(".qube-question .qube-error").text).to include("couldn't be used")

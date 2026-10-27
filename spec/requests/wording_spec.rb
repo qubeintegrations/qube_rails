@@ -45,12 +45,16 @@ RSpec.describe "The screens' wording", type: :request do
   end
 
   it "takes an app's own words for a key, on the screens and in a route's message" do
-    I18n.backend.store_translations(:en, qube_rails: { status: { check_for_updates: "Look again" },
+    I18n.backend.store_translations(:en, qube_rails: { status: { check_for_updates: "Look again",
+                                                                 stalled: { not_checking_in: "Turn on the office PC." } },
                                                        errors: { not_starting: "Already on its way." } })
 
     stuck = storyboard.at_css("[data-qube-storyboard='looks_stuck'] form.qube-redeliver-form")
     expect(stuck.at_css("button, input[type=submit]").then { |b| b.text.strip.empty? ? b["value"] : b.text.strip })
       .to eq("Look again")
+
+    expect(storyboard.at_css("[data-qube-storyboard='stalled_not_checking_in'] .qube-run-stall").text.strip)
+      .to eq("Turn on the office PC.")
 
     run = make_run(invoice, connection).tap { |r| r.update!(state: "running") }
     post "/qube/runs/#{run.id}/retry_start", headers: signed_in
