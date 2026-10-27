@@ -63,7 +63,7 @@ QubeRails.configure do |config|
   # Your CSS framework's classes for the engine's screens, by piece, added beside their qube-
   # classes (pieces: QubeRails::Configuration::UI_PIECES; see the README's "Styling"):
   # config.ui_classes = { button: "btn btn-primary", button_secondary: "btn btn-link",
-  #                       input: "form-control", select: "form-select", table: "table" }
+  #                       input: "form-control", select: "form-select", label: "form-label" }
 
   # GET /qube/storyboard: every screen with sample data, in your layout. On in development.
   # config.storyboard = Rails.env.development?
