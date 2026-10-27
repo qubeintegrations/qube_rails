@@ -45,9 +45,6 @@ module QubeRails
        "Cancelled by your app, with its reason."]
     ].freeze
 
-    ERROR_MESSAGE = "This question changed since the page showed it, so that answer was not sent: " \
-                    "the page now shows where it stands."
-
     # Stands in for the engine's routes: every form posts to the storyboard's no-op answer.
     class Urls
       def initialize(answer_path)
@@ -112,7 +109,7 @@ module QubeRails
         Screen.new("error", "Run status", "A one-shot error",
                    "A route's message (flash[:qube_rails_error]), shown once by whichever partial comes first, " \
                    "or by render \"qube_rails/error\" on a page without them.", ["error"], :error,
-                   { message: ERROR_MESSAGE })
+                   { message: QubeRails.t("errors.question_changed") })
       end
 
       def question_screen(key)

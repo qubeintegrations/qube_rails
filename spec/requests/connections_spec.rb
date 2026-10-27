@@ -254,10 +254,10 @@ RSpec.describe "Onboarding", type: :request do
       delete "/quickbooks/connections/#{connection.id}", headers: signed_in, env: { "HTTP_REFERER" => "/account" }
 
       expect(response).to redirect_to("/account")
-      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::RUNS_GOING)
+      expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::ConnectionsController::RUNS_GOING))
       expect(a_request(:delete, api_url("/connections/#{connection.qube_id}"))).not_to have_been_made
       get "/account", headers: signed_in
-      expect(response.body.scan(QubeRails::ConnectionsController::RUNS_GOING.gsub("'", "&#39;")).size).to eq(1)
+      expect(response.body.scan(QubeRails.t(QubeRails::ConnectionsController::RUNS_GOING).gsub("'", "&#39;")).size).to eq(1)
       get "/account", headers: signed_in
       expect(response.body).not_to include("qube-error")
 
@@ -265,7 +265,7 @@ RSpec.describe "Onboarding", type: :request do
       stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_timeout
       delete "/quickbooks/connections/#{connection.id}", headers: signed_in
 
-      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::NO_ANSWER)
+      expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::ConnectionsController::NO_ANSWER))
       expect(QubeRails::Connection.exists?(connection.id)).to be(true)
     end
 
@@ -276,7 +276,7 @@ RSpec.describe "Onboarding", type: :request do
 
       delete "/quickbooks/connections/#{connection.id}", headers: signed_in
 
-      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::RUNS_GOING)
+      expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::ConnectionsController::RUNS_GOING))
       expect(QubeRails::Connection.exists?(connection.id)).to be(true)
     end
 

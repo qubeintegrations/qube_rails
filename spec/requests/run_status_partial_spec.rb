@@ -20,7 +20,7 @@ RSpec.describe "The run status partial", type: :request do
     status = page.at_css(".qube-run-status")
 
     expect(status["class"]).to include("qube-run-failed")
-    expect(status.at_css(".qube-run-summary").text).to eq("Failed: No customer <b>named</b> Riverbend")
+    expect(status.at_css(".qube-run-summary").text).to eq("Couldn't sync: No customer <b>named</b> Riverbend")
     expect(status.at_css(".qube-run-summary b")).to be_nil # escaped
     expect(status.at_css(".qube-run-error-detail").text).to eq("Add the customer first.")
   end
@@ -32,7 +32,7 @@ RSpec.describe "The run status partial", type: :request do
     expect(response).to redirect_to("http://www.example.com/invoices/#{invoice.id}")
 
     errors = page.css(".qube-error")
-    expect(errors.map(&:text)).to eq(["This run isn't waiting for its start to be confirmed."])
+    expect(errors.map(&:text)).to eq(["This was already sent, so there's nothing to try again."])
     expect(page.css(".qube-error")).to be_empty # shown once
   end
 
@@ -56,7 +56,7 @@ RSpec.describe "The run status partial", type: :request do
     run.update_columns(updated_at: 11.minutes.ago)
     form = page.at_css("form.qube-redeliver-form")
     expect(form["action"]).to eq("/qube/runs/#{run.id}/redeliver")
-    expect(page.at_css(".qube-run-quiet").text).to eq("No news from QuBe Sync about it for a while.")
+    expect(page.at_css(".qube-run-quiet").text).to eq("No update from QuickBooks for a while.")
   end
 
   it "shows a completed run without a detail" do
@@ -70,12 +70,12 @@ RSpec.describe "The run status partial", type: :request do
     travel_to(2.minutes.ago) { make_run(invoice, connection).update!(state: "starting") }
     button = page.at_css("form.qube-retry-start-form")
 
-    expect(page.at_css(".qube-run-summary").text).to eq("Not confirmed by QuBe Sync yet")
+    expect(page.at_css(".qube-run-summary").text).to eq("Still waiting for QuickBooks")
     expect(button["action"]).to eq("/qube/runs/#{QubeRails::Run.last.id}/retry_start")
     expect(button.at_css("button.qube-retry-start, input.qube-retry-start")).not_to be_nil
 
     make_run(invoice, connection).update!(state: "starting") # a younger one, now the latest
-    expect(page.at_css(".qube-run-summary").text).to eq("Starting")
+    expect(page.at_css(".qube-run-summary").text).to eq("Sending to QuickBooks")
     expect(page.at_css("form.qube-retry-start-form")).to be_nil
 
     make_run(invoice, connection).update!(state: "running")

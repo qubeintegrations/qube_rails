@@ -110,7 +110,7 @@ RSpec.describe "The view-models" do
       make_run(invoice, connection).update!(state: "failed", ended_at: Time.now,
                                             error: { "message" => "No customer", "detail" => "Add it first." })
 
-      expect([view.status, view.state, view.summary, view.detail]).to eq([:failed, "failed", "Failed: No customer", "Add it first."])
+      expect([view.status, view.state, view.summary, view.detail]).to eq([:failed, "failed", "Couldn't sync: No customer", "Add it first."])
       expect(view.css_class).to eq("qube-run-status qube-sync-failed qube-run-failed")
       expect([view.retry_url, view.redeliver_url]).to eq([nil, nil])
     end
@@ -121,7 +121,7 @@ RSpec.describe "The view-models" do
 
       run.update!(state: "running", qube_run_id: "run-q")
       run.update_columns(updated_at: 11.minutes.ago)
-      expect([view.redeliver_url, view.quiet_text]).to eq(["/qube/runs/#{run.id}/redeliver", QubeRails::RunStatusView::QUIET_TEXT])
+      expect([view.redeliver_url, view.quiet_text]).to eq(["/qube/runs/#{run.id}/redeliver", "No update from QuickBooks for a while."])
     end
 
     it "isn't visible before the record is sent" do

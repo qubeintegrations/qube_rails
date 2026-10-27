@@ -61,7 +61,9 @@ RSpec.describe "Styling the screens", type: :request do
     expect(response).to have_http_status(:ok)
     selectors = response.body.gsub(%r{/\*.*?\*/}m, "").scan(/^([^{}\n][^{}]*)\{/).flatten.map(&:strip)
     expect(selectors).not_to be_empty
-    expect(selectors.reject { |s| s.start_with?(":where(") }).to eq([]) # zero specificity throughout
+    rules = selectors.reject { |s| s.start_with?("@") || %w[from to].include?(s) } # at-rules, keyframe stops
+    expect(rules.reject { |s| s.start_with?(":where(") }).to eq([]) # zero specificity throughout
+    expect(response.body).not_to match(/transition:\s*all|scale\(0\)/)
     %w[--qube-accent --qube-border --qube-radius --qube-gap --qube-font --qube-muted --qube-error --qube-surface].each do |name|
       expect(response.body).to include("var(#{name}")
     end

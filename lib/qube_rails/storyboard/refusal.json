@@ -1,7 +1,7 @@
 {
   "title": "An answer QuBe Sync refused (422)",
   "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail), from flash[:qube_rails_error].",
-  "error": "QuBe Sync couldn't take that answer: name is required.",
+  "error": "That answer couldn't be used: a new name is required.",
   "prompt": {
     "id": "ensure / ask_rename",
     "kind": "decision",

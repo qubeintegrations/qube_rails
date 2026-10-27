@@ -74,7 +74,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "delete_everything")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
+      expect(flash[:qube_rails_error]).to eq("This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest.")
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
@@ -84,7 +84,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
+      expect(flash[:qube_rails_error]).to eq("This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest.")
       expect(run.reload.question).to be_nil
     end
 
@@ -104,7 +104,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "add", data: { count: "3" })
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("QuBe Sync couldn't take that answer: count must be a whole number")
+      expect(flash[:qube_rails_error]).to eq("That answer couldn't be used: count must be a whole number")
       expect(run.reload.question).to eq(question)
     end
 
@@ -189,7 +189,7 @@ RSpec.describe "The question routes", type: :request do
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question changed since the page showed it, so that answer was not sent: the page now shows where it stands.")
+      expect(flash[:qube_rails_error]).to eq("This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest.")
     end
 
     it "forgets the question and says it changed for any other 400" do

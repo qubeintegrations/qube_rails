@@ -43,7 +43,7 @@ RSpec.describe "POST /qube/runs/:id/retry_start", type: :request do
     post "/qube/runs/#{run.id}/retry_start", headers: signed_in
 
     expect(response).to have_http_status(:see_other)
-    expect(flash[:qube_rails_error]).to eq("This run isn't waiting for its start to be confirmed.")
+    expect(flash[:qube_rails_error]).to eq("This was already sent, so there's nothing to try again.")
     expect(a_request(:post, start_url)).not_to have_been_made
   end
 
@@ -108,7 +108,7 @@ RSpec.describe "POST /qube/runs/:id/redeliver", type: :request do
     run = make_run(invoice, connection)
     run.update!(qube_run_id: "run-q-1")
     post "/qube/runs/#{run.id}/redeliver", headers: signed_in
-    expect(flash[:qube_rails_error]).to eq(QubeRails::RunsController::NOT_QUIET)
+    expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::RunsController::NOT_QUIET))
 
     ended = quiet_run(state: "completed")
     post "/qube/runs/#{ended.id}/redeliver", headers: signed_in
@@ -119,11 +119,11 @@ RSpec.describe "POST /qube/runs/:id/redeliver", type: :request do
     run = quiet_run
     stub_request(:post, redeliver_url).to_return(status: 409, body: { errors: { code: "nothing_to_redeliver" } }.to_json)
     post "/qube/runs/#{run.id}/redeliver", headers: signed_in
-    expect(flash[:qube_rails_error]).to eq("QuBe Sync has no news about this run to send yet.")
+    expect(flash[:qube_rails_error]).to eq("There's no update yet. Check again in a few minutes.")
 
     stub_request(:post, redeliver_url).to_return(status: 429, body: "{}")
     post "/qube/runs/#{run.id}/redeliver", headers: signed_in
-    expect(flash[:qube_rails_error]).to eq("That was asked a moment ago: give it a minute.")
+    expect(flash[:qube_rails_error]).to eq("That was checked a moment ago. Try again in a minute.")
   end
 
   it "answers 404 for a run another account's user can't act on" do

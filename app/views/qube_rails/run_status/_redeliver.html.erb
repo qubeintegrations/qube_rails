@@ -1,5 +1,5 @@
 <%# A run that looks stuck: posts to redeliver_url, which asks QuBe Sync to send its latest event
-    again. %>
+    again. The words are I18n's: qube_rails.status.quiet and .check_for_updates. %>
 <p class="qube-run-quiet"><%= run_status.quiet_text %></p>
-<%= button_to "Send its latest news again", run_status.redeliver_url,
+<%= button_to QubeRails.t("status.check_for_updates"), run_status.redeliver_url,
               class: qube_classes(:button_secondary, "qube-redeliver"), form: { class: "qube-redeliver-form" } %>

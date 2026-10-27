@@ -33,7 +33,7 @@ RSpec.describe "The storyboard", type: :request do
     expect(panel.call("looks_stuck").at_css("form.qube-redeliver-form")).not_to be_nil
     expect(panel.call("failed").at_css(".qube-run-error-detail").text).to include("active in QuickBooks")
     expect(panel.call("error").at_css(".qube-error")).not_to be_nil
-    expect(panel.call("refusal").at_css(".qube-question .qube-error").text).to include("couldn't take that answer")
+    expect(panel.call("refusal").at_css(".qube-question .qube-error").text).to include("couldn't be used")
     expect(panel.call("rows").css("tr[data-qube-row]").size).to eq(3)
     expect(panel.call("near_match").at_css("[data-qube-search]")["data-qube-search"]).to eq("/qube/storyboard/near_match/search")
     expect(panel.call("failed").at_css(".qube-storyboard-files").text)

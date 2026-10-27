@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module QubeRails
-  # POST /qube/runs/<run id>/retry_start, from the run status partial's "Try the start again"
+  # POST /qube/runs/<run id>/retry_start, from the run status partial's "Try sending again"
   # button: sends a start QuBe Sync never confirmed (a run still "starting") again, with the same
   # reference as its Idempotency-Key (QubeRails::Run#retry_start!), so a start that did land
   # answers with its run rather than making another. Behind your sign-in and CSRF, as your
@@ -10,13 +10,11 @@ module QubeRails
   class RunsController < QubeRails.config.parent_controller.constantize
     include RunAuthorization
 
-    NOT_STARTING = "This run isn't waiting for its start to be confirmed."
-    NOT_QUIET = "QuBe Sync has been heard from about this run lately: nothing to ask for."
-    REDELIVERY_REFUSED = {
-      409 => "QuBe Sync has no news about this run to send yet.",
-      429 => "That was asked a moment ago: give it a minute."
-    }.freeze
-    NO_ANSWER = "QuBe Sync didn't answer: try again in a minute."
+    # What the page says when it can't, as I18n keys under qube_rails (config/locales/en.yml).
+    NOT_STARTING = :"errors.not_starting"
+    NOT_QUIET = :"errors.not_quiet"
+    REDELIVERY_REFUSED = { 409 => :"errors.no_update_yet", 429 => :"errors.checked_just_now" }.freeze
+    NO_ANSWER = :"errors.unreachable"
 
     def retry_start
       run, = authorized_run("a start retry")
@@ -33,8 +31,8 @@ module QubeRails
       redirect_back fallback_location: "/", status: :see_other
     end
 
-    # POST /qube/runs/<run id>/redeliver, from the run status partial's "Send its latest news
-    # again" button on a run that looks stuck (QubeRails::Run#looks_stuck?): asks QuBe Sync to
+    # POST /qube/runs/<run id>/redeliver, from the run status partial's "Check for updates"
+    # button on a run that looks stuck (QubeRails::Run#looks_stuck?): asks QuBe Sync to
     # send the run's latest event again (its question, or how it ended) to the run's webhook URL,
     # for a webhook this app missed. The event comes back through the webhook route as usual;
     # one this app already applied is skipped by its revision.

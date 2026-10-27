@@ -60,7 +60,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `POST webhooks/qube/requests/:id` | A plain request's webhooks ([Plain requests](#plain-requests)). |
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
-| `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Send its latest news again" button. Behind your sign-in and CSRF, and `authorize_question`. |
+| `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Check for updates" button. Behind your sign-in and CSRF, and `authorize_question`. |
 | `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
 | `GET qube/storyboard`, `GET qube/storyboard/:screen` | Every screen the partials show, from sample data, in your layout ([Styling](#styling)). Only while `config.storyboard` is true (404 otherwise); behind your sign-in. Its search (`GET qube/storyboard/:screen/search`) answers from the samples and its forms post to a no-op (`POST qube/storyboard/:screen/answer`): nothing reaches QuBe Sync or the database. |
 
@@ -504,12 +504,13 @@ message and detail), a cancel's `cancel_reason`, and `ended_at`. So a run's resu
 whether or not your `ended` and `failed` handlers write anything; those are for your own records.
 `run.ended?`, `run.failed?` and `run.cancelled?` say which (a run that completed on a
 `cancelled` outcome, where your app chose to stop, counts as cancelled), and `run.summary_text`
-says it in a sentence: "Added to QuickBooks", "Done", "Failed: <message>", "Cancelled: <reason>",
-"Waiting for your answer", "Starting", "Not confirmed by QuBe Sync yet" or "Running".
+says it in a sentence for your user: "Added to QuickBooks", "Done", "Couldn't sync: <message>",
+"Cancelled: <reason>", "Needs your answer", "Sending to QuickBooks", "Still waiting for QuickBooks"
+or "Syncing with QuickBooks" (the words are I18n's: see [Wording and translations](#wording-and-translations)).
 
 A start QuBe Sync hasn't confirmed for a minute (`run.unconfirmed?`: still `starting`, after a
-start that got no answer) reads "Not confirmed by QuBe Sync yet", and the partial offers a "Try
-the start again" button. It posts to `POST qube/runs/:id/retry_start`, behind your sign-in and
+start that got no answer) reads "Still waiting for QuickBooks", and the partial offers a "Try
+sending again" button. It posts to `POST qube/runs/:id/retry_start`, behind your sign-in and
 CSRF, which runs the same `authorize_question` policy as the questions (404 otherwise), answers
 409 for a run that isn't `starting`, calls `run.retry_start!` (same reference, so a start that did
 land answers with its run) and redirects back with 303.
@@ -538,7 +539,7 @@ status.qb_id        # its QuickBooks id on this connection, when it's linked
 status.error        # a failed run's error
 status.retry?       # whether starting again makes sense (failed or cancelled, and not linked)
 status.unconfirmed? # a start QuBe Sync hasn't confirmed: run.retry_start!
-status.summary_text # "In QuickBooks", "Waiting for your answer", "Failed: ..."
+status.summary_text # "In QuickBooks", "Needs your answer", "Couldn't sync: ..."
 ```
 
 Per connection, since an invoice can be in one company file and not another.
@@ -578,7 +579,7 @@ Without turbo-rails, nothing is sent, and a reload shows it.
 
 A run QuBe Sync confirmed that has had no news for 10 minutes, running or waiting on a question
 this app never received, may have lost a webhook (the app was down longer than QuBe Sync's
-retries). The partial then offers "Send its latest news again", which asks QuBe Sync to send the
+retries). The partial then offers "Check for updates", which asks QuBe Sync to send the
 run's latest event again (`client.redeliver_run`); it comes back through the webhook route, and
 one already applied is skipped by its revision.
 
@@ -633,16 +634,35 @@ element around the screens:
 
 ```css
 :root {
-  --qube-accent: #4f46e5;   /* buttons, focus rings; default: the text colour */
-  --qube-border: #d1d5db;   /* default: the text colour, faded */
-  --qube-radius: 8px;
-  --qube-gap: 1rem;
-  --qube-font: inherit;
+  --qube-accent: #4f46e5;      /* the primary button, focus rings, highlights; default: a calm blue */
+  --qube-accent-text: #fff;    /* text on the accent */
+  --qube-border: #e5e7eb;      /* hairlines; default: the text colour, faded */
+  --qube-control-border: #d1d5db; /* inputs and secondary buttons */
+  --qube-radius: 8px;          /* cards; controls take 2px less */
+  --qube-gap: 16px;
+  --qube-font: inherit;        /* default: the system font stack */
+  --qube-font-size: 0.875rem;
   --qube-muted: #6b7280;
-  --qube-error: #b91c1c;
-  --qube-surface: #fff;     /* inputs, the table header; default: transparent */
+  --qube-error: #c2410c;
+  --qube-success: #15803d;     /* the status dot once it's in QuickBooks */
+  --qube-warning: #b45309;     /* the status dot while it needs an answer */
+  --qube-surface: #fff;        /* cards, inputs, the matches, the table; default: Canvas */
+  --qube-max-width: 52rem;     /* the question card */
+  --qube-rows-height: 36rem;   /* the rows table, before it scrolls */
 }
 ```
+
+Light and dark follow your page's `color-scheme`: with `color-scheme: light dark` (or `dark`) on your
+page, the accent and status colours take their dark-mode shades and the surfaces follow `Canvas`,
+so `prefers-color-scheme` carries through. An app whose dark mode is a class should set
+`color-scheme: dark` with it, or set the variables there.
+
+Motion is short and only where it says something: a button gives way on press (`scale(0.97)`),
+the search box's matches drop in from the input (150ms; they close at once, and moving through them
+with the keyboard is instant), a rows column that stops applying fades rather than jumping, cells
+"Set selected" fills flash a tint, and a one-shot error fades in. All of it is transform and
+opacity, on `cubic-bezier(0.23, 1, 0.32, 1)`; with `prefers-reduced-motion: reduce` the fades stay
+and the movement goes. Hover effects apply only on devices with a fine pointer.
 
 ### 2. Class hooks
 
@@ -728,14 +748,23 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   rows table, `data-qube-row="<row key>"`, holding a text input `data-qube-search-input`, a hidden
   input `data-qube-search-value` (the one with the name, which gets the picked `value`) and a
   container `data-qube-search-results`. Typing two characters or more asks the search URL; each
-  match is a button (classes from `data-qube-result-class`); picking one fills the hidden input and
-  fires `change` on it and `qube:picked` on the box. Until a match is picked, the text input is
-  invalid, so the form isn't sent.
+  match is a button (classes from `data-qube-result-class`, `role="option"`); picking one (a click,
+  or the arrow keys and Enter) fills the hidden input and fires `change` on it and `qube:picked` on
+  the box. Escape, a click outside or leaving the box closes the matches. The box gets
+  `data-qube-open` while they show, and the input `aria-expanded` and `aria-activedescendant`. Until a
+  match is picked, the text input is invalid, so the form isn't sent. Its words come from the box's
+  `data-qube-text-no-matches`, `-searching`, `-search-failed` and `-pick-a-match` (English without).
 - A rows table: `data-qube-rows` around it; each row `data-qube-row` with `data-qube-values` (JSON);
   each cell `data-qube-col="<column>"` and `data-qube-when` (JSON); each input `data-qube-rows-input`;
   the row checkboxes `data-qube-rows-pick` and `data-qube-rows-all`; each "Set selected" cell
   `data-qube-bulk="<column>"` with its value `data-qube-bulk-value` and button `data-qube-bulk-apply`.
   A cell whose `when` doesn't hold gets `data-qube-hidden` and its inputs disabled, so it isn't sent.
+  Optional: a row `data-qube-rows-bulk` shown only while a row is ticked, with a
+  `data-qube-rows-count` the script fills from `data-qube-selected-one` / `-other` on the table
+  (`%{count} selected`); a scroller `data-qube-rows-scroll`, which gets `data-qube-overflow="end"`
+  while there's more to its right. Ticked rows get `data-qube-picked`, cells Apply fills
+  `data-qube-filled` (for the stylesheet's tint).
+- The storyboard: a button `data-qube-copy="<text>"` copies its text.
 
 #### A custom combobox
 
@@ -768,13 +797,68 @@ layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, 
 with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
 kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
-name clash, a lost answer, the rows table, and a refused answer). Each panel names the partials to
-override for it. `GET /qube/storyboard/<screen>` shows one.
+name clash, a lost answer, the rows table, and a refused answer). Each screen is a card on a
+neutral canvas, with a note and its "Override files" (the partials to override for it, each with a
+Copy button); the canvas can be shown as your page is, light or dark. The list of screens links to
+each one. `GET /qube/storyboard/<screen>` shows one.
 
 It's on while `config.storyboard` is true (by default, in development), behind your sign-in. It
 calls nothing: its searches answer from the samples (`lib/qube_rails/storyboard/*.json`, prompts
 shaped as QuBe Sync sends them), its forms post to a no-op that comes back with "Storyboard:
 nothing was sent.", and no row is written.
+
+## Wording and translations
+
+Everything the screens say to your users comes from I18n, under `qube_rails.*`, with the engine's
+English in its `config/locales/en.yml`. Nothing names QuBe Sync: to your users it's QuickBooks. To
+reword a string, set its key in your own locale file (yours load after the engine's); to translate
+them, add your locale's keys. A key your locale lacks falls back to the engine's English.
+
+```yaml
+# config/locales/qube_rails.en.yml
+en:
+  qube_rails:
+    status:
+      running: "Syncing with your accounts"
+    errors:
+      unreachable: "Couldn't reach the accounting sync just now. Try again in a minute."
+```
+
+| Key | English | Where |
+| --- | --- | --- |
+| `status.in_quickbooks` | In QuickBooks | the status, linked |
+| `status.added` | Added to QuickBooks | the status, an add that completed |
+| `status.done`, `status.done_with` | Done; Done: %{outcome} | the status, completed |
+| `status.failed`, `status.failed_with` | Couldn't sync; Couldn't sync: %{message} | the status, failed |
+| `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |
+| `status.cancelled`, `status.cancelled_with` | Cancelled; Cancelled: %{reason} | the status, cancelled |
+| `status.cancel_reason` | it was stopped before it finished | `Run#cancel_reason_text` with no reason |
+| `status.needs_answer` | Needs your answer | the status, asking a question |
+| `status.starting` | Sending to QuickBooks | the status, just started |
+| `status.unconfirmed` | Still waiting for QuickBooks | the status, a start unconfirmed for a minute |
+| `status.running` | Syncing with QuickBooks | the status, running |
+| `status.quiet` | No update from QuickBooks for a while. | above the redeliver button |
+| `status.check_for_updates` | Check for updates | the redeliver button |
+| `status.try_again` | Try sending again | the retry button |
+| `errors.not_starting` | This was already sent, so there's nothing to try again. | a retry of a start that isn't waiting |
+| `errors.not_quiet` | This was updated recently. Check again in a few minutes. | a redeliver of a run that isn't quiet |
+| `errors.no_update_yet` | There's no update yet. Check again in a few minutes. | a redeliver with nothing to send (409) |
+| `errors.checked_just_now` | That was checked a moment ago. Try again in a minute. | a redeliver asked too soon (429) |
+| `errors.unreachable` | Couldn't reach QuickBooks' sync service just now. Try again in a minute. | a redeliver QuBe Sync didn't answer |
+| `errors.disconnect_unreachable` | Couldn't reach QuickBooks' sync service just now. Try disconnecting again in a minute. | a disconnect QuBe Sync didn't answer |
+| `errors.still_syncing` | Something is still syncing with this company file. Let it finish, or answer its question, then disconnect. | a disconnect while work is going |
+| `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
+| `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
+| `question.select_all`, `question.select_row` | Select all; Select %{label} | the rows table's checkboxes (labels for screen readers) |
+| `question.record` | Record | the rows table's first column |
+| `question.set_selected`, `question.selected.one`, `question.selected.other` | Set selected; %{count} selected | the rows table's "Set selected" row |
+| `question.apply` | Apply | its buttons |
+| `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
+| `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
+
+`QubeRails.t(key, **options)` looks one up as the engine does. A question's own words (its message,
+details, choices and field labels) are QuBe Sync's prompt, in English. The route constants
+(`RunsController::NOT_QUIET` and the rest) are these keys, as Symbols.
 
 ## Storage
 

@@ -25,11 +25,12 @@ module QubeRails
       [run, operation, record]
     end
 
-    # Back to the page, with message in the flash for the engine's partials to show
-    # (qube_rails/_question and _run_status). The forms post through Turbo in most apps, which
+    # Back to the page, with message (a Symbol is an I18n key under qube_rails, a String the
+    # sentence itself) in the flash for the engine's partials to show (qube_rails/_question and
+    # _run_status). The forms post through Turbo in most apps, which
     # shows nothing for a plain-text 409 or 422, so a failed answer or retry says why this way.
     def back_with_error(message)
-      flash[:qube_rails_error] = message
+      flash[:qube_rails_error] = message.is_a?(Symbol) ? QubeRails.t(message) : message
       redirect_back fallback_location: "/", status: :see_other
     end
   end

@@ -48,8 +48,9 @@ module QubeRails
       send_to_setup(connection)
     end
 
-    RUNS_GOING = "It has a run or request that hasn't ended: wait for it, or answer its question, first."
-    NO_ANSWER = "QuBe Sync didn't answer: try disconnecting again in a minute."
+    # What the page says when it can't, as I18n keys under qube_rails (config/locales/en.yml).
+    RUNS_GOING = :"errors.still_syncing"
+    NO_ANSWER = :"errors.disconnect_unreachable"
 
     # DELETE /quickbooks/connections/:id: disconnects one of the signed-in account's
     # connections. QuBe Sync deletes its connection (the Web Connector stops syncing that
@@ -87,8 +88,8 @@ module QubeRails
     end
 
     # The engine's partials show the message once.
-    def back_with_error(message)
-      flash[:qube_rails_error] = message
+    def back_with_error(key)
+      flash[:qube_rails_error] = QubeRails.t(key)
       redirect_back fallback_location: "/", status: :see_other
     end
 

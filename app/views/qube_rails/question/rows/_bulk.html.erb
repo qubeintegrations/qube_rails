@@ -3,6 +3,6 @@
 <td data-qube-bulk="<%= cell.column %>">
 <% if cell.field %>
   <%= render cell.field.partial, field: cell.field %>
-  <button type="button" class="<%= qube_classes(:button_secondary, "qube-bulk-apply") %>" data-qube-bulk-apply>Apply</button>
+  <button type="button" class="<%= qube_classes(:button_secondary, "qube-bulk-apply") %>" data-qube-bulk-apply><%= QubeRails.t("question.apply") %></button>
 <% end %>
 </td>

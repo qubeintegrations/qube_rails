@@ -6,8 +6,6 @@ module QubeRails
   # :sending, :needs_answer, :in_quickbooks, :done, :failed, :cancelled); state the latest run's
   # ("starting", "running", "awaiting_input", "completed", "failed" or "cancelled"), or nil.
   class RunStatusView
-    QUIET_TEXT = "No news from QuBe Sync about it for a while."
-
     attr_reader :status, :state, :summary, :detail, :quiet_text, :retry_url, :redeliver_url, :error
 
     # From a QubeRails::SyncStatus. urls answers retry_start_path(run) and redeliver_path(run):
@@ -18,7 +16,7 @@ module QubeRails
       detail = sync.failed? && run ? run.error_detail : nil
       stuck = run ? run.looks_stuck? : false
       new(status: sync.status, state: state, summary: sync.summary_text, detail: detail,
-          quiet_text: stuck ? QUIET_TEXT : nil,
+          quiet_text: stuck ? QubeRails.t("status.quiet") : nil,
           retry_url: sync.unconfirmed? ? urls.retry_start_path(run) : nil,
           redeliver_url: stuck ? urls.redeliver_path(run) : nil, error: error)
     end

@@ -132,6 +132,15 @@ module QubeRails
       Rails.logger
     end
 
+    # What the screens say to a person, from I18n under qube_rails.* (config/locales/en.yml has
+    # every key): an app overrides or translates a key in its own locale files. A locale that
+    # lacks a key falls back to the engine's English.
+    def t(key, **options)
+      I18n.t(key, **options, scope: :qube_rails, raise: true)
+    rescue I18n::MissingTranslationData
+      I18n.t(key, **options, scope: :qube_rails, locale: :en)
+    end
+
     # A run, connection or record that isn't there is dropped with a warning, not raised: the
     # endpoint answered 404 unless the row existed, and the app saves a record before its run's
     # row, so by the time a job runs, a missing one was deleted, and retrying would never

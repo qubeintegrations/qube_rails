@@ -1,9 +1,11 @@
 <%# A record field: what the user types is looked up at field.search_url (GET ?field=&q=&row=,
     answering [{value, label, detail}]), and the match they pick fills the hidden input posted as
-    field.input_name. The behaviour script keys on the data-qube-* attributes. %>
+    field.input_name. The behaviour script keys on the data-qube-* attributes; the box's
+    data-qube-text-* attributes are its words (I18n's qube_rails.question.*). %>
 <% inputs = capture do %>
   <%= tag.input(type: "search", id: field.dom_id, class: qube_classes(:input, "qube-search-input"), maxlength: 100,
                 autocomplete: "off", required: field.required, disabled: field.disabled, form: field.form_attribute,
+                role: "combobox", "aria-autocomplete": "list", "aria-expanded": "false",
                 "aria-label": (field.labelled? ? nil : field.label), data: { "qube-search-input" => "" }) %>
   <%= tag.input(type: "hidden", name: field.input_name, disabled: field.disabled, form: field.form_attribute,
                 class: ["qube-search-value", field.cell? ? "qube-rows-input" : nil, field.bulk? ? "qube-bulk-value" : nil].compact.join(" "),
@@ -13,5 +15,9 @@
 <% control = content_tag(:div, inputs, class: qube_classes(:search, "qube-search"),
                          data: { "qube-search" => field.search_url, "qube-field" => field.search_field,
                                  "qube-row" => field.row_key,
-                                 "qube-result-class" => qube_classes(:search_result, "qube-search-result") }.compact) %>
+                                 "qube-result-class" => qube_classes(:search_result, "qube-search-result"),
+                                 "qube-text-no-matches" => QubeRails.t("question.no_matches"),
+                                 "qube-text-searching" => QubeRails.t("question.searching"),
+                                 "qube-text-search-failed" => QubeRails.t("question.search_failed"),
+                                 "qube-text-pick-a-match" => QubeRails.t("question.pick_a_match") }.compact) %>
 <%= render "qube_rails/question/field", field: field, control: control %>

@@ -116,32 +116,36 @@ module QubeRails
     end
 
     # Where it stands, in one plain sentence for a person: "Added to QuickBooks", "Done",
-    # "Failed: <message>", "Cancelled: <reason>", "Waiting for your answer", "Starting", "Not
-    # confirmed by QuBe Sync yet" or "Running".
+    # "Couldn't sync: <message>", "Cancelled: <reason>", "Needs your answer", "Sending to
+    # QuickBooks", "Still waiting for QuickBooks" (a start unconfirmed for a minute) or "Syncing
+    # with QuickBooks". The words are I18n's, under qube_rails.status (QubeRails.t).
     def summary_text
-      return "Cancelled: #{cancel_reason_text}" if cancelled?
+      if cancelled?
+        reason = cancel_reason.to_s.strip
+        return reason.empty? ? QubeRails.t("status.cancelled") : QubeRails.t("status.cancelled_with", reason: reason)
+      end
 
       case state
       when "starting"
-        unconfirmed? ? "Not confirmed by QuBe Sync yet" : "Starting"
+        QubeRails.t(unconfirmed? ? "status.unconfirmed" : "status.starting")
       when "completed"
         case outcome.to_s
-        when "added" then "Added to QuickBooks"
-        when "", "completed" then "Done"
-        else "Done: #{humanize(outcome)}"
+        when "added" then QubeRails.t("status.added")
+        when "", "completed" then QubeRails.t("status.done")
+        else QubeRails.t("status.done_with", outcome: humanize(outcome))
         end
       when "failed"
         message = error_message
-        message ? "Failed: #{message}" : "Failed"
-      when "awaiting_input" then "Waiting for your answer"
-      else "Running"
+        message ? QubeRails.t("status.failed_with", message: message) : QubeRails.t("status.failed")
+      when "awaiting_input" then QubeRails.t("status.needs_answer")
+      else QubeRails.t("status.running")
       end
     end
 
     # Why it was cancelled: the reason it carried, else what a cancelled outcome means.
     def cancel_reason_text
       reason = cancel_reason.to_s.strip
-      reason.empty? ? "your app chose to stop" : reason
+      reason.empty? ? QubeRails.t("status.cancel_reason") : reason
     end
 
     # A failed run's message: its error's own (a sentence, or the message of a code, message and
@@ -154,7 +158,7 @@ module QubeRails
         end
       text = text.to_s.strip
       return text unless text.empty?
-      return "it couldn't be started" if outcome.nil? && ended_at.nil?
+      return QubeRails.t("status.not_started") if outcome.nil? && ended_at.nil?
 
       outcome.to_s.empty? || outcome == "failed" ? nil : humanize(outcome)
     end

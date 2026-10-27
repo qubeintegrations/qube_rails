@@ -15,8 +15,8 @@ module QubeRails
   # Behind your sign-in, as your ApplicationController (config.parent_controller) is. The answers
   # come from forms, so they carry your CSRF token, as the partial writes it.
   class QuestionsController < QubeRails.config.parent_controller.constantize
-    CHANGED = "This question changed since the page showed it, so that answer was not sent: " \
-              "the page now shows where it stands."
+    # What the page says when the answer wasn't sent, as an I18n key under qube_rails.
+    CHANGED = :"errors.question_changed"
 
     include RunAuthorization
 
@@ -124,9 +124,9 @@ module QubeRails
     # What QuBe Sync said was wrong with an answer, in words (its errors.detail).
     def refusal(error)
       detail = JSON.parse(error.body.to_s).dig("errors", "detail")
-      detail ? "QuBe Sync couldn't take that answer: #{detail}" : "QuBe Sync couldn't take that answer."
+      detail ? QubeRails.t(:"errors.answer_refused_with", detail: detail) : QubeRails.t(:"errors.answer_refused")
     rescue JSON::ParserError, TypeError, NoMethodError
-      "QuBe Sync couldn't take that answer."
+      QubeRails.t(:"errors.answer_refused")
     end
   end
 end

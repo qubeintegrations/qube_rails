@@ -34,14 +34,14 @@ RSpec.describe QubeRails::Run do
       expect(run).to be_failed
       expect(run.error).to eq("code" => "no_such_customer", "message" => "No customer named Riverbend",
                               "detail" => "Add the customer, then start again.")
-      expect(run.summary_text).to eq("Failed: No customer named Riverbend")
+      expect(run.summary_text).to eq("Couldn't sync: No customer named Riverbend")
       expect(run.error_detail).to eq("Add the customer, then start again.")
     end
 
     it "takes an error that's a sentence" do
       run_event("workflow_run.failed", "revision" => 2)
 
-      expect(run.summary_text).to start_with("Failed: Five renames were tried")
+      expect(run.summary_text).to start_with("Couldn't sync: Five renames were tried")
       expect(run.error_detail).to be_nil
     end
 
@@ -62,17 +62,17 @@ RSpec.describe QubeRails::Run do
   end
 
   it "says where it stands in a sentence" do
-    expect(run.summary_text).to eq("Running")
+    expect(run.summary_text).to eq("Syncing with QuickBooks")
     run.update!(state: "awaiting_input")
-    expect(run.summary_text).to eq("Waiting for your answer")
+    expect(run.summary_text).to eq("Needs your answer")
     run.update!(state: "completed", outcome: "completed")
     expect(run.summary_text).to eq("Done")
     run.update!(state: "completed", outcome: "used_existing")
     expect(run.summary_text).to eq("Done: Used existing")
     run.update!(state: "failed", outcome: nil, ended_at: nil, error: nil)
-    expect(run.summary_text).to eq("Failed: it couldn't be started")
+    expect(run.summary_text).to eq("Couldn't sync: it couldn't be sent")
     run.update!(state: "cancelled", cancel_reason: nil)
-    expect(run.summary_text).to eq("Cancelled: your app chose to stop")
+    expect(run.summary_text).to eq("Cancelled")
   end
 
   it "reads a completed run whose outcome is cancelled as cancelled, not done" do
@@ -81,18 +81,18 @@ RSpec.describe QubeRails::Run do
     expect(run).to be_cancelled
     expect(run).to be_ended
     expect(run).not_to be_failed
-    expect(run.summary_text).to eq("Cancelled: your app chose to stop")
+    expect(run.summary_text).to eq("Cancelled")
     run.update!(cancel_reason: "Merged in the CRM")
     expect(run.summary_text).to eq("Cancelled: Merged in the CRM")
   end
 
   it "says a start QuBe Sync hasn't confirmed for a minute is unconfirmed, and a younger one is starting" do
     fresh = make_run(invoice, connection).tap { |r| r.update!(state: "starting") }
-    expect(fresh.summary_text).to eq("Starting")
+    expect(fresh.summary_text).to eq("Sending to QuickBooks")
     expect(fresh).not_to be_unconfirmed
 
     old = travel_to(2.minutes.ago) { make_run(invoice, connection).tap { |r| r.update!(state: "starting") } }
-    expect(old.summary_text).to eq("Not confirmed by QuBe Sync yet")
+    expect(old.summary_text).to eq("Still waiting for QuickBooks")
     expect(old).to be_unconfirmed
   end
 end

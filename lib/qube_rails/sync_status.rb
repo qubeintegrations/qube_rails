@@ -112,7 +112,7 @@ module QubeRails
     # when a run says it), or nil when it hasn't been sent.
     def summary_text
       return nil if not_sent?
-      return "In QuickBooks" if in_quickbooks? && run&.state != "completed"
+      return QubeRails.t("status.in_quickbooks") if in_quickbooks? && run&.state != "completed"
 
       run.summary_text
     end

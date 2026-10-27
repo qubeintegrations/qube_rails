@@ -6,6 +6,28 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- The screens never name QuBe Sync (or runs, webhooks, revisions or ListIDs) to an app's users, and
+  every word they say comes from I18n under `qube_rails.*` (`config/locales/en.yml`, README,
+  "Wording and translations"), so an app can reword or translate them; `QubeRails.t`. New wording:
+  "Sending to QuickBooks", "Syncing with QuickBooks", "Still waiting for QuickBooks" (was "Not
+  confirmed by QuBe Sync yet"), "Needs your answer", "Couldn't sync: ..." (was "Failed: ..."), "Check
+  for updates" (was "Send its latest news again"), "Try sending again" (was "Try the start again"),
+  and the routes' messages. The route constants are now I18n keys (Symbols); `RunStatusView::QUIET_TEXT`
+  is gone (`QubeRails.t("status.quiet")`).
+- A design pass on the stylesheet, the partials and the storyboard: system font, a 4/8/12/16/24
+  spacing scale, hairline borders, one accent, light and dark through `color-scheme`; the first choice
+  is the primary action and cancel the quietest; the status as a pill with a coloured dot; calm
+  inline errors; buttons that give on press; the search box as a full combobox (arrows, Enter,
+  Escape, closes on blur, `aria-expanded` / `aria-activedescendant` / `listbox` / `option`, a quiet
+  "Searching…" only for a slow answer, its words from `data-qube-text-*`); the rows table with a
+  sticky header and record column, an edge fade while it scrolls, "Set selected" shown with its
+  count only while rows are ticked, select-all's indeterminate state, fading columns and a tint on
+  cells it fills; 40px touch targets; short transform/opacity motion that respects reduced motion.
+  The storyboard is a gallery: a sticky list of screens by group, each screen a card on a canvas
+  (as your page, light or dark) with its override files behind a disclosure, each copyable. Every
+  `data-qube-*` attribute, posted name, route and view-model field is unchanged; new markup
+  (`data-qube-rows-bulk`, `data-qube-rows-count`, `data-qube-rows-scroll`, `.qube-rows-frame`) is
+  additive.
 - Styling (README, "Styling"). The question and run status partials are made of small pieces
   (`qube_rails/question/*`, `qube_rails/question/fields/*`, `qube_rails/question/rows/*`,
   `qube_rails/run_status/*`, `qube_rails/_error`), each overridable at its path, rendered from
@@ -48,7 +70,7 @@ into every Rails app, so the app keeps only its own.
   shows a route's message on a page without the run partials.
 - A changed question's message no longer asks for a reload: "This question changed since the
   page showed it, so that answer was not sent: the page now shows where it stands."
-- `POST qube/runs/:id/redeliver` and the run status partial's "Send its latest news again" for a
+- `POST qube/runs/:id/redeliver` and the run status partial's "Check for updates" for a
   run that looks stuck (`Run#looks_stuck?`): QuBe Sync sends its latest event again
   (qube_sync's `redeliver_run`). `SyncStatus` has `:done` for a run that completed and linked
   nothing, so `:in_quickbooks` always means a link with a `qb_id`.
@@ -119,7 +141,7 @@ into every Rails app, so the app keeps only its own.
 - Every ending kept on the run row (state, outcome, error, cancel_reason, ended_at) before the
   app's handler runs; `Run#ended?`, `#failed?`, `#cancelled?`, `#summary_text`, and the
   `qube_rails/run_status` partial. A completed run on a `cancelled` outcome reads as cancelled; a
-  start unconfirmed for a minute reads "Not confirmed by QuBe Sync yet", with a "Try the start
+  start unconfirmed for a minute reads "Still waiting for QuickBooks", with a "Try sending
   again" button posting to `POST qube/runs/:id/retry_start`.
 - Adoption takes only a never-connected (or simulated) QuBe Sync connection whose `created_at` is at or after the
   row's, with its webhook URL and name; one with no `created_at` is never adopted.

@@ -5,7 +5,7 @@
     "id": "add_transaction / ask_about_add",
     "kind": "decision",
     "token": "Xh6rV8wBt4QjC6eE",
-    "message": "QuickBooks never answered when the transaction was added, and the run could not settle whether it was. If it is in QuickBooks -- one of the candidates, or one you find -- use it; if it isn't, add it again.",
+    "message": "QuickBooks didn't confirm whether this invoice went in. If it's the one below, use it; if it isn't there, add it again.",
     "data": {
       "operation": "invoice",
       "why": "lost_answer",
