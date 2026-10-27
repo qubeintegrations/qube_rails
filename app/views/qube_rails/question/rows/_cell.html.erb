@@ -1,0 +1,11 @@
+<%# One cell (a QubeRails::CellView): its control, or what the row already has. data-qube-hidden
+    marks a column whose "when" doesn't hold yet (its input disabled, so it isn't sent). %>
+<% content = capture do %>
+<%   if cell.field %>
+  <%= render cell.field.partial, field: cell.field %>
+<%   else %>
+  <%= cell.preset %>
+<%   end %>
+<% end %>
+<%= content_tag :td, content, data: { "qube-col" => cell.column, "qube-when" => cell.when_json,
+                                      "qube-hidden" => (cell.hidden? ? "" : nil) }.compact %>

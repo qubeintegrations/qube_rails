@@ -37,6 +37,8 @@ when "postgres" then gem "pg"
 when "mysql" then gem "mysql2"
 end
 
+# The dummy app serves the engine's assets (qube_rails/question.js, qube_rails.css) through Propshaft.
+gem "propshaft"
 gem "rake"
 gem "rspec-rails"
 gem "webmock"

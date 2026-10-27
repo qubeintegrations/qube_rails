@@ -25,4 +25,11 @@ QubeRails::Engine.routes.draw do
   # search.
   post "qube/questions/runs/:id", to: "questions#create", as: :question
   get "qube/questions/runs/:id/search", to: "questions#search", as: :question_search
+
+  # Every screen with sample data, while config.storyboard is true: a search answered from the
+  # samples, and a no-op every form posts to.
+  get "qube/storyboard", to: "storyboard#index", as: :storyboard
+  get "qube/storyboard/:screen", to: "storyboard#show", as: :storyboard_screen
+  get "qube/storyboard/:screen/search", to: "storyboard#search", as: :storyboard_search
+  post "qube/storyboard/:screen/answer", to: "storyboard#answer", as: :storyboard_answer
 end

@@ -1,0 +1,51 @@
+{
+  "title": "A pick from a list",
+  "note": "resolve_transaction's ask: an option whose field has choose becomes one choice per item (use:1, use:2, ...), each with its detail; the server fills the field.",
+  "prompt": {
+    "id": "resolve_transaction / ask",
+    "kind": "decision",
+    "token": "Tc7mR3sWp9KdX2yA",
+    "message": "More than one invoice could be the one you meant. Pick it, say none of these is it, or cancel.",
+    "data": {
+      "ref_number": "1042"
+    },
+    "details": [
+      {
+        "label": "Invoice",
+        "value": "1042"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "use:1",
+        "label": "1042",
+        "description": null,
+        "detail": "2026-10-20 · Riverbend Electric · 1250.00",
+        "fields": []
+      },
+      {
+        "id": "use:2",
+        "label": "1042-B",
+        "description": null,
+        "detail": "2026-10-21 · Riverbend Electric · 310.50",
+        "fields": []
+      },
+      {
+        "id": "none",
+        "label": "None of these",
+        "description": null,
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

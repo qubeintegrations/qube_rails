@@ -1,0 +1,53 @@
+{
+  "title": "An answer QuBe Sync refused (422)",
+  "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail), from flash[:qube_rails_error].",
+  "error": "QuBe Sync couldn't take that answer: name is required.",
+  "prompt": {
+    "id": "ensure / ask_rename",
+    "kind": "decision",
+    "token": "Zk8tX1yDv6SmE8gG",
+    "message": "\"Riverbend Electric\" already belongs to a record of another list (Vendor), and QuickBooks keeps names unique across customers, vendors, employees and other names, and across every type of item. Add this one under another name, or cancel.",
+    "data": {
+      "kind": "customer",
+      "name": "Riverbend Electric",
+      "existing": {
+        "list": "vendor"
+      }
+    },
+    "details": [
+      {
+        "label": "Customer",
+        "value": "Riverbend Electric"
+      },
+      {
+        "label": "Held by",
+        "value": "Vendor"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "rename",
+        "label": "Add it under another name",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "name",
+            "type": "string",
+            "label": "New name",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": "Stop here. Nothing is created.",
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

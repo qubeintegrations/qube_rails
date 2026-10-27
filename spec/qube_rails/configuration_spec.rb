@@ -90,4 +90,24 @@ RSpec.describe QubeRails::Configuration do
 
     expect(log_output).to include("WARN QuBe Sync: retrying GET https://qube.example/api/v2/x (503) in 0.3 s")
   end
+
+  it "takes ui_classes by piece, as a String or an Array, and refuses a piece it doesn't have, naming them" do
+    config.ui_classes = { button: %w[btn btn-primary], "input" => "form-control" }
+    expect(config.ui_classes).to eq(button: "btn btn-primary", input: "form-control")
+
+    expect { config.ui_classes = { buton: "btn" } }.to raise_error(ArgumentError) { |error|
+      expect(error.message).to include(":buton", "button, button_secondary", "search_result")
+    }
+    expect { config.ui_classes = "btn" }.to raise_error(ArgumentError, /Hash of piece/)
+  end
+
+  it "has the storyboard only in development by default, and takes true or false" do
+    expect(config.storyboard).to be(false) # the suite runs in test
+    allow(Rails.env).to receive(:development?).and_return(true)
+    expect(config.storyboard).to be(true)
+
+    config.storyboard = false
+    expect(config.storyboard).to be(false)
+    expect { config.storyboard = "yes" }.to raise_error(ArgumentError, /true or false/)
+  end
 end

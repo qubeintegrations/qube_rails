@@ -1,0 +1,77 @@
+{
+  "title": "A near match",
+  "note": "resolve's ask: QuickBooks has no record with exactly that name. The similar ones are choices (detail says why), then a search for another one, none of these, or cancel.",
+  "prompt": {
+    "choices": [
+      {
+        "description": null,
+        "detail": "similar name",
+        "fields": [],
+        "id": "use:1",
+        "label": "Riverbend Electric"
+      },
+      {
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "kind": "customer",
+            "label": "The one to use",
+            "name": "list_id",
+            "required": true,
+            "type": "record"
+          }
+        ],
+        "id": "use",
+        "label": "Another one…"
+      },
+      {
+        "description": null,
+        "detail": null,
+        "fields": [],
+        "id": "none",
+        "label": "None of these"
+      },
+      {
+        "description": null,
+        "detail": null,
+        "fields": [],
+        "id": "cancel",
+        "label": "Cancel"
+      }
+    ],
+    "data": {
+      "name": "Riverbend"
+    },
+    "details": [
+      {
+        "label": "Customer",
+        "value": "Riverbend"
+      }
+    ],
+    "id": "resolve / ask",
+    "kind": "decision",
+    "message": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
+    "options": [],
+    "token": "Vq3kT9xRb2LmW8sZ"
+  },
+  "search": {
+    "list_id": [
+      {
+        "value": "80000001-1700000000",
+        "label": "Riverbend Electric",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000002-1700000000",
+        "label": "Riverbend Supply Co.",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000003-1700000000",
+        "label": "Lone Star Supply",
+        "detail": "Customer"
+      }
+    ]
+  }
+}

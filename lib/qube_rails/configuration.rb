@@ -30,6 +30,48 @@ module QubeRails
       @base_url = nil
       @webhook_secret = nil
       @webhook_url = nil
+      @ui_classes = {}.freeze
+      @storyboard = nil
+    end
+
+    # The pieces of the engine's screens config.ui_classes can add classes to.
+    UI_PIECES = %i[
+      question message details choice choice_detail choice_description field label input select checkbox
+      button button_secondary search search_results search_result table bulk status summary detail error
+    ].freeze
+
+    # Your CSS framework's classes for the engine's screens, by piece, added beside each element's
+    # qube- classes (a String, or an Array of them):
+    #   config.ui_classes = { button: "btn btn-primary", input: "form-control", table: "table" }
+    # A piece not in UI_PIECES raises, naming them.
+    def ui_classes=(map)
+      raise ArgumentError, "ui_classes is a Hash of piece => CSS classes, in #{FILE}" unless map.respond_to?(:each_pair)
+
+      list = {}
+      map.each_pair do |piece, classes|
+        key = piece.to_s.to_sym
+        unless UI_PIECES.include?(key)
+          raise ArgumentError, "ui_classes has no piece #{piece.inspect}: it takes #{UI_PIECES.join(", ")}, in #{FILE}"
+        end
+
+        list[key] = Array(classes).flatten.map(&:to_s).reject(&:empty?).join(" ").freeze
+      end
+      @ui_classes = list.freeze
+    end
+
+    attr_reader :ui_classes
+
+    # Whether GET qube/storyboard shows every screen with sample data. Default: in development.
+    def storyboard
+      return @storyboard unless @storyboard.nil?
+
+      defined?(Rails) && Rails.respond_to?(:env) ? Rails.env.development? : false
+    end
+
+    def storyboard=(value)
+      raise ArgumentError, "storyboard is true or false, in #{FILE}" unless [true, false].include?(value)
+
+      @storyboard = value
     end
 
     # Each operation, and each plain request (QubeRails::Request), by its slug (the SLUG its row

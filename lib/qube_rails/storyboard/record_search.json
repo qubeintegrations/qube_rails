@@ -1,0 +1,78 @@
+{
+  "title": "A record search field",
+  "note": "resolve's ask_pick: the person looks the record up by name. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
+  "prompt": {
+    "id": "resolve / ask_pick",
+    "kind": "decision",
+    "token": "Sb4kQ2rTn8LmV1xZ",
+    "message": "QuickBooks has no customer named \"Lone Star Supply\". Pick the one to use, look it up under another name, or cancel.",
+    "data": {
+      "name": "Lone Star Supply",
+      "kind": "customer"
+    },
+    "details": [
+      {
+        "label": "Customer",
+        "value": "Lone Star Supply"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "use",
+        "label": "Another one…",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "list_id",
+            "type": "record",
+            "kind": "customer",
+            "label": "The one to use",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "by_name",
+        "label": "Look it up by name",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "name",
+            "type": "string",
+            "label": "Name",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {
+    "list_id": [
+      {
+        "value": "80000001-1700000000",
+        "label": "Riverbend Electric",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000002-1700000000",
+        "label": "Riverbend Supply Co.",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000003-1700000000",
+        "label": "Lone Star Supply",
+        "detail": "Customer"
+      }
+    ]
+  }
+}

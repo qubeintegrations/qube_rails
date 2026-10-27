@@ -1,0 +1,4 @@
+<%# A start QuBe Sync hasn't confirmed for a minute: posts to retry_url, which sends it again with
+    the same reference. %>
+<%= button_to "Try the start again", run_status.retry_url, class: qube_classes(:button, "qube-retry-start"),
+              form: { class: "qube-retry-start-form" } %>

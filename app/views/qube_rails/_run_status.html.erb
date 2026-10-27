@@ -1,13 +1,11 @@
 <%# Where record stands with QuickBooks for an operation, in a sentence, and what went wrong when
-    its run failed, or nothing before it's sent. A start QuBe Sync hasn't confirmed for a minute
-    gets a "Try the start again" button, which resends it with the same reference. Render it on
-    the record's page, with connection: when the page is about one company file (else it's the
-    connection the latest run went out on):
+    its run failed, or nothing before it's sent. Render it on the record's page, with
+    connection: when the page is about one company file (else it's the connection the latest run
+    went out on):
       render "qube_rails/run_status", record: @invoice, operation: "create_invoice"
-    It reads QubeRails::SyncStatus (connection.sync_status), worked out from the record's runs and
-    its QuickBooks link. ERB escapes everything it prints, and the qube- classes (qube-sync-<status>
-    among them) are for your CSS. For other markup, copy this file to
-    app/views/qube_rails/_run_status.html.erb in your app, which Rails renders instead. %>
+    It builds a QubeRails::RunStatusView from QubeRails::SyncStatus and renders the
+    qube_rails/run_status/* pieces; override a piece by putting a file at its path in your app
+    (README, "Styling"). %>
 <% unless QubeRails.config.operation_class(operation) %>
 <%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
 <% end %>
@@ -16,28 +14,8 @@
          else
            QubeRails::SyncStatus.latest(record, operation: operation)
          end %>
-<% run = sync.run %>
 <%# Refreshed when the run's next event comes, in an app with turbo-rails (QubeRails.broadcast_refresh). %>
 <%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
-<% if (error = flash[:qube_rails_error]) %>
-<%   flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
-<p class="qube-error"><%= error %></p>
-<% end %>
-<% unless sync.not_sent? %>
-<div class="qube-run-status qube-sync-<%= sync.status %><%= " qube-run-#{run.cancelled? ? "cancelled" : run.state}" if run %>"
-     data-qube-sync-status="<%= sync.status %>">
-  <p class="qube-run-summary"><%= sync.summary_text %></p>
-<%   if sync.failed? && run.error_detail %>
-  <p class="qube-run-error-detail"><%= run.error_detail %></p>
-<%   end %>
-<%   if run&.looks_stuck? %>
-  <p class="qube-run-quiet">No news from QuBe Sync about it for a while.</p>
-  <%= button_to "Send its latest news again", qube_rails.redeliver_path(run), class: "qube-redeliver",
-                form: { class: "qube-redeliver-form" } %>
-<%   end %>
-<%   if sync.unconfirmed? %>
-  <%= button_to "Try the start again", qube_rails.retry_start_path(run), class: "qube-retry-start",
-                form: { class: "qube-retry-start-form" } %>
-<%   end %>
-</div>
-<% end %>
+<% error = flash[:qube_rails_error] %>
+<% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
+<%= render "qube_rails/run_status/status", run_status: QubeRails::RunStatusView.from_sync(sync, qube_rails, error: error) %>

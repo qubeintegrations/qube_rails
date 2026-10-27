@@ -1,0 +1,5 @@
+<%# A run that looks stuck: posts to redeliver_url, which asks QuBe Sync to send its latest event
+    again. %>
+<p class="qube-run-quiet"><%= run_status.quiet_text %></p>
+<%= button_to "Send its latest news again", run_status.redeliver_url,
+              class: qube_classes(:button_secondary, "qube-redeliver"), form: { class: "qube-redeliver-form" } %>

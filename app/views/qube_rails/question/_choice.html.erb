@@ -1,0 +1,19 @@
+<%# One choice (a QubeRails::ChoiceView): a form posting choice=<id> and data[...] for its fields
+    to choice.action_url, with your CSRF token. %>
+<form class="<%= qube_classes(:choice, "qube-choice") %>" method="post" action="<%= choice.action_url %>"
+      data-qube-choice="<%= choice.id %>">
+  <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
+  <%= hidden_field_tag :choice, choice.id, id: nil %>
+<% choice.fields.each do |field| %>
+  <%= render field.partial, field: field %>
+<% end %>
+  <button type="submit" class="<%= qube_classes(choice.secondary? ? :button_secondary : :button, "qube-choice-button") %>">
+    <%= choice.label %>
+<% if choice.detail %>
+    <span class="<%= qube_classes(:choice_detail, "qube-choice-detail") %>"><%= choice.detail %></span>
+<% end %>
+  </button>
+<% if choice.description %>
+  <p class="<%= qube_classes(:choice_description, "qube-choice-description") %>"><%= choice.description %></p>
+<% end %>
+</form>

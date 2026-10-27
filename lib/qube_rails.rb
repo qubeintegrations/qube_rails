@@ -11,6 +11,10 @@ require "qube_rails/operation"
 require "qube_rails/request"
 require "qube_rails/sync_status"
 require "qube_rails/connection_events"
+require "qube_rails/question_view"
+require "qube_rails/run_status_view"
+require "qube_rails/view_helpers"
+require "qube_rails/storyboard"
 
 # QuBe Sync's Rails engine: the code that's the same in every Rails app's integration. Your app
 # keeps its own: config/initializers/qube_rails.rb (QubeRails.configure), an operation class per

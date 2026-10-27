@@ -1,0 +1,15 @@
+<%# The wrapper every field piece renders its control (control, HTML) in: a choice's field gets
+    its label; inside a rows table, the control stands alone. %>
+<% if field.labelled? %>
+<div class="<%= qube_classes(:field, "qube-field", "qube-field-#{field.type}") %>">
+<%   if field.type == "boolean" %>
+  <%= control %>
+  <%= label_tag field.dom_id, field.label, class: qube_classes(:label, "qube-label") %>
+<%   else %>
+  <%= label_tag field.dom_id, field.label, class: qube_classes(:label, "qube-label") %>
+  <%= control %>
+<%   end %>
+</div>
+<% else %>
+<%= control %>
+<% end %>

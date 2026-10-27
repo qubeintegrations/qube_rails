@@ -1,5 +1,13 @@
-<%# A message a QuBe Sync route went back with, shown once: for a page without the run partials. %>
-<% if (error = flash[:qube_rails_error]) %>
+<%# A message from one of the engine's routes, shown once. Without a message local it takes
+    flash[:qube_rails_error], for a page without the run partials:
+      render "qube_rails/error"
+    The question and run status pieces pass theirs (message: nil shows nothing). %>
+<% if local_assigns.key?(:message) %>
+<%   message = local_assigns[:message] %>
+<% else %>
+<%   message = flash[:qube_rails_error] %>
 <%   flash.delete(:qube_rails_error) %>
-<p class="qube-error"><%= error %></p>
+<% end %>
+<% if message.present? %>
+<p class="<%= qube_classes(:error, "qube-error") %>" role="alert"><%= message %></p>
 <% end %>

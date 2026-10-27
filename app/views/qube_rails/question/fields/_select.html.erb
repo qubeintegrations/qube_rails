@@ -1,0 +1,10 @@
+<%# A fixed list (field.options, each value and label), with a blank first. %>
+<% control = capture do %>
+<%= select_tag field.input_name, options_for_select(field.options.map { |o| [o.label, o.value] }),
+               id: field.dom_id, include_blank: true, required: field.required, disabled: field.disabled,
+               form: field.form_attribute,
+               class: qube_classes(:select, "qube-select", field.cell? ? "qube-rows-input" : nil,
+                                   field.bulk? ? "qube-bulk-value" : nil),
+               "aria-label": (field.labelled? ? nil : field.label), data: field.data %>
+<% end %>
+<%= render "qube_rails/question/field", field: field, control: control %>

@@ -39,7 +39,9 @@ The generator writes:
 - `app/services/quickbooks_desktop/connection_events.rb`, your class for a connection's events;
 - the engine's migration (`bin/rails qube_rails:install:migrations`), which adds
   `qube_connections`, `qube_runs`, `qube_notifications` and `qube_quickbooks_records`;
-- `mount QubeRails::Engine => "/"` in `config/routes.rb`.
+- `mount QubeRails::Engine => "/"` in `config/routes.rb`;
+- `<%= qube_rails_assets %>` in your layout's `<head>`, the question's behaviour script
+  ([Styling](#styling)).
 
 Fill in `current_account` in the initializer before anything else: onboarding and the question
 routes both need it.
@@ -60,6 +62,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
 | `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Send its latest news again" button. Behind your sign-in and CSRF, and `authorize_question`. |
 | `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
+| `GET qube/storyboard`, `GET qube/storyboard/:screen` | Every screen the partials show, from sample data, in your layout ([Styling](#styling)). Only while `config.storyboard` is true (404 otherwise); behind your sign-in. Its search (`GET qube/storyboard/:screen/search`) answers from the samples and its forms post to a no-op (`POST qube/storyboard/:screen/answer`): nothing reaches QuBe Sync or the database. |
 
 The webhook routes verify the signature (401 if it doesn't check out), answer 404 when the row
 isn't there, enqueue, and answer 200. No sign-in, no CSRF, the raw body, any content type, up to
@@ -112,6 +115,8 @@ end
 | `job_attempts` | how many times `QubeRails::WebhookJob` runs a delivery whose work raised, with a growing wait, before it logs an error and raises to your adapter (read when the job class loads) | `10` |
 | `dedupe` | where each run's taken notification delivery ids are kept: `once(run, delivery_id) { }`, or `seen?(key)` / `remember(key)` | `QubeRails::DatabaseDedupe`: the engine's `qube_notifications` table, in the handler's transaction |
 | `parent_controller` | the controller onboarding and the questions inherit | `"ApplicationController"` |
+| `ui_classes` | your CSS classes for the engine's screens, by piece (`{ button: "btn btn-primary" }`), added beside the `qube-` classes ([Styling](#styling)); an unknown piece raises, naming them | `{}` |
+| `storyboard` | whether `GET qube/storyboard` shows every screen with sample data | `Rails.env.development?` |
 | `api_key` | | `QUBE_API_KEY` |
 | `base_url` | | `QUBE_URL`, else `https://qubesync.com` |
 | `webhook_secret` | a secret, or a list while one rotates | `QUBE_WEBHOOK_SECRET` |
@@ -517,8 +522,8 @@ Show the latest run's on the record's page:
 
 Its locals are `record` and `operation`. It shows the summary (`.qube-run-summary`, inside
 `.qube-run-status.qube-run-<state>`) and, for a failure, the error's detail
-(`.qube-run-error-detail`), and nothing for a record with no runs. Copy it to
-`app/views/qube_rails/_run_status.html.erb` for other markup.
+(`.qube-run-error-detail`), and nothing for a record with no runs. Its pieces are
+`qube_rails/run_status/*`: see [Styling](#styling) to restyle or replace any of them.
 
 ## Sync status
 
@@ -593,9 +598,9 @@ record's page:
 Its locals are `record` and `operation` (the slug). It shows the open question of that record's
 latest run of that operation, and nothing when that run isn't asking. Each choice is a form
 posting to the run's question route with your CSRF token, and a record field's box searches
-through your app, so the API key never reaches the browser. Style it with its `qube-` classes, or
-copy the partial to `app/views/qube_rails/_question.html.erb` in your app for other markup: Rails
-renders yours instead.
+through your app, so the API key never reaches the browser. Its search boxes and rows table need
+the behaviour script (`qube_rails_assets` in your layout). Its pieces are `qube_rails/question/*`:
+see [Styling](#styling) to restyle or replace any of them.
 
 A rows field (`add_transaction`'s one question for every record QuickBooks doesn't have) shows as a
 table: a row per record with the columns it asks, a column shown only while its `when` holds,
@@ -604,6 +609,172 @@ every ticked row. Its answer is `{"records": {row key => {column => value}}}`.
 
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
 goes back to the page with a message; the run's next webhook says what came of it.
+
+## Styling
+
+The partials render plain, semantic HTML with `qube-` classes. Make them match your app three ways,
+from least to most work; [the storyboard](#the-storyboard) shows every screen at once while you do.
+
+### 1. The stylesheet and its variables
+
+```erb
+<%# app/views/layouts/application.html.erb, in <head> %>
+<%= qube_rails_assets stylesheet: true %>
+```
+
+`qube_rails_assets` writes the behaviour script's tag (`qube_rails/question.js`, deferred, with
+your CSP nonce when you have one) and, with `stylesheet: true`, the opt-in stylesheet's
+(`qube_rails.css`). Your asset pipeline serves both: Propshaft as it is, Sprockets through the
+engine's precompile list. Without `stylesheet: true` nothing of ours styles your page.
+
+Every rule in `qube_rails.css` is inside `:where()`, so it has no specificity and any rule of
+yours wins. It has no reset and no global styles. Theme it with CSS variables on `:root` or any
+element around the screens:
+
+```css
+:root {
+  --qube-accent: #4f46e5;   /* buttons, focus rings; default: the text colour */
+  --qube-border: #d1d5db;   /* default: the text colour, faded */
+  --qube-radius: 8px;
+  --qube-gap: 1rem;
+  --qube-font: inherit;
+  --qube-muted: #6b7280;
+  --qube-error: #b91c1c;
+  --qube-surface: #fff;     /* inputs, the table header; default: transparent */
+}
+```
+
+### 2. Class hooks
+
+`config.ui_classes` adds your CSS framework's classes beside the `qube-` ones, by piece:
+
+```ruby
+# Bootstrap
+config.ui_classes = {
+  button: "btn btn-primary", button_secondary: "btn btn-outline-secondary", input: "form-control",
+  select: "form-select", checkbox: "form-check-input", label: "form-label", table: "table table-sm",
+  error: "alert alert-danger", status: "alert alert-light", search_result: "list-group-item list-group-item-action"
+}
+# Tailwind
+config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", input: "rounded border-gray-300" }
+```
+
+| Piece | Where |
+| --- | --- |
+| `question` | the question's `<section>` |
+| `message`, `details` | its sentence, its label/value table |
+| `choice` | each choice's `<form>` |
+| `button`, `button_secondary` | a choice's button (`cancel` is secondary), the retry button; the redeliver and Apply buttons |
+| `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
+| `field`, `label` | a field's wrapper and its label (and the rows field's) |
+| `input`, `select`, `checkbox` | text, number and search inputs; selects; checkboxes |
+| `search`, `search_results`, `search_result` | a search box's wrapper, its matches' container, each match (made by the script) |
+| `table`, `bulk` | the rows table, its "Set selected" row |
+| `status`, `summary`, `detail` | the run status, its sentence, a failure's detail |
+| `error` | a one-shot error |
+
+Values are a String or an Array. An unknown piece raises when the initializer runs, naming these.
+
+### 3. Overriding a piece
+
+Each piece is a small partial. Put a file at the same path in your app and Rails renders yours;
+everything else stays the engine's. The entry points `render "qube_rails/question", record:,
+operation:` and `render "qube_rails/run_status", record:, operation:` don't change.
+
+| Partial | Local | Renders |
+| --- | --- | --- |
+| `qube_rails/question/_question` | `question` | the section: error, message, details, choices |
+| `qube_rails/question/_message`, `_details` | `question` | the sentence; the label/value rows |
+| `qube_rails/question/_choice` | `question`, `choice` | a form posting `choice` and `data[...]` with your CSRF token |
+| `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
+| `qube_rails/question/fields/_text`, `_number`, `_boolean`, `_select`, `_search`, `_rows` | `field` | one field, by `field.type` |
+| `qube_rails/question/rows/_cell`, `_bulk` | `cell` | a rows table's cell; a "Set selected" cell |
+| `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
+| `qube_rails/run_status/_summary`, `_detail`, `_retry`, `_redeliver` | `run_status` | each part |
+| `qube_rails/_error` | `message` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
+
+The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
+versions:
+
+- `QubeRails::QuestionView`: `message`, `details` (each `label`, `value`), `choices`, `token`,
+  `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
+- `QubeRails::ChoiceView`: `id`, `label`, `detail`, `description`, `fields`, `index`, `action_url`,
+  `secondary?`.
+- `QubeRails::FieldView`: `name`, `input_name` (post your value under it), `dom_id`, `type` (`text`,
+  `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
+  each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
+  `when`, `rows` (a `RowsView`), `disabled`, `partial`, and `labelled?` / `cell?` / `bulk?` for where
+  it sits.
+- `QubeRails::RowsView`: `name`, `label`, `input_name`, `search_url`, `columns` (FieldViews), `rows`,
+  `bulk` (a CellView per column, its `field` nil when the column has no bulk control).
+  `QubeRails::RowView`: `key`, `label`, `detail`, `values`, `values_json`, `cells`.
+  `QubeRails::CellView`: `column`, `field` (nil for a column the row doesn't ask), `preset` (what the
+  row already has), `when`, `when_json`, `hidden?`, `bulk`.
+- `QubeRails::RunStatusView`: `status` (`:not_sent`, `:sending`, `:needs_answer`, `:in_quickbooks`,
+  `:done`, `:failed`, `:cancelled`), `state` (the run's), `summary`, `detail`, `quiet_text`,
+  `retry_url` and `redeliver_url` (nil when the button doesn't apply; post to them), `error`,
+  `visible?`, `css_class`.
+
+A field override posts its value as `field.input_name`, so the controller reads it as it reads
+ours: a checkbox `"true"`, a number as typed, a rows cell `data[<field>][<row key>][<column>]`.
+
+### The behaviour script
+
+`qube_rails/question.js` has one set of listeners on `document`, keyed only on `data-qube-*`
+attributes. It works on any markup that carries them, after Turbo navigation too, needs no build and
+no CSP nonce (it's a file, not an inline script), and loads once however often it's included.
+
+- A search: an element with `data-qube-search="<search URL>"`, `data-qube-field="<field>"` and, in a
+  rows table, `data-qube-row="<row key>"`, holding a text input `data-qube-search-input`, a hidden
+  input `data-qube-search-value` (the one with the name, which gets the picked `value`) and a
+  container `data-qube-search-results`. Typing two characters or more asks the search URL; each
+  match is a button (classes from `data-qube-result-class`); picking one fills the hidden input and
+  fires `change` on it and `qube:picked` on the box. Until a match is picked, the text input is
+  invalid, so the form isn't sent.
+- A rows table: `data-qube-rows` around it; each row `data-qube-row` with `data-qube-values` (JSON);
+  each cell `data-qube-col="<column>"` and `data-qube-when` (JSON); each input `data-qube-rows-input`;
+  the row checkboxes `data-qube-rows-pick` and `data-qube-rows-all`; each "Set selected" cell
+  `data-qube-bulk="<column>"` with its value `data-qube-bulk-value` and button `data-qube-bulk-apply`.
+  A cell whose `when` doesn't hold gets `data-qube-hidden` and its inputs disabled, so it isn't sent.
+
+#### A custom combobox
+
+Your own component can skip the script: it needs only the search route and the hidden input.
+
+```
+GET <question action>/search?field=<field>&q=<2 to 100 characters>[&row=<row key>]
+  → 200 [{"value": "80000001-1700000000", "label": "Riverbend Electric", "detail": "Customer"}, ...]
+```
+
+At most 20 matches, behind your sign-in; the question's action is `question.action_url`
+(`field.search_url` is the whole URL). Post the picked `value` under `field.input_name`:
+
+```erb
+<%# app/views/qube_rails/question/fields/_search.html.erb %>
+<div class="field">
+  <%= label_tag field.dom_id, field.label %>
+  <%= render "shared/combobox", id: field.dom_id, name: field.input_name, required: field.required,
+             url: field.search_url, params: { field: field.search_field, row: field.row_key }.compact %>
+</div>
+```
+
+where `shared/combobox` is your component, sending `q` with those params and submitting the
+chosen `value` in a hidden input named `name`.
+
+### The storyboard
+
+`GET /qube/storyboard` shows every screen your users can meet, from sample data, in your own
+layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, an unconfirmed start
+with its retry button, running, waiting for an answer, looking stuck with its redeliver button, in
+QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
+kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
+name clash, a lost answer, the rows table, and a refused answer). Each panel names the partials to
+override for it. `GET /qube/storyboard/<screen>` shows one.
+
+It's on while `config.storyboard` is true (by default, in development), behind your sign-in. It
+calls nothing: its searches answer from the samples (`lib/qube_rails/storyboard/*.json`, prompts
+shaped as QuBe Sync sends them), its forms post to a no-op that comes back with "Storyboard:
+nothing was sent.", and no row is written.
 
 ## Storage
 

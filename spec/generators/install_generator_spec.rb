@@ -41,7 +41,7 @@ RSpec.describe QubeRails::Generators::InstallGenerator do
 
     initializer = read("config/initializers/qube_rails.rb")
     %w[operations connection_events current_account authorize_question enqueue queue job_attempts dedupe
-       parent_controller api_key base_url webhook_secret webhook_url].each do |setting|
+       parent_controller ui_classes storyboard api_key base_url webhook_secret webhook_url].each do |setting|
       expect(initializer).to include("config.#{setting}")
     end
     expect(initializer).to include('config.connection_events = "QuickbooksDesktop::ConnectionEvents"',
@@ -66,6 +66,21 @@ RSpec.describe QubeRails::Generators::InstallGenerator do
     expect(commands).to eq(["qube_rails:install:migrations"])
     expect(read("config/routes.rb")).to include('mount QubeRails::Engine => "/"')
     expect(Dir[File.join(@root, "db/migrate/*")]).to be_empty # nothing on the app's own tables
+  end
+
+  it "adds the behaviour script to the layout's head, once, and says so when there's no layout" do
+    generate
+    expect(File.exist?(File.join(@root, "app/views/layouts/application.html.erb"))).to be(false)
+
+    FileUtils.mkdir_p(File.join(@root, "app/views/layouts"))
+    File.write(File.join(@root, "app/views/layouts/application.html.erb"),
+               "<html>\n  <head>\n    <title>App</title>\n  </head>\n  <body></body>\n</html>\n")
+    generate
+    generate
+
+    layout = read("app/views/layouts/application.html.erb")
+    expect(layout.scan("<%= qube_rails_assets %>").size).to eq(1)
+    expect(layout).to include("<%= qube_rails_assets %>\n  </head>")
   end
 
   it "has the engine's install:migrations task to run" do

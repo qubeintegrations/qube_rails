@@ -1,0 +1,48 @@
+<%# The storyboard: each screen (@screens, QubeRails::Storyboard) in a panel with its name, the
+    pieces to override for it, a note, and the screen itself, rendered by the engine's partials
+    (or yours, where you've overridden them). %>
+<div class="qube-storyboard" id="qube-storyboard">
+  <header>
+    <h1>QuBe Sync screens</h1>
+    <p class="qube-storyboard-note">
+      Every screen your users can meet, from sample data, in your layout. Override a piece by putting a
+      file at its path in your app; add classes with config.ui_classes. Nothing here reaches QuBe Sync.
+      <%= link_to "All screens", qube_rails.storyboard_path if @screens.size == 1 %>
+    </p>
+<% if flash[:qube_rails_storyboard] %>
+    <p class="qube-storyboard-notice" role="status"><%= flash[:qube_rails_storyboard] %></p>
+<% end %>
+    <nav class="qube-storyboard-nav" aria-label="Screens">
+      <ul>
+<% QubeRails::Storyboard.screens.each do |screen| %>
+        <li><%= link_to screen.title, qube_rails.storyboard_screen_path(screen.key) %></li>
+<% end %>
+      </ul>
+    </nav>
+  </header>
+<% @screens.each do |screen| %>
+<%   answer = qube_rails.storyboard_answer_path(screen.key) %>
+  <section class="qube-storyboard-panel" id="qube-storyboard-<%= screen.key %>" data-qube-storyboard="<%= screen.key %>">
+    <h2><%= screen.group %>: <%= screen.title %></h2>
+    <p class="qube-storyboard-note"><%= screen.note %></p>
+<%   if screen.partials.any? %>
+    <p class="qube-storyboard-files">Override:
+<%     screen.partials.each_with_index do |partial, n| %>
+      <code><%= QubeRails::Storyboard.override_path(partial) %></code><%= "," if n < screen.partials.size - 1 %>
+<%     end %>
+    </p>
+<%   end %>
+    <div class="qube-storyboard-sample">
+<%   if screen.kind == :run_status %>
+      <%= render "qube_rails/run_status/status",
+                 run_status: QubeRails::Storyboard.run_status_view(screen, QubeRails::Storyboard::Urls.new(answer)) %>
+<%   elsif screen.kind == :error %>
+      <%= render "qube_rails/error", message: screen.sample[:message] %>
+<%   else %>
+      <%= render "qube_rails/question/question",
+                 question: QubeRails::Storyboard.question_view(screen, answer, qube_rails.storyboard_search_path(screen.key)) %>
+<%   end %>
+    </div>
+  </section>
+<% end %>
+</div>

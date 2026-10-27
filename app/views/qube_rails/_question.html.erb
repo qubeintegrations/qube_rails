@@ -1,79 +1,21 @@
 <%# The question a QuBe Sync run is asking about record, with a form per choice, or nothing
     when it isn't asking. Render it on the record's page, with its operation's slug:
       render "qube_rails/question", record: @invoice, operation: "create_invoice"
-    It's the open question of record's latest run of that operation (QubeRails::Run), as
-    QubeRails::Operation#question kept it. Each form posts your user's choice to the engine's
-    question route for that run, and a record field's box searches through it too, so the API
-    key never reaches the browser. ERB escapes everything it
-    prints, and the qube- classes are for your CSS. For other markup, copy this file to
-    app/views/qube_rails/_question.html.erb in your app, which Rails renders instead. %>
+    It builds a QubeRails::QuestionView from record's latest run of that operation and renders
+    the qube_rails/question/* pieces; override a piece by putting a file at its path in your
+    app (README, "Styling"). Its search boxes and rows table need the behaviour script
+    (qube_rails_assets in your layout). %>
 <% unless QubeRails.config.operation_class(operation) %>
 <%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
 <% end %>
 <% run = QubeRails::Run.latest_for(record, operation) %>
 <%# Refreshed when the run's next event comes, in an app with turbo-rails (QubeRails.broadcast_refresh). %>
 <%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
-<% question = run && run.open_question %>
-<% if (error = flash[:qube_rails_error]) %>
-<%   flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
-<p class="qube-error"><%= error %></p>
-<% end %>
+<% error = flash[:qube_rails_error] %>
+<% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
+<% question = QubeRails::QuestionView.from_run(run, qube_rails, error: error) %>
 <% if question %>
-<%   action = qube_rails.question_path(run) %>
-<section class="qube-question">
-  <p class="qube-question-message"><%= question["message"] %></p>
-<%   if question["details"].present? %>
-  <table class="qube-question-details">
-<%     question["details"].each do |row| %>
-    <tr><th scope="row"><%= row["label"] %></th><td><%= row["value"] %></td></tr>
-<%     end %>
-  </table>
-<%   end %>
-<%   question["choices"].to_a.each_with_index do |choice, n| %>
-  <form class="qube-choice" method="post" action="<%= action %>">
-    <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token,
-                         id: nil %>
-    <%= hidden_field_tag :choice, choice["id"], id: nil %>
-<%     choice["fields"].to_a.each do |field| %>
-<%       id = "qube-#{question["token"]}-#{n}-#{field["name"]}" %>
-<%       name = "data[#{field["name"]}]" %>
-<%       if field["type"] == "rows" %>
-    <%= render "qube_rails/question_rows", field: field, name: name, id: id, action: action %>
-<%         next %>
-<%       end %>
-    <div class="qube-field">
-      <%= label_tag id, field["label"] || field["name"] %>
-<%       if field["type"] == "record" %>
-      <div class="qube-search" data-qube-search="<%= action %>/search"
-           data-qube-field="<%= field["name"] %>">
-        <%= tag.input(type: "search", id: id, class: "qube-search-input", maxlength: 100,
-                      autocomplete: "off", required: field["required"]) %>
-        <%= hidden_field_tag name, nil, id: nil, class: "qube-search-value" %>
-        <div class="qube-search-results" aria-live="polite"></div>
-      </div>
-<%       elsif field["enum"].present? %>
-      <%= select_tag name, options_for_select(field["enum"].map { |e| [e["label"] || e["value"], e["value"]] }),
-                     id: id, include_blank: true, required: field["required"] %>
-<%       elsif field["type"] == "boolean" %>
-      <%= check_box_tag name, "true", false, id: id %>
-<%       elsif field["type"] == "number" %>
-      <%= number_field_tag name, nil, id: id, step: "any", required: field["required"] %>
-<%       else %>
-      <%= text_field_tag name, nil, id: id, required: field["required"] %>
-<%       end %>
-    </div>
-<%     end %>
-    <button type="submit" class="qube-choice-button">
-      <%= choice["label"] %>
-<%     if choice["detail"].present? %>
-      <span class="qube-choice-detail"><%= choice["detail"] %></span>
-<%     end %>
-    </button>
-<%     if choice["description"].present? %>
-    <p class="qube-choice-description"><%= choice["description"] %></p>
-<%     end %>
-  </form>
-<%   end %>
-  <%= render "qube_rails/question_script" %>
-</section>
+<%= render "qube_rails/question/question", question: question %>
+<% else %>
+<%= render "qube_rails/error", message: error %>
 <% end %>

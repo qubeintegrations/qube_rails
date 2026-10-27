@@ -12,9 +12,22 @@ module QubeRails
   #   POST qube/questions/runs/:id                 an answer, behind your sign-in and CSRF
   #   GET  qube/questions/runs/:id/search          a record field's matches, behind sign-in
   #   POST qube/runs/:id/retry_start               an unconfirmed start sent again, likewise
+  #   GET  qube/storyboard(/:screen)               every screen with sample data (config.storyboard)
   # Your views reach them through the qube_rails route proxy: qube_rails.connections_path,
   # qube_rails.connection_onboarding_path(connection).
   class Engine < ::Rails::Engine
     isolate_namespace QubeRails
+
+    # qube_rails_assets and qube_classes, in every view of the app.
+    initializer "qube_rails.view_helpers" do
+      ActiveSupport.on_load(:action_view) { include QubeRails::ViewHelpers }
+    end
+
+    # Sprockets serves only what's listed; Propshaft serves every asset path and has no list.
+    initializer "qube_rails.assets" do |app|
+      assets = app.config.respond_to?(:assets) ? app.config.assets : nil
+      precompile = assets && assets.precompile
+      precompile.concat(%w[qube_rails/question.js qube_rails.css]) if precompile.is_a?(Array)
+    end
   end
 end

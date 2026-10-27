@@ -1,0 +1,43 @@
+<%# A rows field (field.rows, a QubeRails::RowsView): a row per record with the columns it asks,
+    posted as data[<field>][<row key>][<column>]; a column shows only while its "when" holds,
+    and "Set selected" fills a column on every ticked row (the behaviour script). %>
+<% rows = field.rows %>
+<div class="<%= qube_classes(:field, "qube-field", "qube-rows") %>" data-qube-rows>
+  <p class="<%= qube_classes(:label, "qube-rows-label") %>"><%= rows.label %></p>
+  <div class="qube-rows-scroll">
+    <table class="<%= qube_classes(:table, "qube-rows-table") %>">
+      <thead>
+        <tr>
+          <th><input type="checkbox" class="<%= qube_classes(:checkbox, "qube-rows-all") %>" data-qube-rows-all aria-label="Select all"></th>
+          <th scope="col">Record</th>
+<% rows.columns.each do |column| %>
+          <th scope="col"><%= column.label %></th>
+<% end %>
+        </tr>
+        <tr class="<%= qube_classes(:bulk, "qube-rows-bulk") %>">
+          <td></td>
+          <td>Set selected</td>
+<% rows.bulk.each do |cell| %>
+          <%= render "qube_rails/question/rows/bulk", cell: cell %>
+<% end %>
+        </tr>
+      </thead>
+      <tbody>
+<% rows.rows.each do |row| %>
+        <tr data-qube-row="<%= row.key %>" data-qube-values="<%= row.values_json %>">
+          <td><input type="checkbox" class="<%= qube_classes(:checkbox, "qube-rows-pick") %>" data-qube-rows-pick aria-label="Select <%= row.label %>"></td>
+          <th scope="row">
+            <%= row.label %>
+<%   if row.detail %>
+            <span class="qube-rows-detail"><%= row.detail %></span>
+<%   end %>
+          </th>
+<%   row.cells.each do |cell| %>
+          <%= render "qube_rails/question/rows/cell", cell: cell %>
+<%   end %>
+        </tr>
+<% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

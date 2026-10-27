@@ -9,6 +9,7 @@
 #   POST /webhooks/qube/connections/:id
 #   POST /qube/questions/runs/:id                an answer, behind your sign-in and CSRF
 #   GET  /qube/questions/runs/:id/search         a record field's matches
+#   GET  /qube/storyboard                        every screen, sample data (config.storyboard)
 #
 # Its tables (qube_connections, qube_runs, qube_notifications, qube_quickbooks_records) keep
 # every connection, run and QuickBooks id; your own tables need nothing.
@@ -58,6 +59,14 @@ QubeRails.configure do |config|
   # default is the engine's qube_notifications table, written in the same transaction as the
   # handler. Rails.cache instead needs a cache your workers share, and isn't transactional:
   # config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
+
+  # Your CSS framework's classes for the engine's screens, by piece, added beside their qube-
+  # classes (pieces: QubeRails::Configuration::UI_PIECES; see the README's "Styling"):
+  # config.ui_classes = { button: "btn btn-primary", button_secondary: "btn btn-link",
+  #                       input: "form-control", select: "form-select", table: "table" }
+
+  # GET /qube/storyboard: every screen with sample data, in your layout. On in development.
+  # config.storyboard = Rails.env.development?
 
   # The controller onboarding and the questions inherit, so your sign-in and CSRF apply.
   # config.parent_controller = "ApplicationController"

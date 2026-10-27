@@ -6,9 +6,25 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
-- The question partial shows a rows field as a table (`qube_rails/question_rows`): the columns each
-  row asks, a search per record column with its row, "Set selected" for many rows; a fixed list
-  (`enum`) as a select. The search scripts are one partial, `qube_rails/question_script`.
+- Styling (README, "Styling"). The question and run status partials are made of small pieces
+  (`qube_rails/question/*`, `qube_rails/question/fields/*`, `qube_rails/question/rows/*`,
+  `qube_rails/run_status/*`, `qube_rails/_error`), each overridable at its path, rendered from
+  view-models whose fields are the contract (`QubeRails::QuestionView`, `ChoiceView`, `FieldView`,
+  `RowsView`, `RowView`, `CellView`, `RunStatusView`). The entry points `render "qube_rails/question"`
+  and `render "qube_rails/run_status"` and the posted names are unchanged.
+- `config.ui_classes`: your CSS framework's classes by piece, beside the `qube-` classes; an unknown
+  piece raises.
+- The behaviour script `qube_rails/question.js` (search boxes, the rows table), served by the app's
+  asset pipeline and keyed only on `data-qube-*` attributes, so it works on any markup, after Turbo
+  navigation, with no CSP nonce. The inline scripts are gone: add `<%= qube_rails_assets %>` to your
+  layout (`rails g qube_rails:install` does). The search route and hidden-input contract are
+  documented for a custom combobox.
+- The opt-in stylesheet `qube_rails.css` (`qube_rails_assets stylesheet: true`): zero specificity
+  (`:where()`), themed by `--qube-*` variables, no global styles.
+- The storyboard, `GET qube/storyboard(/:screen)` (`config.storyboard`, on in development): every
+  screen from sample data in your layout, with each piece's override path; nothing is sent or saved.
+- The question partial shows a rows field as a table: the columns each row asks, a search per record
+  column with its row, "Set selected" for many rows; a fixed list (`enum`) as a select.
 - Onboarding makes realtime connections (`config.connection_type`, `"realtime"` by default): workflows run
   only on realtime connections. A start QuBe Sync refuses as `realtime_required` raises
   `QubeRails::RealtimeRequired`, its message saying how to upgrade.
