@@ -31,8 +31,8 @@ module QubeRails
       @webhook_url = nil
     end
 
-    # Each operation by its slug (the SLUG a run row keeps, in qube_runs.operation), as class
-    # *names*:
+    # Each operation, and each plain request (QubeRails::Request), by its slug (the SLUG its row
+    # keeps, in qube_runs.operation or qube_requests.operation), as class *names*:
     #   config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice" }
     # Names, not classes, so code reloading in development finds the class again each time. A
     # fixed list, so a class is never looked up from anything a request says.
@@ -106,7 +106,7 @@ module QubeRails
       @authorize_question || method(:owner_answers)
     end
 
-    # Hands a verified delivery, { kind:, id:, body: } (kind "run" or "connection", id the row's),
+    # Hands a verified delivery, { kind:, id:, body: } (kind "run", "connection" or "request", id the row's),
     # to a queue. The default puts it on ActiveJob (QubeRails::WebhookJob, on the queue setting).
     # Your own queue's worker calls QubeRails.run(kind, id, body).
     def enqueue=(callable)

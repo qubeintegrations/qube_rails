@@ -27,17 +27,19 @@ module QubeRails
 
     belongs_to :owner, polymorphic: true
     has_many :runs, class_name: "QubeRails::Run", inverse_of: :connection
+    has_many :queued_requests, class_name: "QubeRails::QueuedRequest", inverse_of: :connection
     has_many :quickbooks_records, class_name: "QubeRails::QuickbooksRecord", inverse_of: :connection
 
     validates :status, inclusion: { in: STATUSES }
 
     # The connections owner has, whatever its key's type.
-    # The row, with its runs (and their notifications) and its QuickBooks links: a connection
+    # The row, with its runs (and their notifications), its requests and its QuickBooks links: a connection
     # QuBe Sync no longer has. ConnectionsController#destroy deletes QuBe Sync's first.
     def disconnect!
       transaction do
         QubeRails.config.connection_events_class.new(self).disconnected
         runs.find_each(&:destroy!)
+        QubeRails::QueuedRequest.where(connection_id: id).delete_all # its deliveries cascade
         QubeRails::QuickbooksRecord.where(connection_id: id).delete_all
         destroy!
       end

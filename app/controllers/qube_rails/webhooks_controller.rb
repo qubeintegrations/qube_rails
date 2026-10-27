@@ -3,7 +3,8 @@
 module QubeRails
   # Receives QuBe Sync's webhooks at POST /webhooks/qube/runs/<run id>, the URL each run was
   # started with (QubeRails::Run#webhook_url), and at /webhooks/qube/connections/<connection id>,
-  # each connection's (QubeRails::Connection#webhook_url). It only verifies the delivery, checks
+  # each connection's (QubeRails::Connection#webhook_url), and at /webhooks/qube/requests/<id>,
+  # each plain request's (QubeRails::QueuedRequest#webhook_url). It only verifies the delivery, checks
   # the row is there and enqueues it (config.enqueue), so it answers well inside the 5 seconds
   # QuBe Sync waits: the job does the rest.
   #
@@ -24,6 +25,10 @@ module QubeRails
 
     def connection_event
       receive("connection", QubeRails::Connection)
+    end
+
+    def request_event
+      receive("request", QubeRails::QueuedRequest)
     end
 
     private

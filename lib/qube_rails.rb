@@ -8,6 +8,7 @@ require "qube_rails/cache_dedupe"
 require "qube_rails/database_dedupe"
 require "qube_rails/json_coder"
 require "qube_rails/operation"
+require "qube_rails/request"
 require "qube_rails/sync_status"
 require "qube_rails/connection_events"
 
@@ -74,7 +75,8 @@ module QubeRails
     # Runs one verified delivery. kind is "run" (QUBE_WEBHOOK_URL/runs/<id>): the run's
     # operation finds its record and handles the event (QubeRails::Operation#handle); or
     # "connection" (QUBE_WEBHOOK_URL/connections/<id>): your config.connection_events class
-    # handles it for that connection. QubeRails::WebhookJob calls it; so does your own queue's
+    # handles it for that connection; or "request" (QUBE_WEBHOOK_URL/requests/<id>): the request's
+    # class handles it (QubeRails::Request#handle). QubeRails::WebhookJob calls it; so does your own queue's
     # worker when config.enqueue hands deliveries elsewhere.
     #
     # body is the delivery's raw body, which the webhook endpoint verified: parsed into its typed
@@ -85,7 +87,8 @@ module QubeRails
       case kind.to_s
       when "run" then run_event(id, event)
       when "connection" then connection_event(id, event)
-      else raise ArgumentError, "QuBe Sync: a delivery is for a run or a connection, not #{kind.inspect}"
+      when "request" then request_event(id, event)
+      else raise ArgumentError, "QuBe Sync: a delivery is for a run, a connection or a request, not #{kind.inspect}"
       end
     end
 
@@ -137,6 +140,19 @@ module QubeRails
       return dropped("run #{run.id}'s #{run.record_type} #{run.record_id} isn't there", event) unless record
 
       operation.new(record, run).handle(event)
+    end
+
+    def request_event(id, event)
+      row = QueuedRequest.find_by(id: id)
+      return dropped("request #{id} isn't there", event) unless row
+
+      request_class = config.operation_class(row.operation)
+      raise UnknownOperation, "QuBe Sync: no operation has the slug #{row.operation.inspect}" unless request_class
+
+      record = find_run_record(request_class, row)
+      return dropped("request #{row.id}'s #{row.record_type} #{row.record_id} isn't there", event) unless record
+
+      request_class.new(record, row).handle(event)
     end
 
     def connection_event(id, event)

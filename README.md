@@ -4,7 +4,7 @@ QuBe Sync's Rails engine, for QuickBooks Desktop through [qubesync.com](https://
 holds the part of an integration that's the same in every Rails app:
 
 - tables of its own: your customers' **connections** (an account can have several, one per
-  company file), the **runs** your app starts, and the **QuickBooks ids** it learns, each kept
+  company file), the **runs** your app starts (and any plain **requests**), and the **QuickBooks ids** it learns, each kept
   against its connection;
 - onboarding: make a connection for the signed-in account, or send one of its connections back
   through QuBe Sync's setup;
@@ -52,9 +52,10 @@ Relative to where the engine is mounted (`"/"` above):
 | --- | --- |
 | `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
-| `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs and QuickBooks links. Refused while a run hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
+| `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
+| `POST webhooks/qube/requests/:id` | A plain request's webhooks ([Plain requests](#plain-requests)). |
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
 | `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Send its latest news again" button. Behind your sign-in and CSRF, and `authorize_question`. |
@@ -63,7 +64,7 @@ Relative to where the engine is mounted (`"/"` above):
 The webhook routes verify the signature (401 if it doesn't check out), answer 404 when the row
 isn't there, enqueue, and answer 200. No sign-in, no CSRF, the raw body, any content type, up to
 5 MB. Each id in a URL is only a pointer: the job checks the signed event's reference and
-connection id against the row.
+connection id against the row (a request's event, its id).
 
 Onboarding and the question routes inherit your `ApplicationController` (the `parent_controller`
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
@@ -385,6 +386,76 @@ skipped and logged; a notification is taken once; anything else only when its re
 than the last applied. Handlers see `record`, `run` and `connection`. A handler you don't write
 logs.
 
+## Plain requests
+
+A workflow is the default: it finds or makes the records an invoice names, checks QuickBooks
+before resending after a lost answer, and asks your user when something needs a choice. Use a
+plain request (one v2 operation, `QubeSync::Client#queue`) for a one-off query, or a write your
+app settles itself: you handle each answer, error and lost answer.
+
+```ruby
+# app/services/quickbooks_desktop/find_customer.rb
+module QuickbooksDesktop
+  class FindCustomer < QubeRails::Request
+    OPERATION = "customer.query" # a v2 operation id
+    SLUG = "find_customer"
+
+    def params
+      { full_name: record.name }
+    end
+
+    # Each answered page: event.response_json["data"], event.page.
+    def answered(event)
+      found = Array(event.response_json["data"]).first
+      connection.link(record, kind: "customer", qb_id: found["list_id"], name: found["full_name"]) if found
+    end
+
+    # Every page 1..N is in. Optional.
+    def done; end
+
+    # error or discarded: show event.error["user_message"].
+    def failed(event); end
+
+    # QuBe Sync keeps trying (QuickBooks closed, a dialog open). Never resend. Default: logs.
+    def retrying(event); end
+
+    # The answer never came back: QuickBooks may have applied it. Default: failed(event). A query
+    # can be queued again; check a write before resending it.
+    def timed_out(event); end
+  end
+end
+```
+
+List it in `config.operations` with your operations (`"find_customer" =>
+"QuickbooksDesktop::FindCustomer"`), and queue it:
+
+```ruby
+row = QuickbooksDesktop::FindCustomer.queue(customer, connection) # a QubeRails::QueuedRequest
+```
+
+`queue` works as `start` does: under the connection row's lock, a request for the same record,
+slug and connection that hasn't ended is returned (`row.reused?`) rather than queued again, sent
+again first, with the same params and `Idempotency-Key`, when QuBe Sync never confirmed it (no
+`qube_id`). A new request, with a new key, is made only once the last has ended. The key is the
+row's `reference`, saved before the call. A refusal (a 4xx but 409) marks the row `failed` and
+raises; a timeout, a 5xx or a 409 leaves it `queued` and raises: queue again, or call
+`row.retry_queue!`. `params` that raise mark the row `failed` before anything is sent. `find_record`
+works as an operation's.
+
+The request's webhook URL is `QUBE_WEBHOOK_URL/requests/<row id>`. Each delivery is taken once,
+by `page_request_id` and `state` (in `qube_request_deliveries`, written in the handler's
+transaction), under the row's lock. An event whose `id` isn't the row's `qube_id` is skipped and
+logged (request webhooks carry no connection id; before the queue's answer is saved, the first
+event's `id` is kept). Pages can come in any order: `done` is called once, when every page from 1
+to the one whose `iteration_state` is `done` is in (`not_applicable` is one page). A `retryable`
+isn't final, and one that arrives after its page's answer is skipped.
+
+A `QubeRails::QueuedRequest` keeps `operation`, `record`, `connection`, `reference`, `qube_id`,
+`params`, `state` (`queued`, `retryable`, `response_received`, `error`, `timed_out`, `discarded`,
+or `failed` for a refused queue), `error` (the webhook's), `pages_answered`, `last_page` and
+`ended_at` (`ended?`, `done?`). It never keeps a response body: your handler stores what it needs.
+A delivery whose handler raises rolls back with it, so the job's retry runs it again.
+
 ## Typed workflow starts
 
 ```sh
@@ -531,7 +602,8 @@ forgets the question and answers 409; the run's next webhook says what came of i
 
 ## Storage
 
-Rows go with their run: deleting a run deletes its notifications. Runs are kept until you say
+Rows go with their run: deleting a run deletes its notifications, and deleting a plain request
+its deliveries. Disconnecting a connection deletes its runs and requests. Runs are kept until you say
 otherwise. To prune ended ones, set `config.prune_runs_after = 90.days` and schedule
 `QubeRails::PruneRunsJob` (Solid Queue's `config/recurring.yml`, say):
 
@@ -541,7 +613,8 @@ prune_qube_runs:
   schedule: every day at 4am
 ```
 
-It deletes only ended runs (`Run.prunable`), never within a day of their end: a webhook for a
+It deletes only ended runs (`Run.prunable`) and ended plain requests (`QueuedRequest.prunable`,
+with their deliveries), never within a day of their end: a webhook for a
 deleted run answers 404, which QuBe Sync retries for hours. What a record's page shows stays
 right: `in_quickbooks` comes from `qube_quickbooks_records`, which are never pruned, and a sync's
 next `since` from `qube_sync_marks` (`connection.last_synced_at(workflow)`, or

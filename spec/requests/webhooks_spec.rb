@@ -165,6 +165,42 @@ RSpec.describe "QuBe Sync's webhooks", type: :request do
     end
   end
 
+  describe "POST /webhooks/qube/requests/:id" do
+    let(:customer) { Customer.create!(account: account, name: "Northwind Builders") }
+    let(:queued) do
+      QubeRails::QueuedRequest.create!(connection: connection, operation: "find_customer", record: customer,
+                                       reference: "find_customer-#{customer.id}-1", state: "queued")
+    end
+    let(:answer) { vector_body("request: a page of a paginated query") }
+
+    it "verifies the delivery, enqueues it with its raw body and answers 200" do
+      deliver("/webhooks/qube/requests/#{queued.id}", answer, signature(answer))
+
+      expect(response).to have_http_status(:ok)
+      expect(QubeRails::WebhookJob).to have_been_enqueued.with("request", queued.id.to_s, answer)
+    end
+
+    it "answers 404 for a request that isn't there" do
+      deliver("/webhooks/qube/requests/0", answer, signature(answer))
+
+      expect(response).to have_http_status(:not_found)
+      expect(QubeRails::WebhookJob).not_to have_been_enqueued
+    end
+
+    it "refuses a bad signature with 401" do
+      deliver("/webhooks/qube/requests/#{queued.id}", answer, signature(answer, secret: "whsec_no"))
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "answers 413 for a body over 5 MB" do
+      big = "x" * (5 * 1024 * 1024 + 1)
+      deliver("/webhooks/qube/requests/#{queued.id}", big, signature(big))
+
+      expect(response).to have_http_status(413)
+    end
+  end
+
   it "has no route for the old /:operation/:record_id and /connection/:account_id URLs" do
     expect { deliver("/webhooks/qube/create_invoice/#{invoice.id}", body, signature(body)) }
       .to raise_error(ActionController::RoutingError)

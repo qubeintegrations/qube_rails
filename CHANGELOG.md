@@ -6,6 +6,13 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- Plain v2 requests: `QubeRails::Request` (`OPERATION`, `SLUG`, `params`, and the handlers
+  `answered`, `done`, `failed`, `retrying`, `timed_out`), `.queue(record, connection)` returning a
+  `QubeRails::QueuedRequest` (one at a time per record, slug and connection; its reference is the
+  `Idempotency-Key`; `retry_queue!`), and their webhook route `POST webhooks/qube/requests/:id`.
+  Deliveries are taken once by `page_request_id:state`, and `done` fires once every page is in.
+  `PruneRunsJob` and `Connection#disconnect!` delete requests too. New tables `qube_requests` and
+  `qube_request_deliveries`: run `bin/rails qube_rails:install:migrations`.
 - `config.prune_runs_after` and `QubeRails::PruneRunsJob`: opt-in pruning of ended runs
   (`Run.prunable`), never within a day of their end; links stay.
 - `qube_sync_marks`: when each connection's last completed run of a workflow started

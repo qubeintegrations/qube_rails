@@ -2,7 +2,8 @@
 
 module QubeRails
   # The base of the engine's models. Their tables are qube_connections, qube_runs,
-  # qube_notifications and qube_quickbooks_records, from the engine's migration
+  # qube_notifications, qube_quickbooks_records, qube_sync_marks, qube_requests and
+  # qube_request_deliveries, from the engine's migrations
   # (`bin/rails qube_rails:install:migrations`).
   class ApplicationRecord < ActiveRecord::Base
     self.abstract_class = true

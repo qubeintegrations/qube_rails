@@ -17,7 +17,8 @@ module QubeRailsHelpers
     QubeRails.reset!
     QubeRails.configure do |config|
       config.operations = { "create_invoice" => "QuickbooksDesktop::CreateInvoice",
-                            "sync_customer" => "QuickbooksDesktop::SyncCustomer" }
+                            "sync_customer" => "QuickbooksDesktop::SyncCustomer",
+                            "find_customer" => "QuickbooksDesktop::FindCustomer" }
       config.connection_events = "QuickbooksDesktop::ConnectionEvents"
       config.current_account = ->(controller) { controller.current_account }
       # authorize_question is left to its default: the signed-in account owns the run's connection.
@@ -92,6 +93,7 @@ RSpec.configure do |config|
     end
     QuickbooksDesktop::CreateInvoice.calls.clear
     QuickbooksDesktop::SyncCustomer.calls.clear
+    QuickbooksDesktop::FindCustomer.calls.clear
     QuickbooksDesktop::ConnectionEvents.calls.clear
   end
 

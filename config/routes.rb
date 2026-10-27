@@ -12,6 +12,8 @@ QubeRails::Engine.routes.draw do
   # connection's is QUBE_WEBHOOK_URL/connections/<connection id>.
   post "webhooks/qube/runs/:id", to: "webhooks#run_event", as: :run_webhook
   post "webhooks/qube/connections/:id", to: "webhooks#connection_event", as: :connection_webhook
+  # A plain request's: QUBE_WEBHOOK_URL/requests/<id> (QubeRails::QueuedRequest#webhook_url).
+  post "webhooks/qube/requests/:id", to: "webhooks#request_event", as: :request_webhook
 
   # A start QuBe Sync never confirmed, sent again, from the run status partial.
   post "qube/runs/:id/retry_start", to: "runs#retry_start", as: :retry_start

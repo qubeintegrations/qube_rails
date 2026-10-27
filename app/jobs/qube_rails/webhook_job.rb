@@ -35,7 +35,7 @@ module QubeRails
       raise error
     end
 
-    # kind is "run" or "connection", id the row's.
+    # kind is "run", "connection" or "request", id the row's.
     def perform(kind, id, body)
       QubeRails.run(kind, id, body)
     end
