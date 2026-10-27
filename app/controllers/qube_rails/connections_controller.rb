@@ -48,7 +48,7 @@ module QubeRails
       send_to_setup(connection)
     end
 
-    RUNS_GOING = "It has a run that hasn't ended: wait for it, or answer its question, first."
+    RUNS_GOING = "It has a run or request that hasn't ended: wait for it, or answer its question, first."
     NO_ANSWER = "QuBe Sync didn't answer: try disconnecting again in a minute."
 
     # DELETE /quickbooks/connections/:id: disconnects one of the signed-in account's
@@ -61,7 +61,7 @@ module QubeRails
 
       connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
       return head(:not_found) unless connection
-      return back_with_error(RUNS_GOING) if connection.runs.where.not(state: QubeRails::Run::ENDED_STATES).exists?
+      return back_with_error(RUNS_GOING) if work_going?(connection)
 
       delete_on_qube(connection)
       connection.disconnect!
@@ -71,6 +71,11 @@ module QubeRails
     end
 
     private
+
+    def work_going?(connection)
+      connection.runs.where.not(state: QubeRails::Run::ENDED_STATES).exists? ||
+        connection.queued_requests.where(ended_at: nil).exists?
+    end
 
     # Already gone there (404) is gone.
     def delete_on_qube(connection)

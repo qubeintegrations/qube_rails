@@ -257,6 +257,17 @@ RSpec.describe "Onboarding", type: :request do
       expect(QubeRails::Connection.exists?(connection.id)).to be(true)
     end
 
+    it "is refused while a request hasn't ended" do
+      connection = make_connection(account)
+      QubeRails::QueuedRequest.create!(connection: connection, operation: "find_customer", record: invoice,
+                                       reference: "find_customer-1-x", state: "retryable")
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(flash[:qube_rails_error]).to eq(QubeRails::ConnectionsController::RUNS_GOING)
+      expect(QubeRails::Connection.exists?(connection.id)).to be(true)
+    end
+
     it "answers 404 for another account's connection" do
       other = make_connection(Account.create!(name: "Other"))
 
