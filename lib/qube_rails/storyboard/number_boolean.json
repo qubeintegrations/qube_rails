@@ -1,0 +1,54 @@
+{
+  "title": "Number and yes/no fields",
+  "note": "A number field posts what was typed and is sent as a number; a boolean is a checkbox, sent as true or false. No shipped template asks these; a chart of your own can.",
+  "prompt": {
+    "id": "adjust / ask_quantity",
+    "kind": "decision",
+    "token": "Vf4pT6uZr2NgA4cC",
+    "message": "QuickBooks shows fewer on hand than this adjustment takes. Say how many to take, or cancel.",
+    "data": {
+      "on_hand": 3
+    },
+    "details": [
+      {
+        "label": "Item",
+        "value": "Vinyl Banner 3x6"
+      },
+      {
+        "label": "On hand",
+        "value": "3"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "adjust",
+        "label": "Adjust",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "quantity",
+            "type": "number",
+            "label": "Quantity",
+            "required": true
+          },
+          {
+            "name": "allow_negative",
+            "type": "boolean",
+            "label": "Allow a negative quantity on hand",
+            "required": false
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

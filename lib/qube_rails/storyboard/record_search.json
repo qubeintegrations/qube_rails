@@ -1,0 +1,90 @@
+{
+  "title": "A pick from the records there are",
+  "note": "resolve's ask_pick: nothing has that name and nothing may be created for it (an account here), so the person picks one: the first active records as rows, then a search over every record of the kind. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
+  "prompt": {
+    "id": "resolve / ask_pick",
+    "kind": "decision",
+    "token": "Sb4kQ2rTn8LmV1xZ",
+    "message": "QuickBooks has nothing named \"Consulting Income\". Pick the one to use instead, or cancel.",
+    "data": {
+      "name": "Consulting Income",
+      "kind": "account"
+    },
+    "details": [
+      {
+        "label": "Account",
+        "value": "Consulting Income"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "use:1",
+        "label": "Sales",
+        "description": null,
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "use:2",
+        "label": "Sales:Signs",
+        "description": null,
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "use:3",
+        "label": "Service Income",
+        "description": null,
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "use",
+        "label": "Use this one",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "list_id",
+            "type": "record",
+            "kind": "account",
+            "label": "Search for the one to use",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {
+    "list_id": [
+      {
+        "value": "8000000A-1700000000",
+        "label": "Sales",
+        "detail": "Account"
+      },
+      {
+        "value": "8000000B-1700000000",
+        "label": "Sales:Signs",
+        "detail": "Account"
+      },
+      {
+        "value": "8000000C-1700000000",
+        "label": "Service Income",
+        "detail": "Account"
+      },
+      {
+        "value": "8000000D-1700000000",
+        "label": "Consulting Fees",
+        "detail": "Account"
+      }
+    ]
+  }
+}

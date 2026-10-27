@@ -1,0 +1,7 @@
+<%# A number field: posted as typed, sent as a number. %>
+<% control = capture do %>
+<%= number_field_tag field.input_name, nil, id: field.dom_id, step: "any", required: field.required,
+                     disabled: field.disabled, class: qube_classes(:input, "qube-input", field.cell? ? "qube-rows-input" : nil),
+                     "aria-label": (field.labelled? ? nil : field.label), data: field.data %>
+<% end %>
+<%= render "qube_rails/question/field", field: field, control: control %>

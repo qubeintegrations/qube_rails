@@ -1,0 +1,7 @@
+<%# A checkbox: ticked posts "true", sent as true; unticked, false. %>
+<% control = capture do %>
+<%= check_box_tag field.input_name, "true", false, id: field.dom_id, disabled: field.disabled,
+                  class: qube_classes(:checkbox, "qube-checkbox", field.cell? ? "qube-rows-input" : nil),
+                  "aria-label": (field.labelled? ? nil : field.label), data: field.data %>
+<% end %>
+<%= render "qube_rails/question/field", field: field, control: control %>

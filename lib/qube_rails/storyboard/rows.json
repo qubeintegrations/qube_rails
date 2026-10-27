@@ -1,0 +1,359 @@
+{
+  "title": "Records not in QuickBooks yet",
+  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. \"Set all to:\" sets every record's choice; \"Use for all\" copies a picked value to the others.",
+  "prompt": {
+    "id": "add_transaction / ask_missing",
+    "kind": "decision",
+    "token": "Yj7sW9xCu5RkD7fF",
+    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
+    "data": {
+      "operation": "invoice",
+      "missing": [
+        {
+          "kind": "customer",
+          "full_name": "Lone Star Supply",
+          "paths": [
+            "customer_ref"
+          ]
+        },
+        {
+          "kind": "item",
+          "full_name": "Vinyl Banner 3x6",
+          "paths": [
+            "invoice_line_add.0.item_ref"
+          ]
+        },
+        {
+          "kind": "item",
+          "full_name": "Hardware Kit",
+          "paths": [
+            "invoice_line_add.1.item_ref"
+          ]
+        }
+      ]
+    },
+    "details": [
+      {
+        "label": "Adding",
+        "value": "Invoice"
+      },
+      {
+        "label": "Number",
+        "value": "1042"
+      },
+      {
+        "label": "For",
+        "value": "Lone Star Supply"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "proceed",
+        "label": "Add the transaction",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "records",
+            "type": "rows",
+            "label": "Not in QuickBooks yet",
+            "required": true,
+            "columns": [
+              {
+                "name": "action",
+                "type": "string",
+                "label": "What to do",
+                "required": true,
+                "kind": null,
+                "enum": [
+                  {
+                    "value": "create",
+                    "label": "Create it"
+                  },
+                  {
+                    "value": "use",
+                    "label": "Use an existing one"
+                  }
+                ],
+                "when": null
+              },
+              {
+                "name": "list_id",
+                "type": "record",
+                "label": "Existing record",
+                "required": true,
+                "kind": null,
+                "enum": null,
+                "when": {
+                  "action": [
+                    "use"
+                  ]
+                }
+              },
+              {
+                "name": "item_type",
+                "type": "string",
+                "label": "Item type",
+                "required": true,
+                "kind": null,
+                "enum": [
+                  {
+                    "value": "item_service",
+                    "label": "Service"
+                  },
+                  {
+                    "value": "item_non_inventory",
+                    "label": "Non-inventory part"
+                  },
+                  {
+                    "value": "item_inventory",
+                    "label": "Inventory part"
+                  },
+                  {
+                    "value": "item_other_charge",
+                    "label": "Other charge"
+                  }
+                ],
+                "when": {
+                  "action": [
+                    "create"
+                  ]
+                }
+              },
+              {
+                "name": "entity_type",
+                "type": "string",
+                "label": "Add it as",
+                "required": true,
+                "kind": null,
+                "enum": [
+                  {
+                    "value": "customer",
+                    "label": "Customer"
+                  },
+                  {
+                    "value": "vendor",
+                    "label": "Vendor"
+                  },
+                  {
+                    "value": "other_name",
+                    "label": "Other name"
+                  }
+                ],
+                "when": {
+                  "action": [
+                    "create"
+                  ]
+                }
+              },
+              {
+                "name": "income_account",
+                "type": "record",
+                "label": "Income account",
+                "required": true,
+                "kind": "account",
+                "enum": null,
+                "when": {
+                  "action": [
+                    "create"
+                  ]
+                }
+              },
+              {
+                "name": "asset_account",
+                "type": "record",
+                "label": "Inventory asset account",
+                "required": true,
+                "kind": "account",
+                "enum": null,
+                "when": {
+                  "action": [
+                    "create"
+                  ],
+                  "item_type": [
+                    "item_inventory"
+                  ]
+                }
+              },
+              {
+                "name": "cogs_account",
+                "type": "record",
+                "label": "Cost of goods sold account",
+                "required": true,
+                "kind": "account",
+                "enum": null,
+                "when": {
+                  "action": [
+                    "create"
+                  ],
+                  "item_type": [
+                    "item_inventory"
+                  ]
+                }
+              }
+            ],
+            "rows": [
+              {
+                "key": "customer_ref",
+                "label": "Lone Star Supply",
+                "detail": "Customer",
+                "columns": [
+                  "action",
+                  "list_id"
+                ],
+                "values": {},
+                "kinds": {
+                  "list_id": "customer"
+                }
+              },
+              {
+                "key": "invoice_line_add.0.item_ref",
+                "label": "Vinyl Banner 3x6",
+                "detail": "Item",
+                "columns": [
+                  "action",
+                  "list_id",
+                  "item_type",
+                  "income_account",
+                  "asset_account",
+                  "cogs_account"
+                ],
+                "values": {},
+                "kinds": {
+                  "list_id": "item",
+                  "income_account": "account",
+                  "asset_account": "account",
+                  "cogs_account": "account"
+                }
+              },
+              {
+                "key": "invoice_line_add.1.item_ref",
+                "label": "Hardware Kit",
+                "detail": "Item",
+                "columns": [
+                  "action",
+                  "list_id",
+                  "income_account",
+                  "asset_account",
+                  "cogs_account"
+                ],
+                "values": {
+                  "item_type": "item_inventory"
+                },
+                "kinds": {
+                  "list_id": "item",
+                  "income_account": "account",
+                  "asset_account": "account",
+                  "cogs_account": "account"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": "Stop here. Nothing is created.",
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {
+    "records.list_id": [
+      {
+        "value": "80000001-1700000000",
+        "label": "Riverbend Electric",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000002-1700000000",
+        "label": "Riverbend Supply Co.",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000003-1700000000",
+        "label": "Lone Star Supply",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000011-1700000000",
+        "label": "Vinyl Banner 3x6",
+        "detail": "Inventory part"
+      },
+      {
+        "value": "80000012-1700000000",
+        "label": "Hardware Kit",
+        "detail": "Non-inventory part"
+      }
+    ],
+    "records.income_account": [
+      {
+        "value": "8000000A-1700000000",
+        "label": "Sales",
+        "detail": "Income"
+      },
+      {
+        "value": "8000000B-1700000000",
+        "label": "Sales:Signs",
+        "detail": "Income"
+      },
+      {
+        "value": "80000005-1700000000",
+        "label": "Inventory Asset",
+        "detail": "Other current asset"
+      },
+      {
+        "value": "80000006-1700000000",
+        "label": "Cost of Goods Sold",
+        "detail": "Cost of goods sold"
+      }
+    ],
+    "records.asset_account": [
+      {
+        "value": "8000000A-1700000000",
+        "label": "Sales",
+        "detail": "Income"
+      },
+      {
+        "value": "8000000B-1700000000",
+        "label": "Sales:Signs",
+        "detail": "Income"
+      },
+      {
+        "value": "80000005-1700000000",
+        "label": "Inventory Asset",
+        "detail": "Other current asset"
+      },
+      {
+        "value": "80000006-1700000000",
+        "label": "Cost of Goods Sold",
+        "detail": "Cost of goods sold"
+      }
+    ],
+    "records.cogs_account": [
+      {
+        "value": "8000000A-1700000000",
+        "label": "Sales",
+        "detail": "Income"
+      },
+      {
+        "value": "8000000B-1700000000",
+        "label": "Sales:Signs",
+        "detail": "Income"
+      },
+      {
+        "value": "80000005-1700000000",
+        "label": "Inventory Asset",
+        "detail": "Other current asset"
+      },
+      {
+        "value": "80000006-1700000000",
+        "label": "Cost of Goods Sold",
+        "detail": "Cost of goods sold"
+      }
+    ]
+  }
+}

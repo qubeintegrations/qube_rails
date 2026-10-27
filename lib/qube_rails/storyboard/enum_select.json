@@ -1,0 +1,56 @@
+{
+  "title": "A fixed list",
+  "note": "A string field with an enum shows as a select, a blank first; the answer is the picked value. No shipped template asks one; a chart of your own can.",
+  "prompt": {
+    "id": "route_order / ask_route",
+    "kind": "decision",
+    "token": "Ue2nS5tYq1MfZ3bB",
+    "message": "Which list should this order go to?",
+    "data": {},
+    "details": [
+      {
+        "label": "Order",
+        "value": "SO-2207"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "route",
+        "label": "Send it",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "destination",
+            "type": "string",
+            "label": "Goes to",
+            "required": true,
+            "enum": [
+              {
+                "value": "sales_order",
+                "label": "Sales order"
+              },
+              {
+                "value": "estimate",
+                "label": "Estimate"
+              },
+              {
+                "value": "invoice",
+                "label": "Invoice"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

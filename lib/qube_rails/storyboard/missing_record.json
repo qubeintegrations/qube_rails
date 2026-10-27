@@ -1,0 +1,141 @@
+{
+  "title": "A missing customer",
+  "note": "add_transaction's ask_missing with one record: the invoice names a customer QuickBooks doesn't have and the app sent no add for it, so the person says whether to create it or use one QuickBooks has. Create it needs nothing more for a customer; Use an existing one shows the search.",
+  "prompt": {
+    "id": "add_transaction / ask_missing",
+    "kind": "decision",
+    "token": "Mc7pR4tKw2NbY9xQ",
+    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
+    "data": {
+      "operation": "invoice",
+      "missing": [
+        {
+          "kind": "customer",
+          "full_name": "Lone Star Supply",
+          "paths": [
+            "customer_ref"
+          ]
+        },
+        {
+          "kind": "item",
+          "full_name": "Vinyl Banner 3x6",
+          "paths": [
+            "invoice_line_add.0.item_ref"
+          ]
+        },
+        {
+          "kind": "item",
+          "full_name": "Hardware Kit",
+          "paths": [
+            "invoice_line_add.1.item_ref"
+          ]
+        }
+      ]
+    },
+    "details": [
+      {
+        "label": "Adding",
+        "value": "Invoice"
+      },
+      {
+        "label": "Number",
+        "value": "1042"
+      },
+      {
+        "label": "For",
+        "value": "Lone Star Supply"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "proceed",
+        "label": "Add the transaction",
+        "description": null,
+        "detail": null,
+        "fields": [
+          {
+            "name": "records",
+            "type": "rows",
+            "label": "Not in QuickBooks yet",
+            "required": true,
+            "columns": [
+              {
+                "name": "action",
+                "type": "string",
+                "label": "What to do",
+                "required": true,
+                "kind": null,
+                "enum": [
+                  {
+                    "value": "create",
+                    "label": "Create it"
+                  },
+                  {
+                    "value": "use",
+                    "label": "Use an existing one"
+                  }
+                ],
+                "when": null
+              },
+              {
+                "name": "list_id",
+                "type": "record",
+                "label": "Existing record",
+                "required": true,
+                "kind": null,
+                "enum": null,
+                "when": {
+                  "action": [
+                    "use"
+                  ]
+                }
+              }
+            ],
+            "rows": [
+              {
+                "key": "customer_ref",
+                "label": "Lone Star Supply",
+                "detail": "Customer",
+                "columns": [
+                  "action",
+                  "list_id"
+                ],
+                "values": {},
+                "kinds": {
+                  "list_id": "customer"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": "Stop here. Nothing is created.",
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {
+    "records.list_id": [
+      {
+        "value": "80000001-1700000000",
+        "label": "Riverbend Electric",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000002-1700000000",
+        "label": "Riverbend Supply Co.",
+        "detail": "Customer"
+      },
+      {
+        "value": "80000003-1700000000",
+        "label": "Lone Star Supply",
+        "detail": "Customer"
+      }
+    ]
+  }
+}

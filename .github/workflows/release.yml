@@ -1,0 +1,38 @@
+name: release
+# Pushing a tag vX.Y.Z publishes qube_rails X.Y.Z to rubygems.org, once the
+# specs pass and the tag matches lib/qube_rails/version.rb.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  # Trusted publishing: rubygems.org takes this workflow's OIDC token, so no
+  # API key is stored. The trusted publisher is set on the gem's page there
+  # (a pending one until the first release creates the gem).
+  id-token: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RAILS_VERSION: "8.1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - run: bundle exec rspec
+      - name: Tag matches the gem version
+        run: |
+          version=$(ruby -r ./lib/qube_rails/version -e 'print QubeRails::VERSION')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match QubeRails::VERSION $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - run: gem build qube_rails.gemspec
+      - uses: rubygems/configure-rubygems-credentials@v2.1.0
+      - run: gem push "qube_rails-$VERSION.gem"
+      - run: gh release create "$GITHUB_REF_NAME" "qube_rails-$VERSION.gem" --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md)."
+        env:
+          GH_TOKEN: ${{ github.token }}

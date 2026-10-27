@@ -1,0 +1,46 @@
+# Everything the engine's screens say to your users. Override any key in your app's own
+# config/locales/*.yml (it loads after this file), or add another locale's file to translate them.
+# README, "Wording and translations", lists them.
+en:
+  qube_rails:
+    status:
+      in_quickbooks: "In QuickBooks"
+      added: "Added to QuickBooks"
+      done: "Done"
+      done_with: "Done: %{outcome}"
+      failed: "Couldn't sync"
+      not_started: "it couldn't be sent"
+      cancelled: "Cancelled"
+      cancel_reason: "it was stopped before it finished"
+      needs_answer: "Needs your answer"
+      starting: "Sending to QuickBooks"
+      unconfirmed: "Still waiting for QuickBooks"
+      running: "Syncing with QuickBooks"
+      quiet: "No update from QuickBooks for a while."
+      check_for_updates: "Check for updates"
+      try_again: "Try sending again"
+      waiting_for_quickbooks: "Waiting for QuickBooks"
+      stalled:
+        not_checking_in: "QuickBooks hasn't checked in for a while, so this is waiting. Make sure the computer with QuickBooks is on and the Web Connector is running."
+        quickbooks_unavailable: "The Web Connector is checking in but can't open QuickBooks. Open the company file in QuickBooks on that computer."
+        other: "Syncing with QuickBooks has stopped for now. Check the computer with QuickBooks and its Web Connector."
+    errors:
+      not_starting: "This was already sent, so there's nothing to try again."
+      not_quiet: "This was updated recently. Check again in a few minutes."
+      no_update_yet: "There's no update yet. Check again in a few minutes."
+      checked_just_now: "That was checked a moment ago. Try again in a minute."
+      unreachable: "Couldn't reach QuickBooks' sync service just now. Try again in a minute."
+      disconnect_unreachable: "Couldn't reach QuickBooks' sync service just now. Try disconnecting again in a minute."
+      still_syncing: "Something is still syncing with this company file. Let it finish, or answer its question, then disconnect."
+      question_changed: "This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest."
+      answer_refused: "That answer couldn't be used. Check it and try again."
+      answer_refused_with: "That answer couldn't be used: %{detail}"
+    question:
+      set_all: "Set all to:"
+      use_pick: "Use this one"
+      use_for_all: "Use for all %{count}"
+      or: "or"
+      pick_a_match: "Pick one of the matches."
+      no_matches: "No matches"
+      searching: "Searching…"
+      search_failed: "Search isn't available right now. Try again in a moment."

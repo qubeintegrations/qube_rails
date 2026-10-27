@@ -1,0 +1,1115 @@
+/* qube_rails: opt-in looks for the QuickBooks screens (a question, a record's status, the
+   storyboard). Every selector is inside :where(), so it has no specificity and any rule of your
+   app's wins. Theme it with the --qube-* variables (README, "Styling"), on :root or any element
+   around the screens. No reset, no global styles: only qube- elements are touched.
+   Dark mode follows the page's color-scheme: with `color-scheme: light dark` on your page, the
+   accent, status colours and surfaces switch with prefers-color-scheme. */
+
+:where(.qube-question, .qube-run-status, .qube-error, .qube-storyboard) {
+  --qube-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --qube-accent-color: var(--qube-accent, #2563eb);
+  --qube-accent-text-color: var(--qube-accent-text, #fff);
+  --qube-border-color: var(--qube-border, color-mix(in srgb, currentColor 14%, transparent));
+  --qube-control-border-color: var(--qube-control-border, color-mix(in srgb, currentColor 24%, transparent));
+  --qube-tint-color: color-mix(in srgb, currentColor 4%, transparent);
+  --qube-radius-size: var(--qube-radius, 8px);
+  --qube-control-radius: calc(var(--qube-radius-size) - 2px);
+  --qube-gap-size: var(--qube-gap, 16px);
+  --qube-muted-color: var(--qube-muted, color-mix(in srgb, currentColor 62%, transparent));
+  --qube-error-color: var(--qube-error, #c2410c);
+  --qube-success-color: var(--qube-success, #15803d);
+  --qube-warning-color: var(--qube-warning, #d97706);
+  --qube-surface-color: var(--qube-surface, transparent);
+  --qube-solid-color: var(--qube-surface, Canvas);
+  font-family: var(--qube-font, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: var(--qube-font-size, 0.875rem);
+  line-height: 1.5;
+}
+
+@supports (color: light-dark(#000, #fff)) {
+  :where(.qube-question, .qube-run-status, .qube-error, .qube-storyboard) {
+    --qube-accent-color: var(--qube-accent, light-dark(#2563eb, #3b82f6));
+    --qube-error-color: var(--qube-error, light-dark(#c2410c, #fb923c));
+    --qube-success-color: var(--qube-success, light-dark(#15803d, #4ade80));
+    --qube-warning-color: var(--qube-warning, light-dark(#d97706, #fbbf24));
+  }
+}
+
+/* ---- The question card: the message first, then what it's about, then the choices */
+
+:where(.qube-question) {
+  display: grid;
+  gap: var(--qube-gap-size);
+  max-width: var(--qube-max-width, 52rem);
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--qube-border-color);
+  border-radius: var(--qube-radius-size);
+  background: var(--qube-surface-color);
+  box-sizing: border-box;
+}
+
+:where(.qube-question-message) {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 1.1429em;
+  font-weight: 600;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* What it's about: a quiet two-column key/value list */
+:where(.qube-question-details) {
+  justify-self: start;
+  border-collapse: collapse;
+  font-size: 0.9286em;
+}
+
+:where(.qube-question-details th) {
+  padding: 2px 24px 2px 0;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-question-details td) {
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Choices, by kind: picks as option rows, each form choice its own section ("or" between),
+   exits in a footer row. At most one filled button: a form's submit, or in a plain question the
+   first choice. */
+
+:where(.qube-choices) {
+  display: grid;
+  gap: 16px;
+  padding-top: var(--qube-gap-size);
+  border-top: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-choice) {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+/* A pick: a quiet, full-width option row that says what clicking it does */
+:where(.qube-picks) {
+  display: grid;
+  gap: 8px;
+}
+
+:where(.qube-pick) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: var(--qube-solid-color);
+  border: 1px solid var(--qube-control-border-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+
+:where(.qube-pick-action) {
+  flex-shrink: 0;
+  font-size: 0.9286em;
+  font-weight: 500;
+  color: var(--qube-accent-color);
+  white-space: nowrap;
+}
+
+:where(.qube-pick:active) {
+  transform: scale(0.99);
+}
+
+:where(.qube-pick-text) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+:where(.qube-pick-label) {
+  font-weight: 500;
+}
+
+:where(.qube-pick-detail) {
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-pick-description) {
+  flex-basis: 100%;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-pick:hover) {
+    background: color-mix(in srgb, currentColor 4%, var(--qube-solid-color));
+    border-color: color-mix(in srgb, currentColor 34%, transparent);
+  }
+}
+
+/* "or" between picks and a form, or between forms */
+:where(.qube-choice-divider) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8571em;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-choice-divider)::before,
+:where(.qube-choice-divider)::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+/* A form choice: its field's label leads, its submit under it */
+:where(.qube-choice-form .qube-label) {
+  font-size: 1em;
+}
+
+/* The exits: one row under a hairline (no hairline when they're all there is) */
+:where(.qube-choice-footer) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+:where(.qube-picks, .qube-choice-form) + :where(.qube-choice-footer) {
+  padding-top: 16px;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-choice-footer .qube-choice:has(.qube-choice-description)) {
+  flex-basis: 100%;
+}
+
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy) {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  color: inherit;
+  background: var(--qube-solid-color);
+  border: 1px solid var(--qube-control-border-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 160ms var(--qube-ease-out),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+}
+
+/* Pressing gives way a little */
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy):where(:active:not(:disabled)) {
+  transform: scale(0.97);
+}
+
+:where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button):where(:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The one primary action, and the retry */
+:where(.qube-choice-button[data-qube-button="primary"], .qube-retry-start) {
+  color: var(--qube-accent-text-color);
+  background: var(--qube-accent-color);
+  border-color: var(--qube-accent-color);
+}
+
+/* Cancel: no box until hovered */
+:where(.qube-choice-button[data-qube-button="ghost"]) {
+  color: var(--qube-muted-color);
+  background: transparent;
+  border-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-choice-button, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy):where(:hover:not(:disabled)) {
+    background: color-mix(in srgb, currentColor 6%, var(--qube-solid-color));
+  }
+
+  :where(.qube-choice-button[data-qube-button="primary"], .qube-retry-start):where(:hover:not(:disabled)) {
+    background: color-mix(in srgb, var(--qube-accent-color) 88%, black);
+    border-color: color-mix(in srgb, var(--qube-accent-color) 88%, black);
+  }
+
+  :where(.qube-choice-button[data-qube-button="ghost"]):where(:hover) {
+    color: inherit;
+    background: var(--qube-tint-color);
+  }
+}
+
+:where(.qube-choice-detail) {
+  font-weight: 400;
+  opacity: 0.72;
+}
+
+:where(.qube-choice-description) {
+  max-width: 65ch;
+  margin: -4px 0 0;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
+/* ---- Focus: always visible from the keyboard, never removed */
+
+:where(.qube-question, .qube-run-status, .qube-storyboard) :where(:focus-visible) {
+  outline: 2px solid var(--qube-accent-color);
+  outline-offset: 2px;
+}
+
+/* ---- Fields */
+
+:where(.qube-field) {
+  display: grid;
+  gap: 6px;
+}
+
+:where(.qube-field-boolean) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+:where(.qube-label, .qube-rows-label) {
+  margin: 0;
+  font-size: 0.9286em;
+  font-weight: 500;
+}
+
+:where(.qube-field-boolean .qube-label) {
+  font-size: 1em;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+:where(.qube-input, .qube-select, .qube-search-input) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 28rem;
+  min-width: 8rem;
+  min-height: 38px;
+  padding: 0 10px;
+  font: inherit;
+  color: inherit;
+  background: var(--qube-solid-color);
+  border: 1px solid var(--qube-control-border-color);
+  border-radius: var(--qube-control-radius);
+  transition: border-color 150ms ease;
+}
+
+:where(.qube-input, .qube-select, .qube-search-input):where(:focus) {
+  border-color: var(--qube-accent-color);
+}
+
+:where(.qube-input, .qube-select, .qube-search-input):where(:user-invalid) {
+  border-color: var(--qube-error-color);
+}
+
+:where(.qube-input, .qube-select, .qube-search-input):where(:disabled) {
+  opacity: 0.5;
+}
+
+:where(.qube-checkbox) {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--qube-accent-color);
+  cursor: pointer;
+}
+
+/* ---- The search box: a combobox whose matches drop down from the input */
+
+:where(.qube-search) {
+  position: relative;
+  max-width: 28rem;
+}
+
+:where(.qube-search-results) {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 1px;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--qube-solid-color);
+  border: 1px solid var(--qube-border-color);
+  border-radius: var(--qube-radius-size);
+  box-shadow: 0 12px 28px -12px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.08);
+  transform-origin: top center;
+  transition: opacity 150ms var(--qube-ease-out), transform 150ms var(--qube-ease-out);
+}
+
+/* Enters from the input; closes at once */
+@starting-style {
+  :where(.qube-search-results) {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+:where(.qube-search-results:empty) {
+  display: none;
+}
+
+:where(.qube-search-result) {
+  display: grid;
+  gap: 2px;
+  min-height: 36px;
+  padding: 7px 10px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--qube-radius-size) - 4px);
+  cursor: pointer;
+}
+
+/* The highlighted match: instant, from the keyboard or the pointer */
+:where(.qube-search-result[aria-selected="true"]) {
+  background: color-mix(in srgb, var(--qube-accent-color) 12%, transparent);
+}
+
+:where(.qube-search-result [data-qube-search-detail]) {
+  overflow-wrap: anywhere;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-search-results [data-qube-search-note]) {
+  padding: 7px 10px;
+  color: var(--qube-muted-color);
+}
+
+/* ---- A rows field: a block per record, its fields stacked. Nothing scrolls sideways: each
+   record's name sits beside its fields when there's room, above them when there isn't. */
+
+:where(.qube-rows-field) {
+  gap: 12px;
+}
+
+:where(.qube-rows-set-all) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9286em;
+}
+
+:where(.qube-rows-set-all-label) {
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-set-all-button) {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+:where(.qube-rows) {
+  display: grid;
+  container-type: inline-size;
+  border-top: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-row) {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-row-header) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+:where(.qube-row-label) {
+  font-weight: 500;
+}
+
+:where(.qube-row-detail) {
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-row-body) {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+:where(.qube-row-fields) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 12px 16px;
+}
+
+/* Nothing to show yet (no choice made): no gap for it */
+:where(.qube-row-fields:not(:has(> .qube-row-cell:not([hidden])))) {
+  display: none;
+}
+
+@container (min-width: 36rem) {
+  :where(.qube-row) {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    gap: 12px 24px;
+    align-items: start;
+  }
+
+  :where(.qube-row-header) {
+    flex-direction: column;
+    padding-top: 9px;
+  }
+}
+
+:where(.qube-row .qube-label) {
+  font-size: 0.9286em;
+}
+
+:where(.qube-row-fields) :where(.qube-input, .qube-select, .qube-search-input, .qube-search) {
+  max-width: none;
+  min-width: 0;
+}
+
+/* A field that starts to apply fades in; one that stops is gone at once (hidden) */
+:where(.qube-row-cell) {
+  min-width: 0;
+  transition: opacity 150ms var(--qube-ease-out);
+}
+
+@starting-style {
+  :where(.qube-row-cell) {
+    opacity: 0;
+  }
+}
+
+/* What the record already has: read-only */
+:where(.qube-row-preset) {
+  gap: 6px;
+}
+
+:where(.qube-row-preset-value) {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+/* The record's choice (create it, or use one QuickBooks has): a segmented control */
+:where(.qube-segmented-field) {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+:where(.qube-visually-hidden) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:where(.qube-segmented) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border-radius: calc(var(--qube-control-radius) + 2px);
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  box-sizing: border-box;
+}
+
+:where(.qube-segment) {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  font-weight: 500;
+  color: var(--qube-muted-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 160ms var(--qube-ease-out),
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+:where(.qube-segment-input) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+:where(.qube-segment:has(:checked)) {
+  color: inherit;
+  background: var(--qube-solid-color);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 0 1px var(--qube-border-color);
+}
+
+:where(.qube-segment:active) {
+  transform: scale(0.97);
+}
+
+:where(.qube-segment:has(:focus-visible)) {
+  outline: 2px solid var(--qube-accent-color);
+  outline-offset: 2px;
+}
+
+:where(.qube-segment:has(:disabled)) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-segment:hover) {
+    color: inherit;
+  }
+}
+
+@container (max-width: 24rem) {
+  :where(.qube-segmented) {
+    width: 100%;
+  }
+}
+
+/* "Use for all N": a text button under a filled field */
+:where(.qube-use-for-all) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 2px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.9286em;
+  font-weight: 500;
+  color: var(--qube-accent-color);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: transform 160ms var(--qube-ease-out);
+}
+
+:where(.qube-use-for-all[hidden]) {
+  display: none;
+}
+
+:where(.qube-use-for-all:active) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-use-for-all:hover) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* What "Set all to" or "Use for all" just filled: a tint that fades out */
+@keyframes qube-filled {
+  from {
+    background-color: color-mix(in srgb, var(--qube-accent-color) 22%, var(--qube-solid-color));
+  }
+}
+
+:where([data-qube-filled]) :where(.qube-input, .qube-select, .qube-search-input, .qube-segmented) {
+  animation: qube-filled 600ms ease-out;
+}
+
+/* ---- Status: a compact pill with a coloured dot */
+
+:where(.qube-run-status) {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+:where(.qube-run-summary) {
+  --qube-dot-color: var(--qube-accent-color);
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0;
+  padding: 3px 12px 3px 10px;
+  font-weight: 500;
+  border: 1px solid var(--qube-border-color);
+  border-radius: 14px;
+  box-sizing: border-box;
+  background: var(--qube-tint-color);
+}
+
+:where(.qube-run-summary)::before {
+  content: "";
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: calc(0.75em - 4px);
+  border-radius: 50%;
+  background: var(--qube-dot-color);
+}
+
+:where(.qube-sync-needs_answer .qube-run-summary, .qube-connection-stalled .qube-run-summary) {
+  --qube-dot-color: var(--qube-warning-color);
+}
+
+:where(.qube-sync-in_quickbooks .qube-run-summary, .qube-sync-done .qube-run-summary) {
+  --qube-dot-color: var(--qube-success-color);
+}
+
+:where(.qube-sync-failed .qube-run-summary) {
+  --qube-dot-color: var(--qube-error-color);
+}
+
+:where(.qube-sync-cancelled .qube-run-summary) {
+  --qube-dot-color: var(--qube-muted-color);
+}
+
+:where(.qube-run-reason) {
+  max-width: 65ch;
+  margin: 0;
+}
+
+:where(.qube-run-error-detail, .qube-run-quiet) {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--qube-muted-color);
+}
+
+/* Why it waits: the connection stalled. Calm, like an error, in the warning colour */
+:where(.qube-run-stall) {
+  max-width: 65ch;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--qube-control-radius);
+  background: color-mix(in srgb, var(--qube-warning-color) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--qube-warning-color);
+}
+
+:where(.qube-retry-start-form, .qube-redeliver-form) {
+  margin: 0;
+}
+
+/* ---- A one-shot error: calm, inline, a coloured edge */
+
+:where(.qube-error) {
+  max-width: 65ch;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--qube-control-radius);
+  background: color-mix(in srgb, var(--qube-error-color) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--qube-error-color);
+  transition: opacity 200ms var(--qube-ease-out), transform 200ms var(--qube-ease-out);
+}
+
+@starting-style {
+  :where(.qube-error) {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---- Narrow screens: choices stack, full width */
+
+@media (max-width: 30rem) {
+  :where(.qube-choice-footer > .qube-choice) {
+    flex-basis: 100%;
+  }
+
+  :where(.qube-choice-button) {
+    justify-self: stretch;
+  }
+}
+
+/* ---- Reduced motion: fades stay, movement goes */
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy, .qube-pick):where(:active) {
+    transform: none;
+  }
+
+  @starting-style {
+    :where(.qube-search-results, .qube-error) {
+      transform: none;
+    }
+  }
+
+  :where(.qube-segment, .qube-use-for-all):where(:active) {
+    transform: none;
+  }
+}
+
+/* ---- The storyboard (GET qube/storyboard): a gallery of every screen */
+
+:where(.qube-storyboard) {
+  display: grid;
+  gap: 24px;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  box-sizing: border-box;
+}
+
+:where(.qube-storyboard-header) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+:where(.qube-storyboard-header h1) {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+:where(.qube-storyboard-note) {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-storyboard-notice) {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--qube-control-radius);
+  background: color-mix(in srgb, var(--qube-success-color) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--qube-success-color);
+}
+
+/* The canvas theme: App (as your page is), Light or Dark */
+:where(.qube-storyboard-theme) {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--qube-border-color);
+  border-radius: var(--qube-radius-size);
+}
+
+:where(.qube-storyboard-theme legend) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+:where(.qube-storyboard-theme label) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.9286em;
+  font-weight: 500;
+  color: var(--qube-muted-color);
+  border-radius: var(--qube-control-radius);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+:where(.qube-storyboard-theme input) {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+:where(.qube-storyboard-theme label:has(:checked)) {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+:where(.qube-storyboard-theme label:has(:focus-visible)) {
+  outline: 2px solid var(--qube-accent-color);
+  outline-offset: 2px;
+}
+
+:where(.qube-storyboard-body) {
+  display: grid;
+  gap: 24px;
+}
+
+/* The screens' list: a sticky strip on a narrow screen, a sticky sidebar on a wide one */
+:where(.qube-storyboard-nav) {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 16px;
+  margin: 0 -16px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  background: var(--qube-solid-color);
+  border-bottom: 1px solid var(--qube-border-color);
+}
+
+:where(.qube-storyboard-nav-group) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+:where(.qube-storyboard-nav-title) {
+  margin: 0 4px 0 0;
+  font-size: 0.8571em;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-storyboard-nav ul) {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.qube-storyboard-nav a) {
+  display: block;
+  padding: 6px 10px;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--qube-control-radius);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.qube-storyboard-nav a:hover) {
+    background: color-mix(in srgb, currentColor 6%, transparent);
+  }
+}
+
+:where(.qube-storyboard-nav a[aria-current]) {
+  font-weight: 500;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+@media (min-width: 60rem) {
+  :where(.qube-storyboard-body) {
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: 40px;
+    align-items: start;
+  }
+
+  :where(.qube-storyboard-nav) {
+    top: 16px;
+    flex-direction: column;
+    gap: 20px;
+    max-height: calc(100vh - 32px);
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    background: none;
+    border: 0;
+  }
+
+  :where(.qube-storyboard-nav-group) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  :where(.qube-storyboard-nav-title) {
+    margin: 0 0 4px 10px;
+  }
+
+  :where(.qube-storyboard-nav ul) {
+    flex-direction: column;
+  }
+
+  :where(.qube-storyboard-nav a) {
+    white-space: normal;
+  }
+}
+
+:where(.qube-storyboard-screens) {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+:where(.qube-storyboard-panel) {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--qube-border-color);
+  scroll-margin-top: 72px;
+}
+
+:where(.qube-storyboard-panel:first-child) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+:where(.qube-storyboard-panel-head) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+:where(.qube-storyboard-panel h2) {
+  margin: 0;
+  font-size: 1.1429em;
+  font-weight: 600;
+}
+
+:where(.qube-storyboard-panel h2 a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+:where(.qube-storyboard-panel h2 a)::after {
+  content: " #";
+  color: var(--qube-muted-color);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+:where(.qube-storyboard-panel h2 a:hover, .qube-storyboard-panel h2 a:focus-visible)::after {
+  opacity: 1;
+}
+
+:where(.qube-storyboard-group) {
+  font-size: 0.8571em;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-storyboard-open) {
+  margin-left: auto;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-storyboard-panel > .qube-storyboard-note) {
+  margin-top: -6px;
+}
+
+/* Each screen on a neutral canvas */
+:where(.qube-storyboard-canvas) {
+  display: grid;
+  padding: clamp(20px, 5vw, 48px) clamp(16px, 5vw, 48px);
+  color: inherit;
+  background: color-mix(in srgb, currentColor 2.5%, transparent);
+}
+
+:where(.qube-storyboard:has([data-qube-canvas-theme="light"]:checked) .qube-storyboard-canvas) {
+  color-scheme: light;
+  color: #18181b;
+  background: #f6f6f7;
+}
+
+:where(.qube-storyboard:has([data-qube-canvas-theme="dark"]:checked) .qube-storyboard-canvas) {
+  color-scheme: dark;
+  color: #ececee;
+  background: #111113;
+}
+
+:where(.qube-storyboard-empty) {
+  margin: 0;
+  color: var(--qube-muted-color);
+}
+
+:where(.qube-storyboard-files) {
+  font-size: 0.9286em;
+}
+
+:where(.qube-storyboard-files summary) {
+  width: fit-content;
+  padding: 6px 0;
+  color: var(--qube-muted-color);
+  cursor: pointer;
+}
+
+:where(.qube-storyboard-files ul) {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.qube-storyboard-files li) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+:where(.qube-storyboard-files code) {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9231em;
+  white-space: nowrap;
+  border-radius: var(--qube-control-radius);
+  background: var(--qube-tint-color);
+  user-select: all;
+}
+
+:where(.qube-storyboard-copy) {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.9231em;
+}

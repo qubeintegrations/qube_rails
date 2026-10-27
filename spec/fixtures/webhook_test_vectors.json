@@ -1,0 +1,517 @@
+{
+  "about": "Webhook test vectors from the QuBe Sync server (mix webhook_vectors.gen). Bodies and headers are the server's own; ids, the timestamp and the secrets are made up. See Qube.WebhookVectors.",
+  "scheme": {
+    "header": "X-QUBE-Signature",
+    "format": "t=<unix seconds>,v1=<hex>[,v1=<hex>...]: one v1 per active secret",
+    "signed": "HMAC-SHA256, lowercase hex, of \"<t>.<raw body bytes>\" keyed by the secret",
+    "tolerance": 300,
+    "reasons": [
+      "missing",
+      "malformed",
+      "stale",
+      "mismatch"
+    ]
+  },
+  "timestamp": 1761000000,
+  "secrets": [
+    "whsec_test_vector_one",
+    "whsec_test_vector_two"
+  ],
+  "signatures": [
+    {
+      "name": "one secret",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "two secrets while one rotates, verified with the old",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809,v1=e1da0e731a0fedc53d3b9b08247fd25794fc1c11389d97b45dacbb940e2f0d3d",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "two secrets while one rotates, verified with the new",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809,v1=e1da0e731a0fedc53d3b9b08247fd25794fc1c11389d97b45dacbb940e2f0d3d",
+      "secrets": [
+        "whsec_test_vector_two"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "signed with the new secret, the verifier holding both",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=e1da0e731a0fedc53d3b9b08247fd25794fc1c11389d97b45dacbb940e2f0d3d",
+      "secrets": [
+        "whsec_test_vector_one",
+        "whsec_test_vector_two"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "t and v1 in another order",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809,t=1761000000",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "spaces after the commas",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000, v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "300 seconds old",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000300,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "300 seconds in the future",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1760999700,
+      "tolerance": 300,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "name": "301 seconds old",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000301,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "stale"
+    },
+    {
+      "name": "301 seconds in the future",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1760999699,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "stale"
+    },
+    {
+      "name": "stale is checked before the signature",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=0000000000000000000000000000000000000000000000000000000000000000",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000301,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "stale"
+    },
+    {
+      "name": "a secret the app doesn't hold",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_not_this_app"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "a tampered body",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwood Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwood Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "the body re-serialized",
+      "body": "{\n  \"app_id\": \"0196a1c0-0000-7000-8000-00000000a001\",\n  \"app_name\": \"Vector App\",\n  \"error\": null,\n  \"id\": \"0196a1c0-0000-7000-8000-00000000e001\",\n  \"iteration_state\": \"not_applicable\",\n  \"page\": 1,\n  \"page_request_id\": \"0196a1c0-0000-7000-8000-00000000e001\",\n  \"response_json\": {\n    \"data\": {\n      \"edit_sequence\": \"1760999990\",\n      \"email\": \"ap@northwind.example\",\n      \"full_name\": \"Northwind Builders\",\n      \"is_active\": true,\n      \"list_id\": \"80000024-1760999990\",\n      \"name\": \"Northwind Builders\",\n      \"notes\": \"Naïve café — ünïcode, kept as UTF-8\"\n    },\n    \"status\": \"success\"\n  },\n  \"response_xml\": \"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\n  \"sandbox\": true,\n  \"state\": \"response_received\",\n  \"timestamp\": 1761000000\n}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "the HMAC of the body alone, without the timestamp",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=3669d54d6d7c34376bf682ffd56271a138417b313acc788772a9215a4d66b68e",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "uppercase hex",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=F7A441D353D4C7C473A543A6D5651A75E676EF034393F5EC919369914EC7E809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "a v1 that isn't ASCII",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=ünïcode",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "mismatch"
+    },
+    {
+      "name": "no header",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": null,
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "missing"
+    },
+    {
+      "name": "an empty header",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "missing"
+    },
+    {
+      "name": "no v1: the server had no usable secret",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    },
+    {
+      "name": "a blank v1",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    },
+    {
+      "name": "the signature under another scheme",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v0=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    },
+    {
+      "name": "no t",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    },
+    {
+      "name": "a t that isn't a number",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=soon,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    },
+    {
+      "name": "a t that isn't a whole number",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000.5,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "secrets": [
+        "whsec_test_vector_one"
+      ],
+      "now": 1761000000,
+      "tolerance": 300,
+      "valid": false,
+      "reason": "malformed"
+    }
+  ],
+  "events": [
+    {
+      "name": "request: an answer",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"data\":{\"edit_sequence\":\"1760999990\",\"email\":\"ap@northwind.example\",\"full_name\":\"Northwind Builders\",\"is_active\":true,\"list_id\":\"80000024-1760999990\",\"name\":\"Northwind Builders\",\"notes\":\"Naïve café — ünïcode, kept as UTF-8\"},\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f7a441d353d4c7c473a543a6d5651a75e676ef034393f5ec919369914ec7e809",
+      "expect": {
+        "type": "request",
+        "event": null,
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000e001:response_received",
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "request: a page of a paginated query",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":null,\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"continue\",\"page\":2,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e002\",\"response_json\":{\"data\":[{\"full_name\":\"Riverbend Electric\",\"list_id\":\"80000025-1760999991\"},{\"full_name\":\"Summit Plumbing\",\"list_id\":\"80000026-1760999992\"}],\"status\":\"success\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"response_received\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=042cde41f357a2e0d25c86ab36058948087aca89d8099a00305a1795efbe8a30",
+      "expect": {
+        "type": "request",
+        "event": null,
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000e002:response_received",
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "request: QuickBooks refused it",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":{\"debug_message\":null,\"error_code\":3100,\"error_type\":\"quickbooks_business_error\",\"hresult\":null,\"message\":\"The name \\\"Northwind Builders\\\" of the list element is already in use.\",\"user_message\":\"A customer named \\\"Northwind Builders\\\" already exists in QuickBooks.\"},\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":{\"error\":{\"code\":\"3100\",\"message\":\"The name \\\"Northwind Builders\\\" of the list element is already in use.\",\"type\":\"name_in_use\"},\"status\":\"error\"},\"response_xml\":\"<?xml version=\\\"1.0\\\" ?><QBXML><QBXMLMsgsRs>...</QBXMLMsgsRs></QBXML>\",\"sandbox\":true,\"state\":\"error\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=470bfe7b5000f83aad5b2a1923556f662eed912c6351522e39cb6418dde4fdcb",
+      "expect": {
+        "type": "request",
+        "event": null,
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000e001:error",
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "request: an answer that never came back",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"app_name\":\"Vector App\",\"error\":{\"debug_message\":null,\"error_code\":null,\"error_type\":\"timed_out\",\"hresult\":null,\"message\":\"No answer came back: the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, while QuickBooks had the request, and the Web Connector session ended without its answer. QuickBooks may still have applied it, so look before sending it again.\",\"user_message\":\"The connection was lost, or QuickBooks or the Web Connector was closed, while this request was being processed, so QuickBooks' answer never came back. It may still have been saved in QuickBooks: check there before trying again.\"},\"id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"iteration_state\":\"not_applicable\",\"page\":1,\"page_request_id\":\"0196a1c0-0000-7000-8000-00000000e001\",\"response_json\":null,\"response_xml\":null,\"sandbox\":true,\"state\":\"timed_out\",\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=3d8cdb846507232d46cecf152ba6ae3798b1cb74d7a0718e002743d1e856bca6",
+      "expect": {
+        "type": "request",
+        "event": null,
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000e001:timed_out",
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "workflow_run.awaiting_input",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"event\":\"workflow_run.awaiting_input\",\"links\":{\"cancel\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/cancel\",\"decisions\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/decisions?prompt_token=Vq3kT9xRb2LmW8sZ\",\"run\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001\",\"search\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/search?prompt_token=Vq3kT9xRb2LmW8sZ\",\"ui\":\"https://qubesync.com/app/workflow_runs/0196a1c0-0000-7000-8000-00000000f001\"},\"prompt\":{\"choices\":[{\"description\":null,\"detail\":\"similar name\",\"fields\":[],\"id\":\"use:1\",\"label\":\"Riverbend Electric\"},{\"description\":null,\"detail\":null,\"fields\":[{\"kind\":\"customer\",\"label\":\"The one to use\",\"name\":\"list_id\",\"required\":true,\"type\":\"record\"}],\"id\":\"use\",\"label\":\"Another one…\"},{\"description\":null,\"detail\":null,\"fields\":[],\"id\":\"none\",\"label\":\"None of these\"},{\"description\":null,\"detail\":null,\"fields\":[],\"id\":\"cancel\",\"label\":\"Cancel\"}],\"data\":{\"name\":\"Riverbend\"},\"details\":[{\"label\":\"Customer\",\"value\":\"Riverbend\"}],\"id\":\"resolve / ask\",\"kind\":\"decision\",\"message\":\"No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.\",\"options\":[],\"token\":\"Vq3kT9xRb2LmW8sZ\"},\"reference\":\"contact-381-1\",\"revision\":6,\"run_id\":\"0196a1c0-0000-7000-8000-00000000f001\",\"run_state\":\"awaiting_input\",\"sandbox\":true,\"timestamp\":1761000000,\"workflow\":\"ensure_customer\",\"workflow_id\":\"0196a1c0-0000-7000-8000-00000000f0a1\"}",
+      "header": "t=1761000000,v1=eeb96ce89f13e431e25e13289efabc8d5555edc9f2accf00e599365bd6d29860",
+      "expect": {
+        "type": "workflow_run",
+        "event": "workflow_run.awaiting_input",
+        "dedupe_key": null,
+        "revision": 6,
+        "reference": "contact-381-1"
+      }
+    },
+    {
+      "name": "workflow_run.completed",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"error\":null,\"event\":\"workflow_run.completed\",\"links\":{\"cancel\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/cancel\",\"decisions\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/decisions\",\"run\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001\",\"search\":null,\"ui\":\"https://qubesync.com/app/workflow_runs/0196a1c0-0000-7000-8000-00000000f001\"},\"outcome\":\"used_existing\",\"output\":{\"full_name\":\"Riverbend Electric\",\"list_id\":\"80000025-1760999991\"},\"reference\":\"contact-381-1\",\"revision\":9,\"run_id\":\"0196a1c0-0000-7000-8000-00000000f001\",\"run_state\":\"completed\",\"sandbox\":true,\"summary\":{\"decisions\":[{\"choice\":\"use:1\",\"prompt\":\"resolve / ask\"}],\"ended_at\":\"2025-10-20T22:40:00Z\",\"side_effects\":[],\"stopped_at\":null},\"timestamp\":1761000000,\"workflow\":\"ensure_customer\",\"workflow_id\":\"0196a1c0-0000-7000-8000-00000000f0a1\"}",
+      "header": "t=1761000000,v1=816f9f7859b2de2a63540d75f6e7d2db7812e9a0a3712f59e5efa7a80c77d6f9",
+      "expect": {
+        "type": "workflow_run",
+        "event": "workflow_run.completed",
+        "dedupe_key": null,
+        "revision": 9,
+        "reference": "contact-381-1"
+      }
+    },
+    {
+      "name": "workflow_run.failed",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"error\":\"Five renames were tried and every name was taken; the last was \\\"Riverbend Electric 6\\\".\",\"event\":\"workflow_run.failed\",\"links\":{\"cancel\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/cancel\",\"decisions\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/decisions\",\"run\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001\",\"search\":null,\"ui\":\"https://qubesync.com/app/workflow_runs/0196a1c0-0000-7000-8000-00000000f001\"},\"outcome\":\"renames_exhausted\",\"output\":null,\"reference\":\"contact-381-1\",\"revision\":7,\"run_id\":\"0196a1c0-0000-7000-8000-00000000f001\",\"run_state\":\"failed\",\"sandbox\":true,\"summary\":{\"decisions\":[],\"ended_at\":\"2025-10-20T22:40:00Z\",\"side_effects\":[],\"stopped_at\":\"ensure / add\"},\"timestamp\":1761000000,\"workflow\":\"ensure_customer\",\"workflow_id\":\"0196a1c0-0000-7000-8000-00000000f0a1\"}",
+      "header": "t=1761000000,v1=11c41fcd4e290305c08940766b2256f3e7d4cdcaa581f7be87a70f2a1f005d30",
+      "expect": {
+        "type": "workflow_run",
+        "event": "workflow_run.failed",
+        "dedupe_key": null,
+        "revision": 7,
+        "reference": "contact-381-1"
+      }
+    },
+    {
+      "name": "workflow_run.cancelled",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"cancel_reason\":\"The customer was merged in our CRM.\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"error\":null,\"event\":\"workflow_run.cancelled\",\"links\":{\"cancel\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/cancel\",\"decisions\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/decisions\",\"run\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001\",\"search\":null,\"ui\":\"https://qubesync.com/app/workflow_runs/0196a1c0-0000-7000-8000-00000000f001\"},\"outcome\":null,\"output\":null,\"reference\":\"contact-381-1\",\"revision\":8,\"run_id\":\"0196a1c0-0000-7000-8000-00000000f001\",\"run_state\":\"cancelled\",\"sandbox\":true,\"summary\":{\"decisions\":[],\"ended_at\":\"2025-10-20T22:40:00Z\",\"side_effects\":[],\"stopped_at\":\"resolve / ask\"},\"timestamp\":1761000000,\"workflow\":\"ensure_customer\",\"workflow_id\":\"0196a1c0-0000-7000-8000-00000000f0a1\"}",
+      "header": "t=1761000000,v1=d612025decd1461f898567a5a96c64e2e231f1f772556f859671f109a07ec633",
+      "expect": {
+        "type": "workflow_run",
+        "event": "workflow_run.cancelled",
+        "dedupe_key": null,
+        "revision": 8,
+        "reference": "contact-381-1"
+      }
+    },
+    {
+      "name": "workflow_run.notification",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"data\":{\"kind\":\"customer\",\"more\":true,\"page\":1,\"pass\":1,\"records\":[{\"full_name\":\"Acme Co\",\"list_id\":\"80000001-1738310400\"}]},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000d001\",\"event\":\"workflow_run.notification\",\"from\":{\"item_count\":3,\"item_index\":0,\"state\":\"send\",\"workflow\":\"stream_query\"},\"links\":{\"cancel\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/cancel\",\"decisions\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001/decisions\",\"run\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001/workflow-runs/0196a1c0-0000-7000-8000-00000000f001\",\"search\":null,\"ui\":\"https://qubesync.com/app/workflow_runs/0196a1c0-0000-7000-8000-00000000f001\"},\"name\":\"page\",\"reference\":\"nightly-sync-2025-10-20\",\"revision\":5,\"run_id\":\"0196a1c0-0000-7000-8000-00000000f001\",\"run_state\":\"running\",\"sandbox\":true,\"seq\":1,\"state\":\"pull_lists / send\",\"timestamp\":1761000000,\"workflow\":\"pull_changes\",\"workflow_id\":\"0196a1c0-0000-7000-8000-00000000f0a1\"}",
+      "header": "t=1761000000,v1=079b8a51f8e821d8e8f7ecc4b345a91d9815b69d788e9d863f9fcfd4d4108547",
+      "expect": {
+        "type": "notification",
+        "event": "workflow_run.notification",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000d001",
+        "revision": 5,
+        "reference": "nightly-sync-2025-10-20"
+      }
+    },
+    {
+      "name": "connection.connected",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection\":{\"id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"last_connected_at\":\"2025-10-20T22:00:21Z\",\"name\":\"Riverbend Electric\",\"setup\":\"first\",\"type\":\"standard\"},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000b001\",\"event\":\"connection.connected\",\"links\":{\"self\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001\"},\"revision\":1,\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=86f59c2995118b539192079a21f9a0968f06c4527dd75fbd714f592559783388",
+      "expect": {
+        "type": "connection",
+        "event": "connection.connected",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000b001",
+        "revision": 1,
+        "reference": null
+      }
+    },
+    {
+      "name": "connection.setup_cancelled",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection\":{\"id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"last_connected_at\":\"2025-10-20T22:00:21Z\",\"name\":\"Riverbend Electric\",\"type\":\"standard\"},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000b002\",\"event\":\"connection.setup_cancelled\",\"links\":{\"self\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001\"},\"revision\":2,\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=f310e3b65a74baefacc5a8bf7894af8f6ed0ee3baa4581fa62350f6e5841ad1c",
+      "expect": {
+        "type": "connection",
+        "event": "connection.setup_cancelled",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000b002",
+        "revision": 2,
+        "reference": null
+      }
+    },
+    {
+      "name": "connection.stalled",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection\":{\"expected_check_in_at\":\"2025-10-20T22:05:21Z\",\"id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"last_connected_at\":\"2025-10-20T22:00:21Z\",\"name\":\"Riverbend Electric\",\"stall_reason\":\"not_checking_in\",\"type\":\"standard\",\"waiting\":{\"oldest_queued_at\":\"2025-10-20T22:12:40Z\",\"requests\":3}},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000b003\",\"event\":\"connection.stalled\",\"links\":{\"self\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001\"},\"revision\":3,\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=023bb5d1b493950dc2d569c459a389131bd8dd8ef21f1cb4c967fd760b5588de",
+      "expect": {
+        "type": "connection",
+        "event": "connection.stalled",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000b003",
+        "revision": 3,
+        "reference": null
+      }
+    },
+    {
+      "name": "connection.resumed",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection\":{\"id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"last_connected_at\":\"2025-10-20T22:00:21Z\",\"name\":\"Riverbend Electric\",\"stalled_at\":\"2025-10-20T22:27:40Z\",\"type\":\"standard\"},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000b004\",\"event\":\"connection.resumed\",\"links\":{\"self\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001\"},\"revision\":4,\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=caaea63b0a54e6a4aad8ceb003ba48565a2a1e332ecfbb41ef2d1daff1eb8bd4",
+      "expect": {
+        "type": "connection",
+        "event": "connection.resumed",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000b004",
+        "revision": 4,
+        "reference": null
+      }
+    },
+    {
+      "name": "name_index.ready",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"event\":\"name_index.ready\",\"name_index\":{\"as_of\":\"2025-10-20T22:30:00Z\",\"records\":1240,\"state\":\"ready\"},\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=a17bd2ef558daf18b65c20cbfea979c726a7bc9e9316bde94450b2420a6998d1",
+      "expect": {
+        "type": "name_index",
+        "event": "name_index.ready",
+        "dedupe_key": null,
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "name_index.failed",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"event\":\"name_index.failed\",\"name_index\":{\"as_of\":null,\"records\":null,\"state\":\"failed\"},\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=d548f8984c9a81df31c0b0585dad07ee440566ea46fe140124352f064eb588f6",
+      "expect": {
+        "type": "name_index",
+        "event": "name_index.failed",
+        "dedupe_key": null,
+        "revision": null,
+        "reference": null
+      }
+    },
+    {
+      "name": "an event this library doesn't know",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000a0f1\",\"event\":\"invoice.paid_somewhere_new\",\"sandbox\":true,\"something_new\":{\"nested\":[1,2,3]},\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=696a41cee8287156cbbafe1e8a77be386e74c5c7bc07f8b718a23f2edf5472d3",
+      "expect": {
+        "type": "unknown",
+        "event": "invoice.paid_somewhere_new",
+        "dedupe_key": null,
+        "revision": null,
+        "reference": null
+      }
+    }
+  ]
+}

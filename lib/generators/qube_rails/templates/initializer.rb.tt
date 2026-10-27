@@ -1,0 +1,82 @@
+# QuBe Sync (qube_rails): the only place the engine reads your app from. A setting left unset
+# raises QubeRails::NotConfigured, naming this file, the first time it's needed. Fill in
+# current_account before anything else.
+#
+# The engine's routes come from `mount QubeRails::Engine => "/"` in config/routes.rb:
+#   POST /quickbooks/connections                 a new connection for the signed-in account
+#   POST /quickbooks/connections/:id/onboarding  one of its connections, through setup again
+#   POST /webhooks/qube/runs/:id                 QuBe Sync's webhooks (signed, no sign-in)
+#   POST /webhooks/qube/connections/:id
+#   POST /qube/questions/runs/:id                an answer, behind your sign-in and CSRF
+#   GET  /qube/questions/runs/:id/search         a record field's matches
+#   GET  /qube/storyboard                        every screen, sample data (config.storyboard)
+#
+# Its tables (qube_connections, qube_runs, qube_notifications, qube_quickbooks_records) keep
+# every connection, run and QuickBooks id; your own tables need nothing.
+QubeRails.configure do |config|
+  # Each operation by its SLUG, as class names (resolved when used, so code reloading works).
+  # Add one per QubeRails::Operation subclass in app/services/quickbooks_desktop/.
+  config.operations = {
+    # "create_invoice" => "QuickbooksDesktop::CreateInvoice",
+  }
+
+  # Your class for a connection's own events (connected, setup cancelled, stalled, resumed).
+  config.connection_events = "QuickbooksDesktop::ConnectionEvents"
+
+  # The signed-in customer's account, from the controller handling the request (your
+  # current_user and other helpers are on it). It owns the connections it makes, and only its
+  # own can be set up again; nil answers 401.
+  # config.current_account = ->(controller) { controller.current_user.account }
+
+  # Whether the signed-in user may answer or search the question run asks about record. By
+  # default, yes when the signed-in account (current_account) owns the run's connection, and no
+  # (404, logged) otherwise. Set it to check more, such as whether this user may see the record,
+  # or to let staff act across accounts. Only true allows.
+  # config.authorize_question = ->(controller, record, run) {
+  #   run.connection.owner == controller.current_user.account &&
+  #     controller.current_user.can_edit?(record)
+  # }
+
+  # How a verified webhook reaches a worker. The default is ActiveJob (QubeRails::WebhookJob) on
+  # config.queue. For another queue, hand it on and call QubeRails.run from its worker:
+  # config.enqueue = ->(delivery) {
+  #   MyQueue.push(delivery[:kind], delivery[:id], delivery[:body])
+  # }
+  # config.queue = :default
+
+  # Delete ended runs after this long, when QubeRails::PruneRunsJob runs (schedule it). Off
+  # until set.
+  # config.prune_runs_after = 90.days
+
+  # Onboarding makes realtime connections: workflows run only on those (billed as realtime).
+  # config.connection_type = "realtime"
+  # How many times QubeRails::WebhookJob runs a delivery whose work raised, with a growing wait,
+  # before it logs an error and raises to your adapter. With Sidekiq, whose own retries follow,
+  # a smaller number (or 1, to leave retries to Sidekiq) avoids retrying twice over.
+  # config.job_attempts = 10
+
+  # Where notification delivery ids are remembered, so a redelivery runs its handler once. The
+  # default is the engine's qube_notifications table, written in the same transaction as the
+  # handler. Rails.cache instead needs a cache your workers share, and isn't transactional:
+  # config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
+
+  # Your CSS framework's classes for the engine's screens, by piece, added beside their qube-
+  # classes (pieces: QubeRails::Configuration::UI_PIECES; see the README's "Styling"):
+  # config.ui_classes = { button: "btn btn-primary", button_secondary: "btn btn-link",
+  #                       input: "form-control", select: "form-select", label: "form-label" }
+
+  # GET /qube/storyboard: every screen with sample data, in your layout. On in development.
+  # config.storyboard = Rails.env.development?
+
+  # The controller onboarding and the questions inherit, so your sign-in and CSRF apply.
+  # config.parent_controller = "ApplicationController"
+
+  # Read from the environment when unset: QUBE_API_KEY, QUBE_URL (https://qubesync.com) and
+  # QUBE_WEBHOOK_SECRET, which `qube env --write .env` writes, and QUBE_WEBHOOK_URL, the base of
+  # each webhook URL (`qube listen --write-env .env` in development; your app's /webhooks/qube in
+  # production). webhook_secret may be a list while a secret rotates. Never logged.
+  # config.api_key = ENV.fetch("QUBE_API_KEY")
+  # config.base_url = "https://qubesync.com"
+  # config.webhook_secret = [ENV.fetch("QUBE_WEBHOOK_SECRET"), ENV.fetch("QUBE_WEBHOOK_SECRET_OLD")]
+  # config.webhook_url = "https://example.com/webhooks/qube"
+end

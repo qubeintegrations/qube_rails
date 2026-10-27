@@ -1,0 +1,59 @@
+{
+  "title": "A name clash",
+  "note": "ensure's ask_use: the name is already in QuickBooks. Use that record, add this one under another name, or cancel.",
+  "prompt": {
+    "id": "ensure / ask_use",
+    "kind": "decision",
+    "token": "Wg5qU7vAs3PhB5dD",
+    "message": "\"Riverbend Electric\" is already in QuickBooks. Use that record, add this one under another name, or cancel.",
+    "data": {
+      "kind": "customer",
+      "name": "Riverbend Electric",
+      "existing": {
+        "list": "customer"
+      }
+    },
+    "details": [
+      {
+        "label": "Customer",
+        "value": "Riverbend Electric"
+      },
+      {
+        "label": "Held by",
+        "value": "Customer"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "use_existing",
+        "label": "Use the existing record",
+        "description": "Carry on with the record QuickBooks already has. Nothing new is created.",
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "rename",
+        "label": "Add it under another name",
+        "description": "Try the add again under a name you choose.",
+        "detail": null,
+        "fields": [
+          {
+            "name": "name",
+            "type": "string",
+            "label": "New name",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": "Stop here. Nothing is created.",
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

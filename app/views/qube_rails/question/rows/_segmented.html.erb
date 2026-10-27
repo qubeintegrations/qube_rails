@@ -1,0 +1,14 @@
+<%# A short list (field.options, at most three) in a row as a segmented control: radios posted
+    as field.input_name, the column's label their group's name for screen readers. %>
+<fieldset class="qube-segmented-field">
+  <legend class="qube-visually-hidden"><%= field.label %></legend>
+  <div class="<%= qube_classes(:segmented, "qube-segmented") %>">
+<% field.options.each do |option| %>
+    <label class="<%= qube_classes(:segment, "qube-segment") %>">
+      <%= tag.input(type: "radio", name: field.input_name, value: option.value, required: field.required,
+                    disabled: field.disabled, class: "qube-segment-input qube-rows-input", data: field.data) %>
+      <span><%= option.label %></span>
+    </label>
+<% end %>
+  </div>
+</fieldset>

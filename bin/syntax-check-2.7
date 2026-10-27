@@ -1,0 +1,59 @@
+#!/bin/sh
+# Checks that every Ruby file the gem ships parses on Ruby 2.7: the kit vendors these same files
+# into apps below qube_sync's Ruby 3.3 floor, with an inline QubeRails::Backend. It runs
+# `ruby -c` on each file in app/, config/, db/ and lib/, on the question partial's Ruby (erb -x), and
+# on the generator's templates as rendered. It checks syntax only: a Rails or Ruby API newer than
+# Rails 5.2 / Ruby 2.7 is for review to catch.
+#
+#   bin/syntax-check-2.7        on Ruby 2.7 (CI), or in the ruby:2.7 Docker image otherwise
+set -eu
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+
+if ! ruby -e 'exit(RUBY_VERSION.start_with?("2.7.") ? 0 : 1)' 2>/dev/null; then
+  exec docker run --rm -v "$root:/gem:ro" -w /gem ruby:2.7 sh bin/syntax-check-2.7
+fi
+
+cd "$root"
+ruby -v
+failed=0
+count=0
+
+for file in $(find app config db lib -name '*.rb' | sort); do
+  count=$((count + 1))
+  if ! ruby -wc "$file" >/dev/null; then
+    echo "FAIL $file"
+    failed=1
+  fi
+done
+
+for file in $(find app -name '*.erb' | sort); do
+  count=$((count + 1))
+  if ! erb -x -T - "$file" | ruby -c >/dev/null; then
+    echo "FAIL $file"
+    failed=1
+  fi
+done
+
+# The generator's templates, rendered as `rails g qube_rails:install` would for accounts.
+for file in $(find lib/generators -name '*.rb.tt' | sort); do
+  count=$((count + 1))
+  if ! ruby -rerb -e '
+    table_name = String.new("accounts")
+    def table_name.camelize; "Accounts"; end
+    model_name = String.new("Account")
+    def model_name.underscore; "account"; end
+    migration_version = "[5.2]"
+    source = ERB.new(File.read(ARGV[0]), trim_mode: "-").result(binding)
+    RubyVM::InstructionSequence.compile(source, ARGV[0])
+  ' "$file"; then
+    echo "FAIL $file"
+    failed=1
+  fi
+done
+
+if [ "$failed" -ne 0 ]; then
+  echo "Some files don't parse on Ruby 2.7."
+  exit 1
+fi
+echo "$count files parse on Ruby 2.7."

@@ -1,0 +1,23 @@
+<%# A rows field (field.rows, a QubeRails::RowsView): a block per record with the fields it asks,
+    posted as data[<field>][<row key>][<column>]. A field shows only while its "when" holds. "Set
+    all to:" sets the segmented column on every row, and "Use for all" copies one row's value to
+    the others (the behaviour script). %>
+<% rows = field.rows %>
+<% set_all = rows.set_all %>
+<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
+     data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>">
+  <p class="<%= qube_classes(:label, "qube-rows-label") %>"><%= rows.label %></p>
+<% if set_all %>
+  <div class="qube-rows-set-all" data-qube-rows-set-all="<%= set_all.name %>">
+    <span class="qube-rows-set-all-label"><%= QubeRails.t("question.set_all") %></span>
+<%   set_all.options.each do |option| %>
+    <button type="button" class="<%= qube_classes(:button_secondary, "qube-set-all-button") %>" data-qube-set-all="<%= option.value %>"><%= option.label %></button>
+<%   end %>
+  </div>
+<% end %>
+  <div class="<%= qube_classes(:rows, "qube-rows") %>" role="list">
+<% rows.rows.each do |row| %>
+    <%= render "qube_rails/question/rows/row", rows: rows, row: row %>
+<% end %>
+  </div>
+</div>

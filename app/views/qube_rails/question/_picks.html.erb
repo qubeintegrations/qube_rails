@@ -1,0 +1,6 @@
+<%# The question's picks (question.picks): option rows, one form each. %>
+<div class="<%= qube_classes(:picks, "qube-picks") %>" role="list">
+<% question.picks.each do |choice| %>
+  <%= render "qube_rails/question/pick", question: question, choice: choice %>
+<% end %>
+</div>

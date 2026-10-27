@@ -1,0 +1,21 @@
+<%# The question a QuBe Sync run is asking about record, with a form per choice, or nothing
+    when it isn't asking. Render it on the record's page, with its operation's slug:
+      render "qube_rails/question", record: @invoice, operation: "create_invoice"
+    It builds a QubeRails::QuestionView from record's latest run of that operation and renders
+    the qube_rails/question/* pieces; override a piece by putting a file at its path in your
+    app (README, "Styling"). Its search boxes and rows table need the behaviour script
+    (qube_rails_assets in your layout). %>
+<% unless QubeRails.config.operation_class(operation) %>
+<%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
+<% end %>
+<% run = QubeRails::Run.latest_for(record, operation) %>
+<%# Refreshed when the run's next event comes, in an app with turbo-rails (QubeRails.broadcast_refresh). %>
+<%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
+<% error = flash[:qube_rails_error] %>
+<% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
+<% question = QubeRails::QuestionView.from_run(run, qube_rails, error: error) %>
+<% if question %>
+<%= render "qube_rails/question/question", question: question %>
+<% else %>
+<%= render "qube_rails/error", message: error %>
+<% end %>

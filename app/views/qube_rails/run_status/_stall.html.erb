@@ -1,0 +1,3 @@
+<%# Why a record waits: its connection stalled (run_status.stall, the reason; stall_text, what to
+    do, from I18n's qube_rails.status.stalled.*). %>
+<p class="<%= qube_classes(:stall, "qube-run-stall") %>"><%= run_status.stall_text %></p>

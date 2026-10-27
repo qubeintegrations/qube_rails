@@ -1,0 +1,19 @@
+<%# One pick (a QubeRails::ChoiceView of kind :pick): an option row, a form posting choice=<id>
+    to choice.action_url with your CSRF token. %>
+<form class="qube-choice qube-pick-form" method="post" action="<%= choice.action_url %>" role="listitem"
+      data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick">
+  <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
+  <%= hidden_field_tag :choice, choice.id, id: nil %>
+  <button type="submit" class="<%= qube_classes(:pick, "qube-pick") %>">
+    <span class="qube-pick-text">
+      <span class="qube-pick-label"><%= choice.label %></span>
+<% if choice.detail %>
+      <span class="<%= qube_classes(:pick_detail, "qube-pick-detail") %>"><%= choice.detail %></span>
+<% end %>
+<% if choice.description %>
+      <span class="qube-pick-description"><%= choice.description %></span>
+<% end %>
+    </span>
+    <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= QubeRails.t("question.use_pick") %></span>
+  </button>
+</form>

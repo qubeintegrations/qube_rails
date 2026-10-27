@@ -1,0 +1,22 @@
+<%# Where record stands with QuickBooks for an operation, in a sentence, and what went wrong when
+    its run failed, or nothing before it's sent. Render it on the record's page, with
+    connection: when the page is about one company file (else it's the connection the latest run
+    went out on):
+      render "qube_rails/run_status", record: @invoice, operation: "create_invoice"
+    It builds a QubeRails::RunStatusView from QubeRails::SyncStatus and renders the
+    qube_rails/run_status/* pieces; override a piece by putting a file at its path in your app
+    (README, "Styling"). %>
+<% unless QubeRails.config.operation_class(operation) %>
+<%   raise ArgumentError, "QuBe Sync: no operation has the slug #{operation.inspect} (config.operations)" %>
+<% end %>
+<% sync = if local_assigns[:connection]
+           local_assigns[:connection].sync_status(record, operation: operation)
+         else
+           QubeRails::SyncStatus.latest(record, operation: operation)
+         end %>
+<%# Refreshed when the run's next event comes, in an app with turbo-rails (QubeRails.broadcast_refresh). %>
+<%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
+<% error = flash[:qube_rails_error] %>
+<% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
+<%= render "qube_rails/run_status/status", run_status: QubeRails::RunStatusView.from_sync(sync, qube_rails, error: error,
+                                                                                    connection: local_assigns[:connection]) %>

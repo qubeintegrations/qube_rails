@@ -1,0 +1,60 @@
+{
+  "title": "A lost answer",
+  "note": "add_transaction's ask_about_add: QuickBooks never answered the add, and the run couldn't settle whether it went in. Use a candidate, add it again, or cancel.",
+  "prompt": {
+    "id": "add_transaction / ask_about_add",
+    "kind": "decision",
+    "token": "Xh6rV8wBt4QjC6eE",
+    "message": "QuickBooks didn't confirm whether this invoice went in. If it's the one below, use it; if it isn't there, add it again.",
+    "data": {
+      "operation": "invoice",
+      "why": "lost_answer",
+      "candidates_complete": true,
+      "external_guid": "{6B0C3A52-6E1A-4F43-9B1F-0D3E3E1F7A10}",
+      "not_found": null
+    },
+    "details": [
+      {
+        "label": "Adding",
+        "value": "Invoice"
+      },
+      {
+        "label": "Number",
+        "value": "1042"
+      },
+      {
+        "label": "Date",
+        "value": "2026-10-20"
+      },
+      {
+        "label": "For",
+        "value": "Riverbend Electric"
+      }
+    ],
+    "options": [],
+    "choices": [
+      {
+        "id": "use_existing:1",
+        "label": "1042",
+        "description": null,
+        "detail": "2026-10-20 · Riverbend Electric · 1250.00",
+        "fields": []
+      },
+      {
+        "id": "add_again",
+        "label": "None of them: add it again",
+        "description": null,
+        "detail": null,
+        "fields": []
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "description": null,
+        "detail": null,
+        "fields": []
+      }
+    ]
+  },
+  "search": {}
+}

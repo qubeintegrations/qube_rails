@@ -1,2 +1,10 @@
 .DS_Store
 *.gem
+/Gemfile.lock
+/.bundle/
+/vendor/bundle/
+/spec/dummy/log/
+/spec/dummy/tmp/
+/spec/dummy/db/*.sqlite3*
+/tmp/
+.rspec_status

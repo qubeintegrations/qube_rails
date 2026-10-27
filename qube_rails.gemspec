@@ -3,37 +3,36 @@
 require_relative "lib/qube_rails/version"
 
 Gem::Specification.new do |spec|
-  spec.name        = "qube_rails"
-  spec.version     = QubeRails::VERSION
-  spec.authors     = ["QUBE Team"]
-  spec.email       = ["support@qubesync.com"]
-  spec.homepage    = "https://github.com/qube-labs/qube_rails"
-  spec.summary     = "Rails integration for QuickBooks Desktop via QUBE Sync"
-  spec.description = "A Rails gem that provides easy integration with QuickBooks Desktop through the QUBE Sync platform. Includes models, controllers, and utilities for managing QuickBooks data in Rails applications."
-  spec.license     = "MIT"
+  spec.name = "qube_rails"
+  spec.version = QubeRails::VERSION
+  spec.authors = ["Garrett Lancaster"]
+  spec.email = ["support@qubesync.com"]
+  spec.homepage = "https://qubesync.com"
+  spec.summary = "QuBe Sync's Rails engine: the webhook endpoint, onboarding and question routes " \
+                 "for QuickBooks Desktop"
+  spec.description = "The code every Rails app's QuBe Sync integration shares: the webhook endpoint " \
+                     "and its job, onboarding, the question routes and partial, and the Operation " \
+                     "and ConnectionEvents bases. Your app keeps its own operations, its connection " \
+                     "class and one initializer."
+  spec.license = "MIT"
 
-  spec.required_ruby_version = ">= 2.7.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/qube-labs/qube_rails"
-  spec.metadata["changelog_uri"] = "https://github.com/qube-labs/qube_rails/blob/main/CHANGELOG.md"
+  spec.metadata["documentation_uri"] = "https://docs.qubesync.com"
+  spec.metadata["source_code_uri"] = "https://github.com/qubeintegrations/qube_rails"
+  spec.metadata["changelog_uri"] = "https://github.com/qubeintegrations/qube_rails/blob/main/CHANGELOG.md"
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
-    Dir["{lib}/**/*", "README.md", "LICENSE.txt"]
+    Dir["{app,config,db,lib}/**/*", "README.md", "CHANGELOG.md", "LICENSE.txt"].reject do |f|
+      File.directory?(f) || File.basename(f) == ".DS_Store"
+    end
   end
-
-  # Core dependencies
-  spec.add_dependency "rails", ">= 6.1.0"
-  spec.add_dependency "qube_sync", path: "../qube_sync_rb"
-
-  # Development dependencies
-  spec.add_development_dependency "rspec-rails", "~> 6.0"
-  spec.add_development_dependency "factory_bot_rails", "~> 6.2"
-  spec.add_development_dependency "faker", "~> 3.0"
-  spec.add_development_dependency "sqlite3", "~> 1.4"
-  spec.add_development_dependency "pry", "~> 0.14"
-  spec.add_development_dependency "rubocop", "~> 1.50"
-  spec.add_development_dependency "rubocop-rails", "~> 2.19"
-
   spec.require_paths = ["lib"]
+
+  spec.add_dependency "qube_sync", ">= 0.5.0"
+  spec.add_dependency "railties", ">= 7.0"
+  # QubeRails::WebhookJob, the default enqueue, is an ActiveJob job.
+  spec.add_dependency "activejob", ">= 7.0"
 end

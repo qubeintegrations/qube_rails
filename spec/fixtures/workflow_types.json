@@ -1,0 +1,113 @@
+{
+  "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "operations_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "include_drafts": true,
+  "workflows": {
+    "add_transaction": {
+      "name": "Add a transaction",
+      "description": "Sends any transaction add once every list record it names exists.",
+      "version": 3,
+      "draft": false,
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation", "params"],
+        "properties": {
+          "operation": {"type": "string", "enum": ["bill.create", "invoice.create"], "description": "The transaction add to send."},
+          "params": {"type": "object", "description": "The add's body, exactly as the v2 endpoint for the operation takes it."},
+          "adds": {
+            "type": "array",
+            "description": "The adds to send for records the add names that may be missing.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "add"],
+              "properties": {
+                "kind": {"type": "string", "description": "The list it goes to."},
+                "add": {"type": "object", "description": "The v2 <kind>.create body."},
+                "fields": {
+                  "type": ["object", "null"],
+                  "additionalProperties": false,
+                  "properties": {"email": {"type": ["string", "null"]}, "postal_code": {"type": ["string", "null"]}}
+                },
+                "accept": {"enum": ["exact", "strong", null]}
+              },
+              "discriminator": {"propertyName": "kind"},
+              "oneOf": [
+                {"title": "customer", "properties": {"kind": {"const": "customer"}, "add": {"$operation": "customer.create", "description": "The v2 <kind>.create body."}}},
+                {"title": "item_service", "properties": {"kind": {"const": "item_service"}, "add": {"$operation": "item_service.create", "description": "The v2 <kind>.create body."}}}
+              ]
+            }
+          },
+          "references": {
+            "type": "object",
+            "description": "Changes to the rules, by kind.",
+            "additionalProperties": {"enum": ["ensure", "create", "must_exist"]}
+          }
+        },
+        "discriminator": {"propertyName": "operation"},
+        "oneOf": [
+          {"title": "bill", "properties": {"operation": {"const": "bill.create"}, "params": {"$operation": "bill.create", "description": "The add's body, exactly as the v2 endpoint for the operation takes it."}}},
+          {"title": "invoice", "properties": {"operation": {"const": "invoice.create"}, "params": {"$operation": "invoice.create", "description": "The add's body, exactly as the v2 endpoint for the operation takes it."}}}
+        ]
+      }
+    },
+    "record_payment": {
+      "name": "Record a payment",
+      "description": "Records a customer's payment and applies it to one invoice.",
+      "version": 1,
+      "draft": false,
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment"],
+        "properties": {
+          "payment": {"$operation": "receive_payment.create", "description": "How it was paid."},
+          "txn_id": {"type": "string", "description": "The TxnID your app stored, if any."},
+          "filters": {"$operation": "invoice.query", "description": "The query's own filters."}
+        }
+      }
+    },
+    "upsert": {
+      "name": "Upsert a list record",
+      "description": "Finds a record and updates it, or creates it.",
+      "version": 2,
+      "draft": false,
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["add", "kind", "update"],
+        "properties": {
+          "kind": {"type": "string", "description": "The list the record is in."},
+          "add": {"type": "object", "description": "The add to send when nothing is the record."},
+          "update": {"type": "object", "description": "The fields to set on the record."},
+          "list_id": {"type": "string"},
+          "class": {"type": "string", "description": "An input named after a Ruby keyword, to test the generator."}
+        },
+        "discriminator": {"propertyName": "kind"},
+        "oneOf": [
+          {"title": "customer", "properties": {"kind": {"const": "customer"}, "add": {"$operation": "customer.create"}, "update": {"$operation": "customer.update"}}},
+          {"title": "future_list", "properties": {"kind": {"const": "future_list"}, "add": {"$operation": "future_list.create"}, "update": {"type": "object"}}}
+        ]
+      }
+    }
+  },
+  "drafts": {
+    "resolve": {
+      "name": "Resolve a list record",
+      "description": "Turns what your app holds about a list record into that record.",
+      "version": null,
+      "draft": true,
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {
+          "kind": {"type": "string"},
+          "name": {"type": "string"},
+          "list_id": {"type": "string"}
+        }
+      }
+    }
+  }
+}

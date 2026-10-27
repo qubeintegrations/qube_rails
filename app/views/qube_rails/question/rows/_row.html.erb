@@ -1,0 +1,22 @@
+<%# One record of a rows field (row, a QubeRails::RowView): its name, its segmented choice, then
+    the fields its answers so far call for. %>
+<% header_id = "qube-row-#{rows.input_name.gsub(/[^A-Za-z0-9]+/, "-")}#{row.index}".squeeze("-") %>
+<div class="<%= qube_classes(:row, "qube-row") %>" role="listitem" aria-labelledby="<%= header_id %>"
+     data-qube-row="<%= row.key %>" data-qube-values="<%= row.values_json %>">
+  <div class="<%= qube_classes(:row_header, "qube-row-header") %>" id="<%= header_id %>">
+    <span class="qube-row-label"><%= row.label %></span>
+<% if row.detail %>
+    <span class="qube-row-detail"><%= row.detail %></span>
+<% end %>
+  </div>
+  <div class="qube-row-body">
+<% row.segmented_cells.each do |cell| %>
+    <%= render "qube_rails/question/rows/cell", cell: cell %>
+<% end %>
+    <div class="<%= qube_classes(:row_fields, "qube-row-fields") %>">
+<% row.field_cells.each do |cell| %>
+      <%= render "qube_rails/question/rows/cell", cell: cell %>
+<% end %>
+    </div>
+  </div>
+</div>

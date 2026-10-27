@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# qube_sync 0.5.0 (the version qube_rails depends on) isn't on rubygems.org yet. The Gemfile
+# takes it from ../wt-qube_sync_rb when that checkout is there (locally) and from rubygems.org
+# otherwise, so the test jobs fail at `bundle install` until qube_sync 0.5.0 is published.
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest Ruby and Rails the gem supports, and the newest.
+        ruby: ["3.3", "3.4"]
+        rails: ["7.0", "8.1"]
+    runs-on: ubuntu-latest
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rspec
+      - run: gem build qube_rails.gemspec
+
+  # The kit vendors these same files into apps on Ruby 2.7 (with an inline backend), so every
+  # file must parse there.
+  syntax-2-7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "2.7"
+      - run: bin/syntax-check-2.7
