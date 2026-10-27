@@ -53,7 +53,9 @@ module QubeRails
       return render(json: [], status: :conflict) unless @links["search"]
       return render(json: []) unless searchable?(q, field)
 
-      render json: QubeRails.client.search(@links["search"], field: field, q: q)
+      row = params[:row].to_s
+      row = nil if row.empty? || row.length > 200
+      render json: QubeRails.client.search(@links["search"], field: field, q: q, row: row)
     rescue Backend::APIError => e
       raise unless e.status.between?(400, 499)
 
@@ -63,6 +65,20 @@ module QubeRails
     private
 
     # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
+    # A rows field's answer: each row's filled columns, by row key. QuBe Sync drops a column the
+    # row's other answers say doesn't apply, and names any required one left out.
+    def rows_data(field, form)
+      form = form.respond_to?(:to_unsafe_h) ? form.to_unsafe_h : {}
+      field["rows"].to_a.each_with_object({}) do |row, rows|
+        given = form[row["key"]].is_a?(Hash) ? form[row["key"]] : {}
+        columns = field["columns"].to_a.select { |column| row["columns"].to_a.include?(column["name"]) }
+        rows[row["key"]] = columns.each_with_object({}) do |column, values|
+          text = given[column["name"]].to_s.strip
+          values[column["name"]] = column["type"] == "number" ? number(text) : text unless text.empty?
+        end
+      end
+    end
+
     def searchable?(q, field)
       q.length.between?(2, 100) && field.length.between?(1, 100)
     end
@@ -90,6 +106,8 @@ module QubeRails
       form = params.fetch(:data, {})
       choice["fields"].to_a.each_with_object({}) do |field, data|
         name = field["name"]
+        next data[name] = rows_data(field, form[name]) if field["type"] == "rows"
+
         text = form[name].to_s.strip
         if field["type"] == "boolean"
           data[name] = text == "true"

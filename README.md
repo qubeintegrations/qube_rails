@@ -597,8 +597,13 @@ through your app, so the API key never reaches the browser. Style it with its `q
 copy the partial to `app/views/qube_rails/_question.html.erb` in your app for other markup: Rails
 renders yours instead.
 
+A rows field (`add_transaction`'s one question for every record QuickBooks doesn't have) shows as a
+table: a row per record with the columns it asks, a column shown only while its `when` holds,
+a search per record column (sent with the row), and a "Set selected" bar that fills a column on
+every ticked row. Its answer is `{"records": {row key => {column => value}}}`.
+
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
-forgets the question and answers 409; the run's next webhook says what came of it.
+goes back to the page with a message; the run's next webhook says what came of it.
 
 ## Storage
 

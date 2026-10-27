@@ -6,6 +6,9 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- The question partial shows a rows field as a table (`qube_rails/question_rows`): the columns each
+  row asks, a search per record column with its row, "Set selected" for many rows; a fixed list
+  (`enum`) as a select. The search scripts are one partial, `qube_rails/question_script`.
 - Onboarding makes realtime connections (`config.connection_type`, `"realtime"` by default): workflows run
   only on realtime connections. A start QuBe Sync refuses as `realtime_required` raises
   `QubeRails::RealtimeRequired`, its message saying how to upgrade.

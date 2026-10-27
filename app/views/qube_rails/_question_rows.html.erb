@@ -1,0 +1,147 @@
+<%# A rows field: one row per record, each with the columns it asks (a column shows only while
+    its "when" holds for the row's other answers), and a "Set selected" bar that fills a column
+    on every ticked row. Posts data[<field>][<row key>][<column>]. %>
+<% columns = field["columns"].to_a %>
+<% search_url = "#{action}/search" %>
+<div class="qube-field qube-rows" data-qube-rows>
+  <p class="qube-rows-label"><%= field["label"] || field["name"] %></p>
+  <table class="qube-rows-table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="qube-rows-all" aria-label="Select all"></th>
+        <th>Record</th>
+<%   columns.each do |column| %>
+        <th><%= column["label"] || column["name"] %></th>
+<%   end %>
+      </tr>
+      <tr class="qube-rows-bulk">
+        <td></td>
+        <td>Set selected</td>
+<%   columns.each do |column| %>
+        <td data-qube-bulk="<%= column["name"] %>">
+<%     if column["enum"].present? %>
+          <%= select_tag nil, options_for_select(column["enum"].map { |e| [e["label"] || e["value"], e["value"]] }),
+                         include_blank: true, class: "qube-bulk-value", id: nil, form: "" %>
+          <button type="button" class="qube-bulk-apply">Apply</button>
+<%     elsif column["type"] == "record" && column["kind"].present? %>
+          <div class="qube-search" data-qube-search="<%= search_url %>"
+               data-qube-field="<%= field["name"] %>.<%= column["name"] %>">
+            <input type="search" class="qube-search-input" maxlength="100" autocomplete="off" form="">
+            <input type="hidden" class="qube-search-value qube-bulk-value" form="">
+            <div class="qube-search-results" aria-live="polite"></div>
+          </div>
+          <button type="button" class="qube-bulk-apply">Apply</button>
+<%     end %>
+        </td>
+<%   end %>
+      </tr>
+    </thead>
+    <tbody>
+<%   field["rows"].to_a.each do |row| %>
+<%     key = row["key"] %>
+<%     values = row["values"] || {} %>
+      <tr data-qube-row="<%= key %>" data-qube-values="<%= values.to_json %>">
+        <td><input type="checkbox" class="qube-rows-pick" aria-label="Select <%= row["label"] %>"></td>
+        <th scope="row">
+          <%= row["label"] %>
+<%       if row["detail"].present? %>
+          <span class="qube-rows-detail"><%= row["detail"] %></span>
+<%       end %>
+        </th>
+<%       columns.each do |column| %>
+<%         col = column["name"] %>
+<%         input_name = "#{name}[#{key}][#{col}]" %>
+        <td data-qube-col="<%= col %>" data-qube-when="<%= (column["when"] || {}).to_json %>">
+<%         if !row["columns"].to_a.include?(col) %>
+<%           preset = values[col] %>
+<%           label = column["enum"].to_a.find { |e| e["value"] == preset } %>
+          <%= label ? label["label"] : preset %>
+<%         elsif column["enum"].present? %>
+          <%= select_tag input_name, options_for_select(column["enum"].map { |e| [e["label"] || e["value"], e["value"]] }),
+                         include_blank: true, required: column["required"], id: nil,
+                         class: "qube-rows-input", "aria-label": column["label"] %>
+<%         elsif column["type"] == "record" %>
+          <div class="qube-search" data-qube-search="<%= search_url %>"
+               data-qube-field="<%= field["name"] %>.<%= col %>" data-qube-row="<%= key %>">
+            <%= tag.input(type: "search", class: "qube-search-input", maxlength: 100, autocomplete: "off",
+                          required: column["required"], "aria-label": column["label"]) %>
+            <%= hidden_field_tag input_name, nil, id: nil, class: "qube-search-value qube-rows-input" %>
+            <div class="qube-search-results" aria-live="polite"></div>
+          </div>
+<%         else %>
+          <%= text_field_tag input_name, nil, id: nil, required: column["required"], class: "qube-rows-input",
+                             "aria-label": column["label"] %>
+<%         end %>
+        </td>
+<%       end %>
+      </tr>
+<%   end %>
+    </tbody>
+  </table>
+</div>
+<script nonce="<%= content_security_policy_nonce %>">
+(function () {
+  var tables = document.querySelectorAll("[data-qube-rows]:not([data-qube-ready])");
+  Array.prototype.forEach.call(tables, function (table) {
+    table.setAttribute("data-qube-ready", "");
+    var rows = table.querySelectorAll("tr[data-qube-row]");
+
+    // A row's answers so far: its preset values, then its selects.
+    var answers = function (row) {
+      var values = JSON.parse(row.getAttribute("data-qube-values") || "{}");
+      Array.prototype.forEach.call(row.querySelectorAll("td[data-qube-col] select"), function (select) {
+        values[select.closest("td").getAttribute("data-qube-col")] = select.value;
+      });
+      return values;
+    };
+
+    // Shows a cell while its "when" holds; a hidden one sends nothing and isn't required.
+    var refresh = function (row) {
+      var values = answers(row);
+      Array.prototype.forEach.call(row.querySelectorAll("td[data-qube-col]"), function (cell) {
+        var when = JSON.parse(cell.getAttribute("data-qube-when") || "{}");
+        var shown = Object.keys(when).every(function (k) { return when[k].indexOf(values[k]) !== -1; });
+        cell.style.visibility = shown ? "" : "hidden";
+        Array.prototype.forEach.call(cell.querySelectorAll("input, select"), function (input) {
+          input.disabled = !shown;
+        });
+      });
+    };
+
+    Array.prototype.forEach.call(rows, function (row) {
+      row.addEventListener("change", function () { refresh(row); });
+      refresh(row);
+    });
+
+    table.querySelector(".qube-rows-all").addEventListener("change", function (event) {
+      Array.prototype.forEach.call(table.querySelectorAll(".qube-rows-pick"), function (box) {
+        box.checked = event.target.checked;
+      });
+    });
+
+    // Fills a column on every ticked row that asks it.
+    Array.prototype.forEach.call(table.querySelectorAll(".qube-bulk-apply"), function (button) {
+      button.addEventListener("click", function () {
+        var bulk = button.closest("[data-qube-bulk]");
+        var col = bulk.getAttribute("data-qube-bulk");
+        var value = bulk.querySelector(".qube-bulk-value").value;
+        var shownLabel = bulk.querySelector(".qube-search-input");
+        if (!value) return;
+        Array.prototype.forEach.call(rows, function (row) {
+          if (!row.querySelector(".qube-rows-pick").checked) return;
+          var cell = row.querySelector('td[data-qube-col="' + col + '"]');
+          var input = cell && cell.querySelector(".qube-rows-input");
+          if (!input || input.disabled) return;
+          input.value = value;
+          var search = cell.querySelector(".qube-search-input");
+          if (search) {
+            search.value = shownLabel ? shownLabel.value : value;
+            search.setCustomValidity("");
+          }
+          refresh(row);
+        });
+      });
+    });
+  });
+})();
+</script>

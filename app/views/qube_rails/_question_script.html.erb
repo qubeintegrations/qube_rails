@@ -1,0 +1,61 @@
+<%# The question's search boxes: what your user types is looked up through your app's search
+    route (data-qube-search), and the match they pick fills the field. Plain JavaScript, no
+    build; it binds each box once. %>
+<script nonce="<%= content_security_policy_nonce %>">
+(function () {
+  var boxes = document.querySelectorAll(".qube-search:not([data-qube-ready])");
+  Array.prototype.forEach.call(boxes, function (box) {
+    box.setAttribute("data-qube-ready", "");
+    var input = box.querySelector(".qube-search-input");
+    var value = box.querySelector(".qube-search-value");
+    var results = box.querySelector(".qube-search-results");
+    var timer = null;
+    var asked = 0;
+    // Until a match is picked, the form won't send what was typed.
+    var check = function () {
+      var unpicked = input.value && !value.value;
+      input.setCustomValidity(unpicked ? "Pick one of the matches." : "");
+    };
+    input.addEventListener("input", function () {
+      value.value = "";
+      check();
+      clearTimeout(timer);
+      results.textContent = "";
+      var q = input.value.trim();
+      if (q.length < 2) return;
+      timer = setTimeout(function () {
+        var n = ++asked;
+        var url = box.getAttribute("data-qube-search") +
+          "?field=" + encodeURIComponent(box.getAttribute("data-qube-field")) +
+          "&q=" + encodeURIComponent(q);
+        var row = box.getAttribute("data-qube-row");
+        if (row) url += "&row=" + encodeURIComponent(row);
+        fetch(url, {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        })
+          .then(function (res) { return res.ok ? res.json() : []; })
+          .then(function (matches) {
+            if (n !== asked) return; // a later search has gone out since
+            results.textContent = matches.length ? "" : "No matches.";
+            matches.forEach(function (match) {
+              var pick = document.createElement("button");
+              pick.type = "button";
+              pick.className = "qube-search-result";
+              pick.textContent = match.label;
+              if (match.detail) pick.textContent += " · " + match.detail;
+              pick.addEventListener("click", function () {
+                value.value = match.value;
+                input.value = match.label;
+                results.textContent = "";
+                check();
+                box.dispatchEvent(new CustomEvent("qube:picked", { bubbles: true }));
+              });
+              results.appendChild(pick);
+            });
+          });
+      }, 250);
+    });
+  });
+})();
+</script>
