@@ -4,9 +4,9 @@ source "https://rubygems.org"
 
 gemspec
 
-# qube_sync 0.4.0 (the v2 client) isn't on rubygems.org yet. Locally it comes from the v2-client
-# worktree beside this repo (or QUBE_SYNC_PATH); anywhere else, from rubygems.org once it's
-# published.
+# qube_sync 0.5.0 (the workflow types, redeliver_run and simulated connections qube_rails uses)
+# isn't on rubygems.org yet. Locally it comes from the qube_sync worktree beside this repo (or
+# QUBE_SYNC_PATH); anywhere else, from rubygems.org once it's published.
 qube_sync_path = ENV.fetch("QUBE_SYNC_PATH", File.expand_path("../wt-qube_sync_rb", __dir__))
 gem "qube_sync", path: qube_sync_path if File.directory?(qube_sync_path)
 

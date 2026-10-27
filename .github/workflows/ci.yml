@@ -4,9 +4,9 @@ on:
     branches: [main]
   pull_request:
 
-# qube_sync 0.4.0 (the v2 client qube_rails depends on) isn't on rubygems.org yet. The Gemfile
+# qube_sync 0.5.0 (the version qube_rails depends on) isn't on rubygems.org yet. The Gemfile
 # takes it from ../wt-qube_sync_rb when that checkout is there (locally) and from rubygems.org
-# otherwise, so the test jobs fail at `bundle install` until qube_sync 0.4.0 is published.
+# otherwise, so the test jobs fail at `bundle install` until qube_sync 0.5.0 is published.
 jobs:
   test:
     strategy:

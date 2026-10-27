@@ -18,7 +18,7 @@ way it starts a workflow, and a class for a connection's events. Your own tables
 columns. Update the engine with `bundle update qube_rails`; your files stay as you wrote them.
 
 Needs Ruby 3.3 or later and Rails 7.0 or later, and the [qube_sync](https://rubygems.org/gems/qube_sync)
-gem 0.4.0 or later, which it installs. Works on PostgreSQL, MySQL and SQLite.
+gem 0.5.0 or later, which it installs. Works on PostgreSQL, MySQL and SQLite.
 
 ## Install
 
@@ -955,7 +955,7 @@ DB=postgres DATABASE_URL=postgres://... bundle exec rspec   # or DB=mysql: the s
 bin/syntax-check-2.7                     # every shipped file parses on Ruby 2.7
 ```
 
-qube_sync 0.4.0 isn't published yet: the Gemfile takes it from `../wt-qube_sync_rb` (or
+Until qube_sync 0.5.0 is published, the Gemfile takes it from `../wt-qube_sync_rb` (or
 `QUBE_SYNC_PATH`) when that checkout is there.
 
 The source is kept Ruby 2.7 and Rails 5.2 compatible, and every call to qube_sync goes through

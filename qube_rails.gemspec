@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "qube_sync", ">= 0.4.0"
+  spec.add_dependency "qube_sync", ">= 0.5.0"
   spec.add_dependency "railties", ">= 7.0"
   # QubeRails::WebhookJob, the default enqueue, is an ActiveJob job.
   spec.add_dependency "activejob", ">= 7.0"
