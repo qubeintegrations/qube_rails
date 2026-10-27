@@ -128,7 +128,8 @@ module QubeRails
         QubeRails.client.update_connection(connection.qube_id, webhook_url: connection.webhook_url)
         made = QubeRails.client.regenerate_onboarding(connection.qube_id)
       else
-        made = QubeRails.client.create_connection(webhook_url: connection.webhook_url, name: connection.name)
+        made = QubeRails.client.create_connection(webhook_url: connection.webhook_url, name: connection.name,
+                                                  type: QubeRails.config.connection_type)
         connection.update!(qube_id: made["id"])
       end
 

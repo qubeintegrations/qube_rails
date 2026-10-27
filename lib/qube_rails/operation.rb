@@ -117,6 +117,8 @@ module QubeRails
                                      reference: run.reference, webhook_url: run.webhook_url)
         rescue Backend::APIError => e
           mark_failed(run) if refused?(e)
+          raise RealtimeRequired, refusal_detail(e) if refusal_code(e) == "realtime_required"
+
           raise
         end
       record_start(run, started.is_a?(Hash) ? started : {})
@@ -130,6 +132,28 @@ module QubeRails
       error.status.between?(400, 499) && error.status != 409
     end
     private_class_method :refused?
+
+    # errors.code and errors.detail, from the gem's APIError or the inline client's body.
+    def self.refusal_code(error)
+      return error.code if error.respond_to?(:code)
+
+      refusal_errors(error)["code"]
+    end
+    private_class_method :refusal_code
+
+    def self.refusal_detail(error)
+      errors = error.respond_to?(:errors) && error.errors.is_a?(Hash) ? error.errors : refusal_errors(error)
+      errors["detail"] || "Workflows run on realtime connections, and this one is standard."
+    end
+    private_class_method :refusal_detail
+
+    def self.refusal_errors(error)
+      parsed = JSON.parse(error.body.to_s)
+      parsed.is_a?(Hash) && parsed["errors"].is_a?(Hash) ? parsed["errors"] : {}
+    rescue JSON::ParserError
+      {}
+    end
+    private_class_method :refusal_errors
 
     def self.mark_failed(run)
       run.update_columns(state: "failed", updated_at: Time.now)

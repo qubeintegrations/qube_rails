@@ -6,6 +6,9 @@ A rewrite on QuBe Sync's v2 API, holding the code QuBe Sync's integration kit us
 into every Rails app, so the app keeps only its own.
 
 ### Added
+- Onboarding makes realtime connections (`config.connection_type`, `"realtime"` by default): workflows run
+  only on realtime connections. A start QuBe Sync refuses as `realtime_required` raises
+  `QubeRails::RealtimeRequired`, its message saying how to upgrade.
 - A run whose question QuBe Sync took an answer to is `running` again at once (`Operation#answered(token,
   taken: true)`), not `needs_answer` until the Web Connector's next poll brings its next webhook.
 - Plain v2 requests: `QubeRails::Request` (`OPERATION`, `SLUG`, `params`, and the handlers

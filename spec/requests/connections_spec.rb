@@ -16,10 +16,22 @@ RSpec.describe "Onboarding", type: :request do
       connection = QubeRails::Connection.last
       expect(created).to have_been_requested
       expect(a_request(:post, api_url("/connections"))
-        .with(body: { webhook_url: connection.webhook_url, name: "Main file" })).to have_been_made
+        .with(body: { webhook_url: connection.webhook_url, name: "Main file", type: "realtime" })).to have_been_made
       expect(response).to have_http_status(:see_other)
       expect(response).to redirect_to(onboarding)
       expect(connection).to have_attributes(owner: account, qube_id: "conn-q-1", status: "pending", name: "Main file")
+    end
+
+    it "makes a standard connection when the app says so" do
+      QubeRails.config.connection_type = "standard"
+      created = stub_request(:post, api_url("/connections"))
+                .with { |req| JSON.parse(req.body)["type"] == "standard" }
+                .to_return(json_data("id" => "conn-q-1", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(created).to have_been_requested
+      expect { QubeRails.config.connection_type = "fast" }.to raise_error(ArgumentError)
     end
 
     it "makes a new connection when the account's only one is connected" do

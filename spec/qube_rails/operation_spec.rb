@@ -273,6 +273,16 @@ RSpec.describe QubeRails::Operation do
       expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
     end
 
+    it "raises RealtimeRequired, with QuBe Sync's detail, when the connection is standard" do
+      detail = "Workflows run on realtime connections. This connection is standard: upgrade it."
+      stub_request(:post, /workflow-runs/)
+        .to_return(status: 422, body: { errors: { code: "realtime_required", detail: detail } }.to_json)
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::RealtimeRequired, detail)
+      expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
+    end
+
     it "marks the run failed when its input raises, before anything is sent" do
       allow_any_instance_of(QuickbooksDesktop::CreateInvoice).to receive(:input).and_raise(NotImplementedError)
 

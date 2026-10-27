@@ -24,6 +24,7 @@ module QubeRails
       @queue = nil
       @job_attempts = nil
       @prune_runs_after = nil
+      @connection_type = nil
       @parent_controller = nil
       @api_key = nil
       @base_url = nil
@@ -134,6 +135,20 @@ module QubeRails
     # The ActiveJob queue QubeRails::WebhookJob runs on.
     def queue
       @queue || :default
+    end
+
+    # The type onboarding creates connections as: "realtime" (the default; workflows need it) or
+    # "standard".
+    def connection_type
+      @connection_type || "realtime"
+    end
+
+    def connection_type=(type)
+      unless %w[realtime standard].include?(type.to_s)
+        raise ArgumentError, "connection_type is 'realtime' or 'standard', in #{FILE}"
+      end
+
+      @connection_type = type.to_s
     end
 
     # How long ended runs are kept before QubeRails::PruneRunsJob deletes them (nil: never).
