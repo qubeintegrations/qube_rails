@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.2.1 (unreleased)
+
+Connections keep their type, so workflows aren't started on standard ones, and run webhooks are
+read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` and
+`bin/rails db:migrate`.
+
+### Added
+
+**Connections and onboarding**
+- `qube_connections.connection_type` (`realtime`, `standard` or `simulated`), set when Connect
+  makes the connection and kept up to date by the connection's events; `Connection#standard?` and
+  `Connection#refresh_type!` (reads it from QuBe Sync after an upgrade in the dashboard).
+- Connect (`POST quickbooks/connections`) takes `type=realtime` or `type=standard`, else
+  `config.connection_type`; any other type answers 422. It sends back through setup only a
+  never-connected connection of that type.
+
+**Starting workflows**
+- `Operation.start` on a standard connection raises `QubeRails::RealtimeRequired` before writing a
+  run or calling QuBe Sync.
+- A start QuBe Sync refuses with 422 `realtime_required` keeps its run, as state
+  `realtime_required` with `error` `{code, detail}`, rather than failing it. The run status shows
+  the detail and the "Try sending again" button, and `run.retry_start!` (or starting again) sends
+  it with the same Idempotency-Key once the connection is upgraded: QuBe Sync stores nothing for
+  that refusal.
+
+**Run status**
+- `run.headline`, every event's sentence for a person (`qube_runs.headline`), shown for an ended
+  run whose reason doesn't already say it (`.qube-run-headline`).
+- `Run#with_errors?`: an outcome such as `push_records`' `pushed_with_errors` reads "Done, but some
+  didn't go through" (`status.done_with_errors`) and adds `.qube-run-with-errors`.
+
+### Changed
+
+- A failed run's `error` is QuBe Sync's `{code, type, message, quickbooks_message, hint}`:
+  `reason_text` is its message and `error_detail` its hint. An error stored by 0.2.0 (a sentence,
+  or code, message and detail) still reads.
+- A run's `cancel_url` is cleared when it ends; `links.decisions` and `links.search` may be absent.
+- A `rows` field's boolean columns answer `true` or `false`, not the text `"true"`.
+- The storyboard's sample prompts drop `options`, which run webhooks no longer carry.
+
+### Compatibility
+
+Matches QuBe Sync's reshaped workflow-run webhooks (qube PR #61): the error object, `headline`,
+an `output` per outcome without `output.outcome` (add_transaction's `added` keeps `record` and
+`references`, so `link_references` is unchanged), links only while they work, no
+`prompt.options`, and `summary.changes` in place of `summary.side_effects` (the engine read
+neither). Webhooks in the old shape are still read. The start's 422 `realtime_required` answer is
+the same before and after that change.
+
 ## 0.2.0 (2026-10-27)
 
 A rewrite on QuBe Sync's v2 API. The engine now holds the code QuBe Sync's integration kit used to

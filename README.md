@@ -651,7 +651,8 @@ column of up to three options, such as create or use, as a segmented control), t
 its answers so far call for (each column shown while its `when` holds), stacked in a grid, a search
 per record column (sent with the row). "Set all to:" sets that choice on every record, and "Use for
 all N" under a filled search or select copies it to the other records that ask it and are still
-empty. Its answer is `{"records": {row key => {column => value}}}`.
+empty. Its answer is `{"records": {row key => {column => value}}}`: each row's `key`, the columns
+that row asks (`rows[].columns`), a number column as a number and a boolean one as `true` or `false`.
 
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
 goes back to the page with a message; the run's next webhook says what came of it.
@@ -977,6 +978,10 @@ gain `run` and `connection`), move `account_id`, `authorize_question!` and
 `QubeSync` module and routes in favour of the mount line. Copy each account's connection into
 `qube_connections` (its owner, `qube_id` and status) and drop the `qube_*` columns from your
 tables once nothing reads them.
+
+From qube_rails 0.2.0: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
+and `bin/rails db:migrate` for `qube_connections.connection_type` and `qube_runs.headline`.
+Existing connection rows read `realtime` until their next event says their type.
 
 From qube_rails 0.1.0 (v1): 0.2.0 shares nothing with it. Its models and tables are yours to keep
 or drop.
