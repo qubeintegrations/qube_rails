@@ -52,7 +52,7 @@ Relative to where the engine is mounted (`"/"` above):
 
 | Route | What it does |
 | --- | --- |
-| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and `config.connection_type`, `"realtime"` by default since workflows run only on realtime connections, then its `qube_id`, with an optional `name`) when the account has none, or with `new=1`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
+| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
 | `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run or request hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
@@ -61,7 +61,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `POST qube/questions/runs/:id` | Your user's answer to the run's question, from the partial. Behind your sign-in and CSRF. |
 | `GET qube/questions/runs/:id/search` | A record field's matches, as JSON. Behind your sign-in. |
 | `POST qube/runs/:id/redeliver` | A run that looks stuck (`Run#looks_stuck?`: confirmed, not ended, and quiet for 10 minutes while running or waiting on a question this app never got): asks QuBe Sync to send its latest event again, from the run status partial's "Check for updates" button. Behind your sign-in and CSRF, and `authorize_question`. |
-| `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
+| `POST qube/runs/:id/retry_start` | A start QuBe Sync never confirmed, or one refused as `realtime_required`, sent again with the same reference, from the run status partial. Behind your sign-in and CSRF, and `authorize_question`. |
 | `GET qube/storyboard`, `GET qube/storyboard/:screen` | Every screen the partials show, from sample data, in your layout ([Styling](#styling)). Only while `config.storyboard` is true (404 otherwise); behind your sign-in. Its search (`GET qube/storyboard/:screen/search`) answers from the samples and its forms post to a no-op (`POST qube/storyboard/:screen/answer`): nothing reaches QuBe Sync or the database. |
 
 The webhook routes verify the signature (401 if it doesn't check out), answer 404 when the row
@@ -112,6 +112,7 @@ end
 | `authorize_question` | `->(controller, record, run) { true }` when the signed-in user may answer or search that run's question. The run carries its `operation` and its `connection` (whose `owner` connected it). Only `true` allows; anything else answers 404 (search: `[]` with 404), as for a missing run, and is logged. | allows only when `current_account` owns the run's connection (compared by type and id, so a nil or unsaved account never matches) |
 | `enqueue` | `->(delivery) { ... }`, handing `{ kind:, id:, body: }` (kind `"run"` or `"connection"`) to a queue | ActiveJob: `QubeRails::WebhookJob` on `queue` |
 | `queue` | the ActiveJob queue | `:default` |
+| `connection_type` | the type Connect makes connections as: `"realtime"` (workflows run only on these) or `"standard"` (for an app that only queues requests); anything else raises `ArgumentError`. Connect's `type` param overrides it per click. | `"realtime"` |
 | `job_attempts` | how many times `QubeRails::WebhookJob` runs a delivery whose work raised, with a growing wait, before it logs an error and raises to your adapter (read when the job class loads) | `10` |
 | `dedupe` | where each run's taken notification delivery ids are kept: `once(run, delivery_id) { }`, or `seen?(key)` / `remember(key)` | `QubeRails::DatabaseDedupe`: the engine's `qube_notifications` table, in the handler's transaction |
 | `parent_controller` | the controller onboarding and the questions inherit | `"ApplicationController"` |
@@ -208,10 +209,14 @@ dropped ...") and returns.
 
 A `QubeRails::Connection` is one company file: `owner` (your account), `qube_id` (QuBe Sync's
 id, nil until it answers), `name`, `status` (`pending`, `connected`, `setup_cancelled`,
-`stalled`), `stall_reason` and `revision`. `QubeRails::Connection.owned_by(account)` lists an
-account's.
+`stalled`), `stall_reason`, `revision` and `connection_type` (`realtime`, `standard` or
+`simulated`). `QubeRails::Connection.owned_by(account)` lists an account's.
 
-Its own events (QUBE_WEBHOOK_URL/connections/<id>) update `status`, `stall_reason` and `revision`
+A connection's type can't be changed through the API: the customer upgrades a standard one to
+realtime from its page in the QuBe Sync dashboard. Its next event carries the new type, and
+`connection.refresh_type!` reads it at once (`GET /api/v2/connections/:id`).
+
+Its own events (QUBE_WEBHOOK_URL/connections/<id>) update `status`, `stall_reason`, `connection_type` and `revision`
 when the event is for that connection (`qube_id`) and newer than the last one applied, under the
 row's lock. Then your class runs, with `connection` and `owner`.
 
@@ -362,6 +367,15 @@ A start can fail two ways, and they're handled differently:
 
 - **Refused** (QuBe Sync answered 4xx: bad input, a workflow that isn't published) or an input that
   raised: nothing was started. The row is marked `failed` and the error raised; start again.
+- **Not realtime**: workflows run on realtime connections (and simulated ones). On a row whose
+  `connection_type` is `standard`, `start` raises `QubeRails::RealtimeRequired` before writing a
+  run or calling QuBe Sync. When QuBe Sync refuses the start for it anyway (a `422` whose
+  `errors.code` is `realtime_required`: the connection was downgraded in the dashboard), the row
+  is kept as `realtime_required`, not `failed`, with `error` `{"code", "detail"}`, and
+  `RealtimeRequired` is raised with the detail. QuBe Sync stores nothing for that refusal, the
+  `Idempotency-Key` included, so once the customer upgrades the connection from its page in the
+  QuBe Sync dashboard, `run.retry_start!` (or `start` again, which returns that run) starts it with
+  the same reference.
 - **No answer** (a timeout, a 5xx, a dropped connection): the run may have started. The row stays
   `starting`, with its reference and input, and the error is raised. Send it again with
   `run.retry_start!` (or `QuickbooksDesktop::CreateInvoice.retry_start(run)`), never with a new
@@ -381,7 +395,8 @@ the first call started, as it is now, plus `Idempotent-Replayed: true`, and star
 same key with a different call is a `422`; a refused call (`400`, `403`, `404`, `422`) stores no
 key, so retrying it runs the checks again. A key lives as long as its run: finished runs are
 purged 60 days after they end. `retry_start!` returns a run that already has its `qube_run_id`
-as it is, and refuses one that `failed`. (The gem's client also resends a start that got no
+as it is, and refuses one that `failed`; one that's `realtime_required` it sends again, unless its
+connection's row still says `standard` (it raises `RealtimeRequired` without calling QuBe Sync). (The gem's client also resends a start that got no
 answer twice itself, within 60 seconds, with the same key.)
 
 A `QubeRails::Run` keeps `operation`, `record`, `connection`, `reference`, `revision`, `state`,
@@ -509,11 +524,15 @@ says it in a sentence for your user: "Added to QuickBooks", "Done", "Couldn't sy
 or "Syncing with QuickBooks" (the words are I18n's: see [Wording and translations](#wording-and-translations)). `run.reason_text` says why it failed or was cancelled, as a sentence (the error's message, or
 the reason your app gave), and nil otherwise.
 
+A start refused as `realtime_required` reads QuBe Sync's detail (how to upgrade the connection)
+as its summary, has sync status `:failed`, and gets the same "Try sending again" button, for once
+the connection is upgraded.
+
 A start QuBe Sync hasn't confirmed for a minute (`run.unconfirmed?`: still `starting`, after a
 start that got no answer) reads "Still waiting for QuickBooks", and the partial offers a "Try
 sending again" button. It posts to `POST qube/runs/:id/retry_start`, behind your sign-in and
 CSRF, which runs the same `authorize_question` policy as the questions (404 otherwise), answers
-409 for a run that isn't `starting`, calls `run.retry_start!` (same reference, so a start that did
+409 for a run that isn't `starting` (or `realtime_required`), calls `run.retry_start!` (same reference, so a start that did
 land answers with its run) and redirects back with 303.
 
 Show the latest run's on the record's page:
@@ -549,7 +568,8 @@ Per connection, since an invoice can be in one company file and not another.
 out on, for a page that doesn't say which.
 
 When the run and the link disagree, the newest word wins:
-1. a latest run that hasn't ended: `:sending` (an unconfirmed start too) or `:needs_answer`;
+1. a latest run that hasn't ended: `:sending` (an unconfirmed start too) or `:needs_answer`; a
+   start refused as `realtime_required` is `:failed`;
 2. a latest run that failed or was cancelled after the link was made, or with no link:
    `:failed` or `:cancelled`;
 3. a link: `:in_quickbooks`, always with its `qb_id`;
@@ -871,6 +891,7 @@ en:
 | `status.added` | Added to QuickBooks | the status, an add that completed |
 | `status.done`, `status.done_with` | Done; Done: %{outcome} | the status, completed |
 | `status.failed` | Couldn't sync | the status, failed (why is `reason_text`, below it) |
+| `status.realtime_required` | This company file's connection needs an upgrade to realtime before this can sync. | the status, a start refused as `realtime_required` that carried no detail |
 | `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |
 | `status.cancelled` | Cancelled | the status, cancelled (the reason, if any, below it) |
 | `status.cancel_reason` | it was stopped before it finished | `Run#cancel_reason_text` with no reason |

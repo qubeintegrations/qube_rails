@@ -48,8 +48,10 @@ QubeRails.configure do |config|
   # until set.
   # config.prune_runs_after = 90.days
 
-  # Onboarding makes realtime connections: workflows run only on those (billed as realtime).
+  # The type Connect makes connections as: "realtime" (workflows run only on those, billed as
+  # realtime) or "standard" (for an app that only queues requests). Connect's type param overrides it.
   # config.connection_type = "realtime"
+
   # How many times QubeRails::WebhookJob runs a delivery whose work raised, with a growing wait,
   # before it logs an error and raises to your adapter. With Sidekiq, whose own retries follow,
   # a smaller number (or 1, to leave retries to Sidekiq) avoids retrying twice over.

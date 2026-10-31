@@ -29,7 +29,7 @@ module QubeRails
       new(status: sync.status, state: state,
           summary: stall ? QubeRails.t("status.waiting_for_quickbooks") : sync.summary_text, reason: reason, detail: detail,
           quiet_text: stuck ? QubeRails.t("status.quiet") : nil,
-          retry_url: sync.unconfirmed? ? urls.retry_start_path(run) : nil,
+          retry_url: sync.unconfirmed? || run&.realtime_required? ? urls.retry_start_path(run) : nil,
           redeliver_url: stuck ? urls.redeliver_path(run) : nil, error: error, stall: stall)
     end
 

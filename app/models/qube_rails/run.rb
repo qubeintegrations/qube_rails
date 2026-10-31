@@ -13,7 +13,8 @@ module QubeRails
   # the run's as of that event. question and links are the question it's asking, if any, for the
   # question partial. input is what the run was started with. A start QuBe Sync refused (a 4xx),
   # or whose input raised, leaves state "failed"; one that got no answer (a timeout, a 5xx, a
-  # dropped connection) stays "starting", for retry_start!.
+  # dropped connection) stays "starting", for retry_start!. One refused as realtime_required is
+  # "realtime_required", with that error, and isn't ended: retry_start! sends it once upgraded.
   class Run < ApplicationRecord
     self.table_name = "qube_runs"
 
@@ -80,6 +81,11 @@ module QubeRails
       state == "failed"
     end
 
+    # Refused because its connection is standard; retry_start! once it's upgraded.
+    def realtime_required?
+      state == "realtime_required"
+    end
+
     # Cancelled by your app (state "cancelled"), or a chart that ended on its own "cancelled"
     # outcome (the app chose to stop): neither is a success.
     def cancelled?
@@ -132,6 +138,7 @@ module QubeRails
         else QubeRails.t("status.done_with", outcome: humanize(outcome))
         end
       when "failed" then QubeRails.t("status.failed")
+      when "realtime_required" then error_message.to_s.empty? ? QubeRails.t("status.realtime_required") : error_message
       when "awaiting_input" then QubeRails.t("status.needs_answer")
       else QubeRails.t("status.running")
       end

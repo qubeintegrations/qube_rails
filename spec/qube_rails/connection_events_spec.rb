@@ -31,6 +31,15 @@ RSpec.describe QubeRails::ConnectionEvents do
     ])
   end
 
+  it "keeps the type each event's connection carries: an upgrade in the dashboard shows on the row" do
+    connection_hash = JSON.parse(vector_body("connection.connected"))["connection"]
+    run_event("connection.connected", "connection" => connection_hash.merge("type" => "standard"))
+    expect(connection.connection_type).to eq("standard")
+
+    run_event("connection.resumed", "connection" => connection_hash.merge("type" => "realtime"), "revision" => 5)
+    expect(connection.connection_type).to eq("realtime")
+  end
+
   it "tells the pages of records with a run going on it to refresh when it stalls or resumes" do
     channel = class_double("Turbo::StreamsChannel", broadcast_refresh_to: nil)
     stub_const("Turbo::StreamsChannel", channel)

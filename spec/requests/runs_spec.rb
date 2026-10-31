@@ -37,6 +37,18 @@ RSpec.describe "POST /qube/runs/:id/retry_start", type: :request do
     expect(run.reload.state).to eq("failed")
   end
 
+  it "resends a start refused as realtime_required, and keeps it that way when it's refused again" do
+    run.update!(state: "realtime_required", error: { "code" => "realtime_required", "detail" => "Upgrade it." })
+    stub_request(:post, start_url).with(headers: { "Idempotency-Key" => run.reference })
+                                  .to_return(status: 422, body: { errors: { code: "realtime_required", detail: "Still standard." } }.to_json)
+
+    post "/qube/runs/#{run.id}/retry_start", headers: signed_in
+
+    expect(response).to have_http_status(:see_other)
+    expect(run.reload).to have_attributes(state: "realtime_required",
+                                          error: { "code" => "realtime_required", "detail" => "Still standard." })
+  end
+
   it "sends them back saying why, for a run that isn't starting" do
     run.update!(state: "running")
 

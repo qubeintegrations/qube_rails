@@ -20,7 +20,7 @@ module QubeRails
   # 1. the latest run hasn't ended: :sending (starting or running, an unconfirmed start too:
   #    unconfirmed? says so) or :needs_answer (awaiting input), whatever the link says;
   # 2. the latest run failed or was cancelled after the link was made (or there's no link):
-  #    :failed or :cancelled;
+  #    :failed or :cancelled; a start refused as realtime_required is :failed whatever the link;
   # 3. the record is linked: :in_quickbooks, always with its qb_id;
   # 4. the latest run completed and linked nothing (an operation that doesn't link its record):
   #    :done, which a start may follow, since nothing in QuickBooks stands for the record;
@@ -49,6 +49,7 @@ module QubeRails
     end
 
     def self.status_of(run, link)
+      return :failed if run&.realtime_required?
       return in_flight(run) if run && !run.ended?
       return stopped(run) if stopped_since_link?(run, link)
       return :in_quickbooks if link

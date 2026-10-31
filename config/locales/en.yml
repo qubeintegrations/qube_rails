@@ -9,6 +9,7 @@ en:
       done: "Done"
       done_with: "Done: %{outcome}"
       failed: "Couldn't sync"
+      realtime_required: "This company file's connection needs an upgrade to realtime before this can sync."
       not_started: "it couldn't be sent"
       cancelled: "Cancelled"
       cancel_reason: "it was stopped before it finished"

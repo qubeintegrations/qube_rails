@@ -34,6 +34,35 @@ RSpec.describe "Onboarding", type: :request do
       expect { QubeRails.config.connection_type = "fast" }.to raise_error(ArgumentError)
     end
 
+    it "makes the type the button asks for, keeps it on the row, and refuses any other" do
+      created = stub_request(:post, api_url("/connections"))
+                .with { |req| JSON.parse(req.body)["type"] == "standard" }
+                .to_return(json_data("id" => "conn-q-1", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", params: { type: "standard" }, headers: signed_in
+
+      expect(created).to have_been_requested
+      expect(QubeRails::Connection.last).to have_attributes(connection_type: "standard", qube_id: "conn-q-1")
+
+      post "/quickbooks/connections", params: { type: "fast" }, headers: signed_in
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(QubeRails::Connection.count).to eq(1)
+    end
+
+    it "keeps the setting's type on the row without a type param, and reuses only a pending one of the type asked" do
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-1", "links" => { "onboarding" => onboarding }))
+      post "/quickbooks/connections", headers: signed_in
+      expect(QubeRails::Connection.last.connection_type).to eq("realtime")
+
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
+      post "/quickbooks/connections", params: { type: "standard" }, headers: signed_in
+
+      expect(QubeRails::Connection.owned_by(account).pluck(:qube_id, :connection_type))
+        .to contain_exactly(%w[conn-q-1 realtime], %w[conn-q-2 standard])
+    end
+
     it "makes a new connection when the account's only one is connected" do
       make_connection(account)
       stub_request(:post, api_url("/connections"))

@@ -83,6 +83,18 @@ RSpec.describe "The run status partial", type: :request do
     expect(page.at_css("form.qube-retry-start-form")).to be_nil
   end
 
+  it "shows a start refused as realtime_required with QuBe Sync's detail, and offers to try it again" do
+    detail = "Workflows run on realtime connections, and this connection is standard."
+    run = make_run(invoice, connection)
+    run.update!(state: "realtime_required", error: { "code" => "realtime_required", "detail" => detail })
+    status = page.at_css(".qube-run-status")
+
+    expect(status["data-qube-sync-status"]).to eq("failed")
+    expect(status["class"]).to include("qube-run-realtime_required")
+    expect(status.at_css(".qube-run-summary").text).to eq(detail)
+    expect(status.at_css("form.qube-retry-start-form")["action"]).to eq("/qube/runs/#{run.id}/retry_start")
+  end
+
   it "shows nothing for a record with no runs" do
     expect(page.at_css(".qube-run-status")).to be_nil
   end

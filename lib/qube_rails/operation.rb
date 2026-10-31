@@ -45,6 +45,11 @@ module QubeRails
     # row stays "starting" and the error is raised: send it again with run.retry_start!, never a
     # new start, or a run that did start runs twice (two invoices).
     #
+    # Workflows run on realtime connections: on a standard one (connection.standard?) it raises
+    # RealtimeRequired before writing a run or calling QuBe Sync. A start QuBe Sync refuses for
+    # that (422 realtime_required) is kept as "realtime_required", with the error, and raises
+    # RealtimeRequired; once the connection is upgraded, run.retry_start! sends it again.
+    #
     # While record's last run of this operation on connection hasn't ended (completed, failed or
     # cancelled), it starts nothing new: it returns that run (run.reused? is true), sending its
     # start again first when QuBe Sync hasn't confirmed it, with the same reference and input. The
@@ -55,6 +60,8 @@ module QubeRails
         raise NotConnected, "QuBe Sync: #{name}.start needs a connection QuBe Sync has made (one with a " \
                             "qube_id): the customer finishes onboarding first"
       end
+
+      raise_realtime_required(connection) if connection.standard?
 
       run, input_error = claim_run(record, connection)
       raise input_error if input_error
@@ -67,15 +74,28 @@ module QubeRails
     # the Idempotency-Key, the same workflow, input and webhook URL. QuBe Sync answers a repeat of
     # a start it took with the run that start made (201, Idempotent-Replayed: true) rather than
     # starting another, for as long as that run is kept (60 days after it ends); a start it never
-    # took starts now. Returns the run; a run already answered is returned as it is.
+    # took starts now. Returns the run; a run already answered is returned as it is. A start
+    # refused as realtime_required is sent again too: QuBe Sync stored nothing for it.
     def self.retry_start(run)
       return run if run.qube_run_id
-      unless run.state == "starting"
-        raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer is sent again"
+      unless RETRYABLE_STATES.include?(run.state)
+        raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer, or " \
+                             "one refused as realtime_required, is sent again"
       end
+      raise_realtime_required(run.connection) if run.connection.standard?
 
+      run.update_columns(state: "starting", error: nil, updated_at: Time.now) if run.realtime_required?
       send_start(run, run.input)
     end
+
+    RETRYABLE_STATES = %w[starting realtime_required].freeze
+
+    def self.raise_realtime_required(connection)
+      raise RealtimeRequired, "QuBe Sync: workflows run on realtime connections, and connection #{connection.id} " \
+                              "is standard. Upgrade it to realtime from its page in the QuBe Sync dashboard (its " \
+                              "type can't be changed through the API), then start the run again."
+    end
+    private_class_method :raise_realtime_required
 
     # The record's run that hasn't ended on connection (reused), or a new row with a new reference
     # and its input, written together under the connection row's lock: two starts of one record at
@@ -116,9 +136,11 @@ module QubeRails
           QubeRails.client.start_run(run.connection.qube_id, self::WORKFLOW, input,
                                      reference: run.reference, webhook_url: run.webhook_url)
         rescue Backend::APIError => e
+          if e.status == 422 && refusal_code(e) == "realtime_required"
+            mark_realtime_required(run, refusal_detail(e))
+            raise RealtimeRequired, refusal_detail(e)
+          end
           mark_failed(run) if refused?(e)
-          raise RealtimeRequired, refusal_detail(e) if refusal_code(e) == "realtime_required"
-
           raise
         end
       record_start(run, started.is_a?(Hash) ? started : {})
@@ -154,6 +176,14 @@ module QubeRails
       {}
     end
     private_class_method :refusal_errors
+
+    # Kept, not failed: QuBe Sync stored nothing, so the same start works once it's upgraded.
+    def self.mark_realtime_required(run, detail)
+      run.error = { "code" => "realtime_required", "detail" => detail }
+      run.state = "realtime_required"
+      run.save!
+    end
+    private_class_method :mark_realtime_required
 
     def self.mark_failed(run)
       run.update_columns(state: "failed", updated_at: Time.now)

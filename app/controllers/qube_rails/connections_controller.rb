@@ -19,6 +19,9 @@ module QubeRails
     # row is left without a qube_id and the next click picks it up. Until connection.connected
     # comes, show it as waiting for QuickBooks: the setup doesn't come back here.
     #
+    # type is "realtime" or "standard" (default config.connection_type); any other answers 422.
+    # Only a never-connected connection of that type is sent back through setup.
+    #
     # With simulated=1, outside production, it connects a simulated QuickBooks company file
     # instead, for testing with no Windows computer: a new row whose QuBe Sync connection is
     # connected as it's made, so connection.connected comes at once, and back to the page the
@@ -28,11 +31,16 @@ module QubeRails
       return head(:unauthorized) unless account
       return connect_simulated(account) if simulated_requested?
 
-      connection = QubeRails::Connection.owned_by(account).never_connected.first unless params[:new].to_s == "1"
+      type = requested_type
+      return head(:unprocessable_entity) unless type
+
+      unless params[:new].to_s == "1"
+        connection = QubeRails::Connection.owned_by(account).never_connected.find_by(connection_type: type)
+      end
       return send_to_setup(connection) if connection
 
-      send_to_setup(QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending"),
-                    fresh: true)
+      send_to_setup(QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending",
+                                                  connection_type: type), fresh: true)
     end
 
     # POST /quickbooks/connections/:id/onboarding: sends one of the signed-in account's
@@ -74,7 +82,7 @@ module QubeRails
     private
 
     def work_going?(connection)
-      connection.runs.where.not(state: QubeRails::Run::ENDED_STATES).exists? ||
+      connection.runs.where.not(state: QubeRails::Run::ENDED_STATES + %w[realtime_required]).exists? ||
         connection.queued_requests.where(ended_at: nil).exists?
     end
 
@@ -101,6 +109,14 @@ module QubeRails
       account
     end
 
+    # The type param, else config.connection_type; nil for anything but realtime or standard.
+    def requested_type
+      type = params[:type].to_s
+      return QubeRails.config.connection_type if type.empty?
+
+      %w[realtime standard].include?(type) ? type : nil
+    end
+
     def simulated_requested?
       params[:simulated].to_s == "1"
     end
@@ -109,7 +125,8 @@ module QubeRails
     def connect_simulated(account)
       return head(:not_found) if Rails.env.production?
 
-      connection = QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending")
+      connection = QubeRails::Connection.create!(owner: account, name: connection_name, status: "pending",
+                                                 connection_type: "simulated")
       made = QubeRails.client.create_connection(webhook_url: connection.webhook_url, name: connection.name,
                                                 type: "simulated")
       connection.update!(qube_id: made["id"])
@@ -130,7 +147,7 @@ module QubeRails
         made = QubeRails.client.regenerate_onboarding(connection.qube_id)
       else
         made = QubeRails.client.create_connection(webhook_url: connection.webhook_url, name: connection.name,
-                                                  type: QubeRails.config.connection_type)
+                                                  type: connection.connection_type)
         connection.update!(qube_id: made["id"])
       end
 
