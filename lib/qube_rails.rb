@@ -41,8 +41,8 @@ module QubeRails
   # is sent, saying which reference and which record.
   class MissingReference < ArgumentError; end
 
-  # QuBe Sync refused a start (422 realtime_required): workflows run on realtime connections, and
-  # this one is standard. Its message says how to upgrade it.
+  # Operation.start on a standard connection, or a start QuBe Sync refused (422
+  # realtime_required): workflows run on realtime connections. Its message says how to upgrade.
   class RealtimeRequired < StandardError; end
 
   # Seconds after an event before a record's pages are told to refresh once more.

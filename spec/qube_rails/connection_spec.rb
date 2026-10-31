@@ -143,6 +143,14 @@ RSpec.describe QubeRails::Connection do
     end
   end
 
+  it "reads its type from QuBe Sync again with refresh_type!" do
+    connection = make_connection(account).tap { |c| c.update!(connection_type: "standard") }
+    stub_request(:get, api_url("/connections/#{connection.qube_id}")).to_return(json_data("type" => "realtime"))
+
+    expect(connection.refresh_type!).to eq("realtime")
+    expect(connection.reload.connection_type).to eq("realtime")
+  end
+
   it "refuses a link without a qb_id" do
     expect { connection.link(customer, kind: "customer", qb_id: nil) }.to raise_error(ArgumentError)
   end

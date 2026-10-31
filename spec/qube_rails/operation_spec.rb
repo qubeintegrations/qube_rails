@@ -273,14 +273,36 @@ RSpec.describe QubeRails::Operation do
       expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
     end
 
-    it "raises RealtimeRequired, with QuBe Sync's detail, when the connection is standard" do
+    it "raises RealtimeRequired on a standard connection before writing a run or sending anything" do
+      connection.update!(connection_type: "standard")
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::RealtimeRequired, /realtime connections.*dashboard/m)
+      expect(QubeRails::Run.count).to eq(0)
+      expect(a_request(:any, /qube\.example/)).not_to have_been_made
+    end
+
+    it "keeps a start refused as realtime_required on the run, then sends it again with the same key once upgraded" do
       detail = "Workflows run on realtime connections. This connection is standard: upgrade it."
       stub_request(:post, /workflow-runs/)
         .to_return(status: 422, body: { errors: { code: "realtime_required", detail: detail } }.to_json)
 
       expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
         .to raise_error(QubeRails::RealtimeRequired, detail)
-      expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
+      refused = QubeRails::Run.last
+      expect(refused).to have_attributes(state: "realtime_required", qube_run_id: nil, ended?: false,
+                                         error: { "code" => "realtime_required", "detail" => detail })
+      expect(refused.summary_text).to eq(detail)
+      expect(connection.sync_status(invoice, operation: "create_invoice")).to have_attributes(status: :failed, retry?: true)
+
+      WebMock.reset!
+      started = stub_request(:post, /workflow-runs/)
+                .with { |req| req.headers["Idempotency-Key"] == refused.reference && JSON.parse(req.body)["reference"] == refused.reference }
+                .to_return(json_data("id" => "run-q-1", "state" => "running"))
+
+      expect(refused.retry_start!).to eq(refused)
+      expect(started).to have_been_requested
+      expect(refused.reload).to have_attributes(state: "running", qube_run_id: "run-q-1", error: nil)
     end
 
     it "marks the run failed when its input raises, before anything is sent" do
@@ -338,6 +360,15 @@ RSpec.describe QubeRails::Operation do
       failed = make_run(invoice, connection).tap { |r| r.update!(state: "failed") }
       expect { failed.retry_start! }.to raise_error(ArgumentError, /only a start that got no answer/)
     end
+
+    it "refuses a refused start on a connection still standard, sending nothing" do
+      refused = make_run(invoice, connection).tap { |r| r.update!(state: "realtime_required") }
+      connection.update!(connection_type: "standard")
+
+      expect { refused.retry_start! }.to raise_error(QubeRails::RealtimeRequired)
+      expect(a_request(:any, /qube\.example/)).not_to have_been_made
+      expect(refused.reload.state).to eq("realtime_required")
+    end
   end
 
   describe "#answered" do
@@ -386,14 +417,14 @@ RSpec.describe QubeRails::Operation do
     let(:widget) { Customer.create!(account: account, name: "Widget (an item, here)") }
     let(:references) do
       {
-        "customer_ref" => { "kind" => "customer", "outcome" => "found",
+        "customer_ref" => { "kind" => "customer", "outcome" => "found", "how" => "exact",
                             "record" => { "type" => "customer", "list_id" => "80000001-1", "edit_sequence" => "17",
                                           "full_name" => "Riverbend Electric" } },
-        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created",
+        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created", "how" => nil,
                                            "record" => { "type" => "item_service", "list_id" => "80000002-1",
                                                          "full_name" => "Widget" } },
         "invoice_line_add.1.item_ref" => { "kind" => "item", "outcome" => "not_found", "record" => nil },
-        "class_ref" => { "kind" => "class", "outcome" => "found", "record" => { "list_id" => "80000003-1" } }
+        "class_ref" => { "kind" => "class", "outcome" => "found", "how" => "id", "record" => { "list_id" => "80000003-1" } }
       }
     end
 

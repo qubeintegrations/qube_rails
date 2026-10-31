@@ -112,6 +112,9 @@ module QubeRails
         connection.status = status
         connection.stall_reason = event.stalled? ? event.stall_reason : nil
       end
+      # An upgrade or downgrade in the dashboard shows here.
+      type = event.connection.is_a?(Hash) ? event.connection["type"].to_s : ""
+      connection.connection_type = type if Connection::TYPES.include?(type)
       connection.revision = event.revision
 
       if event.connected?

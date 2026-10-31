@@ -12,7 +12,8 @@ module QubeRails
   # qube_id is QuBe Sync's id for it, nil until QuBe Sync answers the create. status is
   # "pending" until the setup ends, then "connected", "setup_cancelled" or "stalled" (with
   # stall_reason), kept up to date by its own webhooks (QubeRails::ConnectionEvents). revision
-  # is the last of those applied.
+  # is the last of those applied. connection_type is "realtime", "standard" or "simulated": as
+  # onboarding made it, then as its events (or refresh_type!) say. Workflows don't run on standard.
   #
   # The QuickBooks ids your app learns are kept against it, by list family (link, qb_id_for,
   # find_linked), since a ListID is unique only within one list family of one company file.
@@ -30,7 +31,10 @@ module QubeRails
     has_many :queued_requests, class_name: "QubeRails::QueuedRequest", inverse_of: :connection
     has_many :quickbooks_records, class_name: "QubeRails::QuickbooksRecord", inverse_of: :connection
 
+    TYPES = %w[realtime standard simulated].freeze
+
     validates :status, inclusion: { in: STATUSES }
+    validates :connection_type, inclusion: { in: TYPES }
 
     # The connections owner has, whatever its key's type.
     # The row, with its runs (and their notifications), its requests and its QuickBooks links: a connection
@@ -62,6 +66,21 @@ module QubeRails
 
     def connected?
       status == "connected"
+    end
+
+    # Workflows don't run on it: Operation.start raises RealtimeRequired.
+    def standard?
+      connection_type == "standard"
+    end
+
+    # Reads its type from QuBe Sync again (GET /api/v2/connections/:id) and saves it: after it's
+    # upgraded to realtime in the dashboard, before its next event says so. Returns the type.
+    def refresh_type!
+      raise NotConnected, "QuBe Sync: connection #{id} has no qube_id yet" if qube_id.to_s.empty?
+
+      type = QubeRails.client.get_connection(qube_id)["type"].to_s
+      update!(connection_type: type) if TYPES.include?(type) && type != connection_type
+      connection_type
     end
 
     # Stalled because the Web Connector isn't checking in (the QuickBooks computer is off, or
@@ -102,7 +121,8 @@ module QubeRails
 
       QubeRails.logger.info("QuBe Sync: connection #{id} adopted QuBe Sync's connection #{found["id"]}, " \
                             "made for it before its id was saved")
-      update!(qube_id: found["id"])
+      type = found["type"].to_s
+      update!({ qube_id: found["id"] }.merge(TYPES.include?(type) ? { connection_type: type } : {}))
       qube_id
     end
 

@@ -101,6 +101,13 @@ RSpec.describe QubeRails::Configuration do
     expect { config.ui_classes = "btn" }.to raise_error(ArgumentError, /Hash of piece/)
   end
 
+  it "makes realtime connections by default, takes standard, and refuses any other type" do
+    expect(config.connection_type).to eq("realtime")
+    config.connection_type = :standard
+    expect(config.connection_type).to eq("standard")
+    expect { config.connection_type = "simulated" }.to raise_error(ArgumentError, /'realtime' or 'standard'/)
+  end
+
   it "has the storyboard only in development by default, and takes true or false" do
     expect(config.storyboard).to be(false) # the suite runs in test
     allow(Rails.env).to receive(:development?).and_return(true)

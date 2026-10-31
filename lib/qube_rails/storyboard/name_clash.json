@@ -23,7 +23,6 @@
         "value": "Customer"
       }
     ],
-    "options": [],
     "choices": [
       {
         "id": "use_existing",

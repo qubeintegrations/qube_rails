@@ -11,9 +11,11 @@ module QubeRails
   # the connection's qube_id. revision is the last event applied; state ("starting", then the
   # run's own: "running", "awaiting_input", "completed", "failed", "cancelled") and outcome are
   # the run's as of that event. question and links are the question it's asking, if any, for the
-  # question partial. input is what the run was started with. A start QuBe Sync refused (a 4xx),
+  # question partial. input is what the run was started with. headline is the last event's
+  # sentence for a person (shown, never parsed). A start QuBe Sync refused (a 4xx),
   # or whose input raised, leaves state "failed"; one that got no answer (a timeout, a 5xx, a
-  # dropped connection) stays "starting", for retry_start!.
+  # dropped connection) stays "starting", for retry_start!. One refused as realtime_required is
+  # "realtime_required", with that error, and isn't ended: retry_start! sends it once upgraded.
   class Run < ApplicationRecord
     self.table_name = "qube_runs"
 
@@ -80,6 +82,11 @@ module QubeRails
       state == "failed"
     end
 
+    # Refused because its connection is standard; retry_start! once it's upgraded.
+    def realtime_required?
+      state == "realtime_required"
+    end
+
     # Cancelled by your app (state "cancelled"), or a chart that ended on its own "cancelled"
     # outcome (the app chose to stop): neither is a success.
     def cancelled?
@@ -129,9 +136,11 @@ module QubeRails
         case outcome.to_s
         when "added" then QubeRails.t("status.added")
         when "", "completed" then QubeRails.t("status.done")
+        when /_with_errors\z/ then QubeRails.t("status.done_with_errors")
         else QubeRails.t("status.done_with", outcome: humanize(outcome))
         end
       when "failed" then QubeRails.t("status.failed")
+      when "realtime_required" then error_message.to_s.empty? ? QubeRails.t("status.realtime_required") : error_message
       when "awaiting_input" then QubeRails.t("status.needs_answer")
       else QubeRails.t("status.running")
       end
@@ -155,8 +164,14 @@ module QubeRails
       reason.empty? ? QubeRails.t("status.cancel_reason") : reason
     end
 
-    # A failed run's message: its error's own (a sentence, or the message of a code, message and
-    # detail), else its outcome in words, or nil.
+    # A completed run that ended on an outcome with errors (push_records' pushed_with_errors): some
+    # of its records failed, so it needs a look.
+    def with_errors?
+      state == "completed" && outcome.to_s.end_with?("_with_errors")
+    end
+
+    # A failed run's message: its error's own (a sentence, or the message of {code, type, message,
+    # quickbooks_message, hint}, or of 0.2.0's code, message and detail), else its outcome in words, or nil.
     def error_message
       text =
         case error
@@ -170,12 +185,12 @@ module QubeRails
       outcome.to_s.empty? || outcome == "failed" ? nil : humanize(outcome)
     end
 
-    # The error's detail, when it carries one apart from its message.
+    # What to do about the error: its hint, else its detail, when apart from its message.
     def error_detail
       return nil unless error.is_a?(Hash)
 
-      detail = error["detail"]
-      detail = detail.to_s.strip
+      detail = error["hint"].to_s.strip
+      detail = error["detail"].to_s.strip if detail.empty?
       detail.empty? || detail == error_message ? nil : detail
     end
 
