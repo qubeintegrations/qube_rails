@@ -123,6 +123,38 @@ RSpec.describe "A rows question", type: :request do
     expect(run.reload.state).to eq("running")
   end
 
+  it "answers a boolean or number column as its type, ticked or not" do
+    field = question["choices"][0]["fields"][0]
+    field["columns"] += [{ "name" => "taxable", "type" => "boolean", "required" => false, "label" => "Taxable" },
+                         { "name" => "price", "type" => "number", "required" => false, "label" => "Price" }]
+    field["rows"][1]["columns"] += %w[taxable price]
+    field["rows"][2]["columns"] += %w[taxable]
+    run.update!(question: question)
+    get "/invoices/#{invoice.id}", headers: signed_in
+    page = Nokogiri::HTML(response.body)
+    expect(page.at_css("input[type=checkbox][name='data[records][invoice_line_add.0.item_ref][taxable]']")).not_to be_nil
+    expect(page.at_css("input[type=number][name='data[records][invoice_line_add.0.item_ref][price]']")).not_to be_nil
+
+    answered = stub_request(:post, decisions).with(
+      body: { choice: "proceed", data: { records: {
+        "customer_ref" => { "action" => "use", "list_id" => "80000001-1" },
+        "invoice_line_add.0.item_ref" => { "action" => "use", "list_id" => "80000002-1", "taxable" => true, "price" => 12.5 },
+        "invoice_line_add.1.item_ref" => { "action" => "use", "list_id" => "80000003-1", "taxable" => false }
+      } } }
+    ).to_return(json_data("state" => "running"))
+
+    post "/qube/questions/runs/#{run.id}", headers: signed_in.merge("HTTP_REFERER" => "/invoices/#{invoice.id}"), params: {
+      choice: "proceed",
+      data: { records: {
+        "customer_ref" => { "action" => "use", "list_id" => "80000001-1" },
+        "invoice_line_add.0.item_ref" => { "action" => "use", "list_id" => "80000002-1", "taxable" => "true", "price" => "12.5" },
+        "invoice_line_add.1.item_ref" => { "action" => "use", "list_id" => "80000003-1" }
+      } }
+    }
+
+    expect(answered).to have_been_requested
+  end
+
   it "searches a record column for its row" do
     stub_request(:get, "#{search_url}&field=records.list_id&q=lone&row=customer_ref").to_return(json_data([]))
 

@@ -64,7 +64,6 @@ module QubeRails
 
     private
 
-    # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
     # A rows field's answer: each row's filled columns, by row key. QuBe Sync drops a column the
     # row's other answers say doesn't apply, and names any required one left out.
     def rows_data(field, form)
@@ -74,11 +73,15 @@ module QubeRails
         columns = field["columns"].to_a.select { |column| row["columns"].to_a.include?(column["name"]) }
         rows[row["key"]] = columns.each_with_object({}) do |column, values|
           text = given[column["name"]].to_s.strip
+          # A checkbox, as a choice's: true or false (QuBe Sync drops one whose "when" doesn't hold).
+          next values[column["name"]] = text == "true" if column["type"] == "boolean"
+
           values[column["name"]] = column["type"] == "number" ? number(text) : text unless text.empty?
         end
       end
     end
 
+    # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
     def searchable?(q, field)
       q.length.between?(2, 100) && field.length.between?(1, 100)
     end
