@@ -37,6 +37,28 @@ RSpec.describe "The run status partial", type: :request do
     expect(page.css(".qube-error")).to be_empty # shown once
   end
 
+  it "shows a failure's message and hint from the error object, and an ended run's headline when no reason says it" do
+    make_run(invoice, connection).update!(
+      state: "failed", ended_at: Time.now, headline: "ensure_customer failed: A customer named Riverbend exists.",
+      error: { "code" => 3100, "type" => "name_in_use", "message" => "A customer named Riverbend exists",
+               "quickbooks_message" => "The name is already in use.", "hint" => "Rename one of them." }
+    )
+    status = page.at_css(".qube-run-status")
+    expect(status.at_css(".qube-run-reason").text).to eq("A customer named Riverbend exists.")
+    expect(status.at_css(".qube-run-error-detail").text).to eq("Rename one of them.")
+    expect(status.at_css(".qube-run-headline")).to be_nil # the reason says it
+
+    make_run(invoice, connection).update!(state: "completed", outcome: "pushed_with_errors", ended_at: Time.now,
+                                          headline: "1 of 3 records failed; the others went through.")
+    status = page.at_css(".qube-run-status")
+    expect(status["class"]).to include("qube-run-with-errors")
+    expect(status.at_css(".qube-run-summary").text).to eq("Done, but some didn't go through")
+    expect(status.at_css(".qube-run-headline").text).to eq("1 of 3 records failed; the others went through.")
+
+    make_run(invoice, connection).update!(state: "running", headline: "Not shown while it runs.")
+    expect(page.at_css(".qube-run-headline")).to be_nil
+  end
+
   it "says the record is in QuickBooks when its link is newer than its failed run, and nothing before it's sent" do
     expect(page.at_css(".qube-run-status")).to be_nil # not sent
 

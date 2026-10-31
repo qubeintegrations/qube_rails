@@ -10,7 +10,8 @@ module QubeRails
   #   status.status    # => :not_sent, :sending, :needs_answer, :in_quickbooks, :done, :failed or
   #                    #    :cancelled
   #   status.qb_id     # the record's QuickBooks id on this connection, when it's linked
-  #   status.error     # a failed run's error ({ "message" => ..., ... }), else nil
+  #   status.error     # a failed run's error ({ "code", "type", "message", "quickbooks_message",
+  #                    #   "hint" }, or an older run's sentence), else nil
   #   status.retry?    # whether starting it again makes sense
   #
   # Per connection: an invoice can be in one company file and not another.

@@ -394,10 +394,12 @@ module QubeRails
       # whatever the handler does: state, outcome, and a failure's error or a cancel's reason.
       run.state = event.run_state || run_state_for(event)
       run.outcome = event.outcome
+      run.headline = event["headline"] if event["headline"].is_a?(String)
       if ended?(event)
         run.ended_at ||= Time.now
         run.error = event.error if event.failed?
         run.cancel_reason = event.cancel_reason if event.cancelled?
+        run.cancel_url = nil # links.cancel works only until the run ends
       end
 
       if event.awaiting_input?

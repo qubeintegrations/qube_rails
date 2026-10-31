@@ -5,7 +5,7 @@
 <% if run_status.visible? %>
 <div class="<%= qube_classes(:status, run_status.css_class) %>" data-qube-sync-status="<%= run_status.status %>"<% if run_status.stall %> data-qube-stall="<%= run_status.stall %>"<% end %>>
   <%= render "qube_rails/run_status/summary", run_status: run_status %>
-<%   if run_status.reason || run_status.detail %>
+<%   if run_status.reason || run_status.detail || run_status.headline %>
   <%= render "qube_rails/run_status/detail", run_status: run_status %>
 <%   end %>
 <%   if run_status.stall %>

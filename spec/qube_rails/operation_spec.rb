@@ -417,14 +417,14 @@ RSpec.describe QubeRails::Operation do
     let(:widget) { Customer.create!(account: account, name: "Widget (an item, here)") }
     let(:references) do
       {
-        "customer_ref" => { "kind" => "customer", "outcome" => "found",
+        "customer_ref" => { "kind" => "customer", "outcome" => "found", "how" => "exact",
                             "record" => { "type" => "customer", "list_id" => "80000001-1", "edit_sequence" => "17",
                                           "full_name" => "Riverbend Electric" } },
-        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created",
+        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created", "how" => nil,
                                            "record" => { "type" => "item_service", "list_id" => "80000002-1",
                                                          "full_name" => "Widget" } },
         "invoice_line_add.1.item_ref" => { "kind" => "item", "outcome" => "not_found", "record" => nil },
-        "class_ref" => { "kind" => "class", "outcome" => "found", "record" => { "list_id" => "80000003-1" } }
+        "class_ref" => { "kind" => "class", "outcome" => "found", "how" => "id", "record" => { "list_id" => "80000003-1" } }
       }
     end
 

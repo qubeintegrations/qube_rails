@@ -39,11 +39,50 @@ RSpec.describe QubeRails::Run do
       expect(run.error_detail).to eq("Add the customer, then start again.")
     end
 
-    it "takes an error that's a sentence" do
+    it "keeps the error object a failed webhook carries, its message the reason and its hint the detail" do
       run_event("workflow_run.failed", "revision" => 2)
-
+      expect(run.error).to include("code" => nil, "type" => nil, "message" => start_with("Five renames were tried"))
       expect(run.reason_text).to start_with("Five renames were tried")
+      expect(run.error_detail).to be_nil # no hint
+
+      error = { "code" => 3100, "type" => "name_in_use", "message" => "A customer named Riverbend already exists.",
+                "quickbooks_message" => "The name \"Riverbend\" of the list element is already in use.",
+                "hint" => "Rename one of them, then start again." }
+      run_event("workflow_run.failed", "revision" => 3, "error" => error)
+      expect([run.summary_text, run.reason_text, run.error_detail])
+        .to eq(["Couldn't sync", "A customer named Riverbend already exists.", "Rename one of them, then start again."])
+    end
+
+    it "still reads an error that's a sentence, as 0.2.0's webhooks sent it" do
+      run_event("workflow_run.failed", "revision" => 2, "error" => "No customer named Riverbend")
+
+      expect(run.reason_text).to eq("No customer named Riverbend.")
       expect(run.error_detail).to be_nil
+    end
+
+    it "keeps each event's headline, and reads pushed_with_errors as needing a look, not plain success" do
+      run_event("workflow_run.completed", "revision" => 2)
+      expect(run.headline).to eq(JSON.parse(vector_body("workflow_run.completed"))["headline"])
+
+      run_event("workflow_run.completed", "revision" => 3, "outcome" => "pushed_with_errors",
+                                          "headline" => "1 of 3 records failed; the others went through.",
+                                          "output" => { "items" => [], "counts" => { "total" => 3, "failed" => 1 } })
+      expect(run).to have_attributes(headline: "1 of 3 records failed; the others went through.", with_errors?: true)
+      expect(run.summary_text).to eq("Done, but some didn't go through")
+
+      run.update!(outcome: "pushed")
+      expect([run.with_errors?, run.summary_text]).to eq([false, "Done: Pushed"])
+    end
+
+    it "forgets the cancel link once the run ends, and a search link the question doesn't carry" do
+      run.update!(cancel_url: "https://qube.example/cancel")
+      links = JSON.parse(vector_body("workflow_run.awaiting_input"))["links"].except("search")
+      run_event("workflow_run.awaiting_input", "revision" => 2, "links" => links)
+      expect(run.links).to eq("decisions" => links["decisions"], "search" => nil)
+      expect(run.cancel_url).to eq("https://qube.example/cancel")
+
+      run_event("workflow_run.completed", "revision" => 3)
+      expect([run.cancel_url, run.links, run.question]).to eq([nil, nil, nil])
     end
 
     it "keeps a cancelled run's reason" do

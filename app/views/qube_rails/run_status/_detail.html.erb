@@ -1,4 +1,8 @@
-<%# Why a run failed or was cancelled (run_status.reason), then what to do about it (detail). %>
+<%# Why a run failed or was cancelled (run_status.reason), then what to do about it (detail), or
+    what an ended run did (headline: QuBe Sync's sentence, shown as it is). %>
+<% if run_status.headline %>
+<p class="<%= qube_classes(:reason, "qube-run-headline") %>"><%= run_status.headline %></p>
+<% end %>
 <% if run_status.reason %>
 <p class="<%= qube_classes(:reason, "qube-run-reason") %>"><%= run_status.reason %></p>
 <% end %>

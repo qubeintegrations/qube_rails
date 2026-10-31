@@ -8,6 +8,7 @@ en:
       added: "Added to QuickBooks"
       done: "Done"
       done_with: "Done: %{outcome}"
+      done_with_errors: "Done, but some didn't go through"
       failed: "Couldn't sync"
       realtime_required: "This company file's connection needs an upgrade to realtime before this can sync."
       not_started: "it couldn't be sent"

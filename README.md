@@ -319,8 +319,8 @@ module QuickbooksDesktop
       })
     end
 
-    # How the run ended: event.outcome says which, event.output holds the result. Keep the
-    # QuickBooks ids it carries on the connection.
+    # How the run ended: event.outcome says which, and event.output has that outcome's own keys
+    # (add_transaction's added: record and references). Keep the QuickBooks ids on the connection.
     def ended(event)
       # The records the add named, found or made, by the input's path: linked, so the next run
       # refers to them by id. A cancelled ending can carry some too.
@@ -514,15 +514,26 @@ QuBe Sync still checks every start: a field the operation doesn't take is a 422 
 ## Run status
 
 The engine keeps every ending on the run row before your handler runs, under the same lock:
-`state`, `outcome`, a failure's `error` (as the event carried it: a sentence, or its code,
-message and detail), a cancel's `cancel_reason`, and `ended_at`. So a run's result is there
+`state`, `outcome`, a failure's `error` (as the event carried it: `{code, type, message,
+quickbooks_message, hint}`, where `code` is QuickBooks' status code and `type` a stable name to
+branch on; a run from before QuBe Sync sent that object keeps its sentence, or its code, message and
+detail), a cancel's `cancel_reason`, and `ended_at`. Every event's `headline`, one plain sentence
+for a person ("Added the transaction to QuickBooks as TxnID 1F2-1."), is kept as `run.headline`:
+show it, never parse it. Branch on `event`, `outcome`, `output` and `error`. So a run's result is there
 whether or not your `ended` and `failed` handlers write anything; those are for your own records.
 `run.ended?`, `run.failed?` and `run.cancelled?` say which (a run that completed on a
 `cancelled` outcome, where your app chose to stop, counts as cancelled), and `run.summary_text`
-says it in a sentence for your user: "Added to QuickBooks", "Done", "Couldn't sync",
+says it in a sentence for your user: "Added to QuickBooks", "Done", "Done, but some didn't go
+through" (an outcome such as `push_records`' `pushed_with_errors`: `run.with_errors?`), "Couldn't sync",
 "Cancelled", "Needs your answer", "Sending to QuickBooks", "Still waiting for QuickBooks"
 or "Syncing with QuickBooks" (the words are I18n's: see [Wording and translations](#wording-and-translations)). `run.reason_text` says why it failed or was cancelled, as a sentence (the error's message, or
-the reason your app gave), and nil otherwise.
+the reason your app gave), and nil otherwise; `run.error_detail` is the error's `hint`, what
+usually fixes it.
+
+A run's links work only while they apply: `links.cancel` until it ends (the row's `cancel_url` is
+cleared then), and `links.decisions` and `links.search` while it asks (the row's `links`, cleared
+when it stops asking; `search` only when the question has a record field). Read them from the row,
+and expect nil.
 
 A start refused as `realtime_required` reads QuBe Sync's detail (how to upgrade the connection)
 as its summary, has sync status `:failed`, and gets the same "Try sending again" button, for once
@@ -542,8 +553,9 @@ Show the latest run's on the record's page:
 ```
 
 Its locals are `record` and `operation`. It shows the summary (`.qube-run-summary`, inside
-`.qube-run-status.qube-run-<state>`) and, for a failure, the error's detail
-(`.qube-run-error-detail`), and nothing for a record with no runs. Its pieces are
+`.qube-run-status.qube-run-<state>`, plus `.qube-run-with-errors` for an ending with errors), for a
+failure its message (`.qube-run-reason`) and hint (`.qube-run-error-detail`), for an ended run with
+no reason its headline (`.qube-run-headline`), and nothing for a record with no runs. Its pieces are
 `qube_rails/run_status/*`: see [Styling](#styling) to restyle or replace any of them.
 
 ## Sync status
@@ -890,6 +902,7 @@ en:
 | `status.in_quickbooks` | In QuickBooks | the status, linked |
 | `status.added` | Added to QuickBooks | the status, an add that completed |
 | `status.done`, `status.done_with` | Done; Done: %{outcome} | the status, completed |
+| `status.done_with_errors` | Done, but some didn't go through | the status, completed on an outcome with errors (`pushed_with_errors`) |
 | `status.failed` | Couldn't sync | the status, failed (why is `reason_text`, below it) |
 | `status.realtime_required` | This company file's connection needs an upgrade to realtime before this can sync. | the status, a start refused as `realtime_required` that carried no detail |
 | `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |

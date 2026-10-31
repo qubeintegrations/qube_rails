@@ -52,7 +52,6 @@
     "id": "resolve / ask",
     "kind": "decision",
     "message": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
-    "options": [],
     "token": "Vq3kT9xRb2LmW8sZ"
   },
   "search": {
