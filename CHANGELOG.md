@@ -33,6 +33,12 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 
 ### Changed
 
+- A request QuickBooks may have applied reaches `timed_out(event)`, not `failed(event)`: routing
+  follows qube_sync's `event.perhaps_applied?`, so an `error` whose `error_type` is
+  `outcome_unknown` or `response_too_large` goes there as a `timed_out` does. Check QuickBooks
+  before sending a write again; a query can be queued again (page a too-large one). `failed`
+  never gets one of those. The hook keeps its name, and its default still calls `failed`.
+- Needs qube_sync 0.6.0 (`perhaps_applied?` is new there); the two ship together.
 - A failed run's `error` is QuBe Sync's `{code, type, message, quickbooks_message, hint}`:
   `reason_text` is its message and `error_detail` its hint. An error stored by 0.2.0 (a sentence,
   or code, message and detail) still reads.

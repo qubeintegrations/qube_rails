@@ -177,6 +177,52 @@ RSpec.describe QubeRails::Request do
       expect(row.state).to eq("timed_out")
     end
 
+    describe "a request QuickBooks may have applied" do
+      def record_timed_out
+        allow_any_instance_of(QuickbooksDesktop::FindCustomer).to receive(:timed_out).and_wrap_original do |original, event|
+          QuickbooksDesktop::FindCustomer.calls << [:timed_out, event.error_type]
+          original.call(event)
+        end
+      end
+
+      def refused_with(error_type, state: "error")
+        error = JSON.parse(vector_body("request: QuickBooks refused it"))["error"].merge("error_type" => error_type)
+        { "state" => state, "error" => error }
+      end
+
+      before { record_timed_out }
+
+      it "hands an outcome_unknown error to timed_out" do
+        deliver("request: QuickBooks refused it", refused_with("outcome_unknown"))
+
+        expect(QuickbooksDesktop::FindCustomer.calls).to eq([[:timed_out, "outcome_unknown"], [:failed, "error"]])
+        expect(row).to have_attributes(state: "error")
+        expect(row.ended?).to be(true)
+      end
+
+      it "hands a response_too_large error to timed_out" do
+        deliver("request: QuickBooks refused it", refused_with("response_too_large"))
+
+        expect(QuickbooksDesktop::FindCustomer.calls).to eq([[:timed_out, "response_too_large"], [:failed, "error"]])
+      end
+
+      it "hands a timed_out to timed_out" do
+        deliver("request: an answer that never came back")
+
+        expect(QuickbooksDesktop::FindCustomer.calls).to eq([[:timed_out, "timed_out"], [:failed, "timed_out"]])
+      end
+
+      it "hands a quickbooks_business_error and a discarded to failed only" do
+        deliver("request: QuickBooks refused it")
+        expect(QuickbooksDesktop::FindCustomer.calls).to eq([[:failed, "error"]])
+
+        discarded = make_request
+        deliver("request: QuickBooks refused it", refused_with("discarded", state: "discarded"), discarded)
+        expect(QuickbooksDesktop::FindCustomer.calls).to eq([[:failed, "error"], [:failed, "discarded"]])
+        expect(discarded.state).to eq("discarded")
+      end
+    end
+
     it "skips an event whose id isn't the row's qube_id" do
       deliver("request: an answer", "id" => "someone-elses")
 
