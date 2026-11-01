@@ -170,8 +170,11 @@ RSpec.describe QubeRails::Operation do
   describe ".start" do
     it "writes the run first, starts it on the connection's qube_id, and keeps QuBe Sync's answer" do
       stub = stub_request(:post, api_url("/connections/#{connection.qube_id}/workflow-runs"))
-             .to_return(json_data("id" => "run-q-1", "state" => "running",
-                                  "links" => { "run" => "https://qube.example/r/1", "cancel" => "https://qube.example/r/1/cancel" }))
+             .to_return(json_data("id" => "run-q-1", "state" => "running", "links" => {
+                                    "self" => "https://qube.example/r/1", "decisions" => "https://qube.example/r/1/decisions",
+                                    "search" => nil, "cancel" => "https://qube.example/r/1/cancel",
+                                    "ui" => "https://qube.example/app/r/1"
+                                  }))
 
       started = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
 
@@ -271,6 +274,25 @@ RSpec.describe QubeRails::Operation do
 
       expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
       expect(QubeRails::Run.last).to have_attributes(state: "failed", qube_run_id: nil)
+    end
+
+    it "keeps a refusal's reason on the failed run, from each shape QuBe Sync answers in" do
+      {
+        { errors: { webhook_url: ["is not a qube listen URL for this app"] } } =>
+          "webhook url is not a qube listen URL for this app",
+        { errors: [{ path: "input.customer", message: "is required" }] } => "input.customer: is required",
+        { errors: "workflow_not_published" } => "workflow_not_published",
+        { errors: { code: "invalid", detail: "bad input" } } => "bad input",
+        { error: "No workflow with that key" } => "No workflow with that key",
+        "<html>oops</html>" => "it couldn't be sent"
+      }.each do |body, message|
+        stub_request(:post, /workflow-runs/).to_return(status: 422, body: body.is_a?(String) ? body : body.to_json)
+        QubeRails::Run.delete_all
+
+        expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
+        expect(QubeRails::Run.last.reload.error)
+          .to eq("code" => "refused", "message" => message, "detail" => "QuBe Sync refused the start (422).")
+      end
     end
 
     it "raises RealtimeRequired on a standard connection before writing a run or sending anything" do
