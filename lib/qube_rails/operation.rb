@@ -425,7 +425,7 @@ module QubeRails
       run.headline = event["headline"] if event["headline"].is_a?(String)
       if ended?(event)
         run.ended_at ||= Time.now
-        run.error = event.error if event.failed?
+        run.error = event["error"] if event.failed? # raw: qube_sync 0.6 types event.error
         run.cancel_reason = event.cancel_reason if event.cancelled?
         run.cancel_url = nil # links.cancel works only until the run ends
       end
