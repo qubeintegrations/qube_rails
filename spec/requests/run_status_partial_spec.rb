@@ -117,6 +117,17 @@ RSpec.describe "The run status partial", type: :request do
     expect(status.at_css("form.qube-retry-start-form")["action"]).to eq("/qube/runs/#{run.id}/retry_start")
   end
 
+  it "shows why QuBe Sync refused a start" do
+    stub_request(:post, api_url("/connections/#{connection.qube_id}/workflow-runs"))
+      .to_return(status: 422, body: { errors: { webhook_url: ["is not a qube listen URL for this app"] } }.to_json)
+    expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeSync::APIError)
+    status = page.at_css(".qube-run-status")
+
+    expect(status["class"]).to include("qube-run-failed")
+    expect(status.at_css(".qube-run-reason").text).to eq("Webhook url is not a qube listen URL for this app.")
+    expect(status.at_css(".qube-run-error-detail").text).to eq("QuBe Sync refused the start (422).")
+  end
+
   it "shows nothing for a record with no runs" do
     expect(page.at_css(".qube-run-status")).to be_nil
   end

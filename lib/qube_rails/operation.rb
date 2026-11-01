@@ -140,7 +140,7 @@ module QubeRails
             mark_realtime_required(run, refusal_detail(e))
             raise RealtimeRequired, refusal_detail(e)
           end
-          mark_failed(run) if refused?(e)
+          mark_failed(run, e) if refused?(e)
           raise
         end
       record_start(run, started.is_a?(Hash) ? started : {})
@@ -185,10 +185,38 @@ module QubeRails
     end
     private_class_method :mark_realtime_required
 
-    def self.mark_failed(run)
-      run.update_columns(state: "failed", updated_at: Time.now)
+    # Failed with QuBe Sync's refusal as its error, so the run status says why.
+    def self.mark_failed(run, error)
+      refusal = { "code" => "refused", "message" => refusal_message(error),
+                  "detail" => "QuBe Sync refused the start (#{error.status})." }
+      run.update_columns(state: "failed", error: refusal, updated_at: Time.now)
     end
     private_class_method :mark_failed
+
+    # A sentence from a refusal's body: {"errors": a sentence, {code, detail}, {field: [messages]}
+    # or [{path, message}]}, or {"error": a sentence}.
+    def self.refusal_message(error)
+      parsed = JSON.parse(error.body.to_s)
+      parsed = {} unless parsed.is_a?(Hash)
+      text = refusal_text(parsed.key?("errors") ? parsed["errors"] : parsed["error"])
+      text.to_s.strip.empty? ? QubeRails.t("status.not_started") : text.strip
+    rescue JSON::ParserError
+      QubeRails.t("status.not_started")
+    end
+    private_class_method :refusal_message
+
+    def self.refusal_text(errors)
+      case errors
+      when String then errors
+      when Array
+        errors.map { |e| e.is_a?(Hash) ? [e["path"], e["message"]].compact.join(": ") : e.to_s }.join("; ")
+      when Hash
+        return errors["detail"] if errors["detail"].is_a?(String)
+
+        errors.map { |field, messages| "#{field.to_s.tr("_", " ")} #{Array(messages).join(", ")}" }.join("; ")
+      end
+    end
+    private_class_method :refusal_text
 
     # The run's id, links and state from QuBe Sync's answer. Its webhooks may have come first, so
     # the state is taken only while the row still says "starting".
@@ -196,7 +224,7 @@ module QubeRails
       links = started["links"].is_a?(Hash) ? started["links"] : {}
       run.with_lock do
         run.qube_run_id = started["id"]
-        run.run_url = links["run"]
+        run.run_url = links["self"] || links["run"] # a WorkflowRun's link is self; a webhook's, run
         run.cancel_url = links["cancel"]
         run.state = started["state"] if run.state == "starting" && started["state"]
         run.save!

@@ -40,6 +40,16 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - A `rows` field's boolean columns answer `true` or `false`, not the text `"true"`.
 - The storyboard's sample prompts drop `options`, which run webhooks no longer carry.
 
+### Fixed
+
+- A start keeps the run's `run_url`: it's read from the start answer's `links.self` (a
+  `WorkflowRun`'s), falling back to `links.run` (a webhook's). 0.2.0 read only `run`, so it stayed
+  nil.
+- A start QuBe Sync refuses with a 4xx (other than 409 and `realtime_required`) keeps why on the
+  failed run: `error` is `{code: "refused", message, detail}`, the message a sentence from the
+  answer's body (field errors joined, or its sentence) and the detail its status. The run status
+  shows it in place of "it couldn't be sent".
+
 ### Compatibility
 
 Matches QuBe Sync's reshaped workflow-run webhooks (qube PR #61): the error object, `headline`,
