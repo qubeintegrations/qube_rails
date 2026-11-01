@@ -151,7 +151,8 @@ module QubeRails
     # Every page 1..N answered. Called once.
     def done; end
 
-    # error or discarded: event.error["user_message"] is safe to show.
+    # error or discarded: event.error["user_message"] is safe to show. Never one QuickBooks may
+    # have applied (event.perhaps_applied?): those go to timed_out.
     def failed(event)
       log_event(event)
     end
@@ -161,7 +162,8 @@ module QubeRails
       log_event(event)
     end
 
-    # QuickBooks may have applied it. A query can be queued again; check a write first.
+    # QuickBooks may have applied it (timed_out, outcome_unknown, response_too_large): check
+    # QuickBooks before sending a write again. A query can be queued again; page a too-large one.
     def timed_out(event)
       failed(event)
     end
@@ -257,7 +259,7 @@ module QubeRails
         row.error = event.error
         row.ended_at = Time.now
       end
-      event.state == "timed_out" ? timed_out(event) : failed(event)
+      event.perhaps_applied? ? timed_out(event) : failed(event)
     end
 
     def answered_pages

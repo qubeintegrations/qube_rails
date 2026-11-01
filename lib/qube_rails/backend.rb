@@ -17,7 +17,7 @@ module QubeRails
   #   stale or mismatch) unless the delivery checks out;
   # - parse(raw_body) returns the typed event (QubeSync::Webhooks' WorkflowRunEvent,
   #   NotificationEvent, ConnectionEvent and the rest), raising ParseError for a body that isn't
-  #   a JSON object;
+  #   a JSON object; Request routes on RequestEvent#perhaps_applied? (qube_sync 0.6.0);
   # - workflow_types(client, include_drafts:, etag:), render_workflow_types(document, ...) and
   #   check_workflow_types(existing, ...) are `bin/rails g qube_rails:workflows`'s: the app's
   #   workflow input types as QuBe Sync serves them, rendered into app/qube/qube_workflows.rb and
