@@ -1,0 +1,7 @@
+<%# A search under the possible matches (question.searches): a native disclosure, "Search
+    QuickBooks…" (question.ui_text(:search_quickbooks)), the search choice's form inside. Open when
+    the question shows a refusal; the behaviour script focuses the search box as it opens. %>
+<details class="qube-search-disclosure" data-qube-search-disclosure<%= " open" if question.error %>>
+  <summary class="<%= qube_classes(QubeRails.config.ui_classes.key?(:button_ghost) ? :button_ghost : :button_secondary, "qube-choice-button") %>" data-qube-button="ghost"><%= question.ui_text(:search_quickbooks) %></summary>
+  <%= render "qube_rails/question/choice", question: question, choice: choice %>
+</details>

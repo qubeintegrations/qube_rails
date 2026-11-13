@@ -52,7 +52,8 @@ RSpec.describe "Styling the screens", type: :request do
 
     expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] button.qube-pick.list-item .qube-pick-detail.muted"))
       .not_to be_nil
-    expect(shown.at_css(".qube-choice-divider.or")).not_to be_nil
+    expect(shown.at_css(".qube-choice-divider.or")).to be_nil # the search is behind "Search QuickBooks…"
+    expect(shown.at_css(".qube-search-disclosure > summary")["class"]).to eq("qube-choice-button btn-link")
     expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn-2")
     expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=cancel] button")["class"])
       .to eq("qube-choice-button btn-link")

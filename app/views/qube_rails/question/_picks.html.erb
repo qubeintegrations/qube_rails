@@ -1,5 +1,6 @@
 <%# The question's picks (question.picks): option rows, one form each. When they're the records
-    QuBe Sync offers (question.matches?), under a "Possible matches" heading. %>
+    QuBe Sync offers (question.matches?), under a "Possible matches" heading, with the search
+    (question.searches) behind "Search QuickBooks…" after them. %>
 <% if question.matches? %>
 <div class="qube-picks" role="group" aria-labelledby="qube-<%= question.token %>-matches">
   <p class="<%= qube_classes(:label, "qube-rows-label") %>" id="qube-<%= question.token %>-matches"><%= question.ui_text(:possible_matches) %></p>
@@ -10,5 +11,8 @@
 <% end %>
 </div>
 <% if question.matches? %>
+<% question.searches.each do |choice| %>
+  <%= render "qube_rails/question/search_disclosure", question: question, choice: choice %>
+<% end %>
 </div>
 <% end %>

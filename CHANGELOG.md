@@ -37,12 +37,15 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
   `cancel`, `answer`): the offered records under "Possible matches" (new key
   `question.possible_matches`), the first one's "Use this one" the screen's primary button and the
-  rest secondary; the search after them, secondary; decline in the footer; cancel last, at the far
+  rest secondary; the search behind a quiet "Search QuickBooks…" at the end of the matches (a native
+  `<details>`, new partial `question/_search_disclosure` and key `question.search_quickbooks`, open
+  after a refusal, the script focusing the search box; `QuestionView#searches`, left out of `forms`),
+  or a section of its own when nothing is offered; decline in the footer; cancel last, at the far
   end of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
   older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
   `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
   "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
-  `data-qube-choice-role`. One new CSS rule
+  `data-qube-choice-role`. New CSS (cancel's place in the footer row, the disclosure's link) beside one rule
   (cancel's place in the footer); the heading and buttons use classes the stylesheet already styles.
 - `question.step` reads "%{position} of %{count}" ("1 of 2"): the record's block already names its
   kind. A `%{name}` in your own wording still works.

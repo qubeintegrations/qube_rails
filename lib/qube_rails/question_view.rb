@@ -40,8 +40,19 @@ module QubeRails
       choices.select { |c| c.kind == :pick }
     end
 
+    # The forms shown as sections. A search under offered records is left out: it's behind
+    # "Search QuickBooks…" at the end of the picks (searches).
     def forms
-      choices.select { |c| c.kind == :form }
+      choices.select { |c| c.kind == :form && !disclosed?(c) }
+    end
+
+    # The search choices shown behind "Search QuickBooks…" under the possible matches.
+    def searches
+      choices.select { |c| disclosed?(c) }
+    end
+
+    def disclosed?(choice)
+      choice.kind == :form && choice.role == "search" && matches?
     end
 
     def exits
@@ -88,7 +99,9 @@ module QubeRails
       end
       promote_rows
       offered = @choices.select { |c| c.role == "pick" }
-      primary = offered.first || (plain? ? @choices.find { |c| !c.cancel? } : answer_form || forms.first)
+      all_forms = @choices.select { |c| c.kind == :form }
+      plain = picks.empty? && all_forms.empty?
+      primary = offered.first || (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
       @choices.each do |choice|
         style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : nil)
                 elsif choice.equal?(primary) then :primary
@@ -101,10 +114,6 @@ module QubeRails
 
     def button_style(choice, primary)
       choice.equal?(primary) ? :primary : :secondary
-    end
-
-    def answer_form
-      forms.find { |c| c.role != "search" }
     end
 
     # Kinds and button styles from each choice's shape (a prompt without roles). One filled button

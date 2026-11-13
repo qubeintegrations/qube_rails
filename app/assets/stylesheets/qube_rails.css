@@ -201,6 +201,21 @@
   flex-basis: 100%;
 }
 
+/* "Search QuickBooks…" under the possible matches: a quiet link that opens the search in place */
+:where(.qube-search-disclosure) {
+  display: grid;
+  gap: 12px;
+}
+
+:where(.qube-search-disclosure > summary) {
+  justify-self: start;
+  list-style: none;
+}
+
+:where(.qube-search-disclosure > summary)::-webkit-details-marker {
+  display: none;
+}
+
 /* Cancel (role cancel): last, at the far end of the row */
 :where(.qube-choice-footer > [data-qube-choice-role="cancel"]) {
   margin-inline-start: auto;

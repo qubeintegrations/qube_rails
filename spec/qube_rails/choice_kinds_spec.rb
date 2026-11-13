@@ -25,8 +25,18 @@ RSpec.describe "A question's choices by kind" do
     expect(view).to be_matches
     expect(arranged(view)).to eq([["use:1", :pick, :primary], ["use", :form, :secondary], ["none", :exit, :secondary],
                                   ["cancel", :exit, :ghost]])
-    expect([view.picks, view.forms, view.exits].map { |l| l.map(&:id) }).to eq([%w[use:1], %w[use], %w[none cancel]])
+    # The search is behind "Search QuickBooks…" under the matches, not a section of its own.
+    expect([view.picks, view.forms, view.searches, view.exits].map { |l| l.map(&:id) })
+      .to eq([%w[use:1], [], %w[use], %w[none cancel]])
     expect(view).not_to be_plain
+  end
+
+  it "shows the search as a section when nothing is offered" do
+    prompt = QubeRails::Storyboard.find("near_match").sample["prompt"]
+    prompt = prompt.merge("choices" => prompt["choices"].reject { |c| c["role"] == "pick" })
+    view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
+    expect([view.forms.map(&:id), view.searches]).to eq([%w[use], []])
+    expect(view.forms.first.style).to eq(:primary)
   end
 
   it "makes the first of a list of picks primary and the rest secondary, decline secondary, cancel a ghost" do

@@ -67,7 +67,10 @@ RSpec.describe "The storyboard", type: :request do
     expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[none exit], %w[cancel exit]])
     near = panel.call("near_match")
     expect(near.at_css(".qube-picks[role=group] > p.qube-rows-label + .qube-picks[role=list]").text).to include("Riverbend Electric")
-    expect(near.at_css(".qube-picks + .qube-choice-divider + form.qube-choice-form[data-qube-choice-role=search]")).not_to be_nil
+    disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
+    expect(disclosure.at_css("summary").text).to eq("Search QuickBooks…")
+    expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
+    expect(near.at_css(".qube-choice-divider")).to be_nil
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
     expect(near.at_css("form[data-qube-choice=use] button[data-qube-button=secondary]")).not_to be_nil
     expect(near.css(".qube-choice-footer > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline cancel])

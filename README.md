@@ -761,6 +761,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/_question` | `question` | the section: error, message, details, choices |
 | `qube_rails/question/_message`, `_details` | `question` | the sentence; the label/value rows |
 | `qube_rails/question/_picks`, `_pick` | `question`; `question`, `choice` | the picks' list; one pick, a form posting `choice` |
+| `qube_rails/question/_search_disclosure` | `question`, `choice` | the search under the possible matches: "Search QuickBooks…" and the search choice's form, in a `<details>` |
 | `qube_rails/question/_choice` | `question`, `choice` | a form or exit choice: a form posting `choice` and `data[...]` with your CSRF token |
 | `qube_rails/question/_footer` | `question` | the exits' row |
 | `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
@@ -775,7 +776,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
 versions:
 
-- `QubeRails::QuestionView`: `picks`, `forms`, `exits` (cancel last), `plain?`, `roles?` (the prompt
+- `QubeRails::QuestionView`: `picks`, `forms` (a search under the possible matches left out), `searches` (those), `exits` (cancel last), `plain?`, `roles?` (the prompt
   says each choice's role), `matches?` (picks are offered records: "Possible matches"), `ui_text(key, **options)`
   (the engine's own word `question.<key>`, the one place the question's partials look new words up) (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
   `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
@@ -808,8 +809,11 @@ versions:
 Choices show by the `role` QuBe Sync gives each (`prompt.choices[].role`). The records it offers
 (`pick`) are option rows under "Possible matches" (`question.possible_matches`), each ending in a
 "Use this one" button: the first is the screen's one filled button, the rest secondary. A `search`
-comes after them, "or" between (`question.or`), its field's label leading ("Not listed? Search
-QuickBooks") and its submit secondary. `decline` ("It's not in QuickBooks") sits in the footer row
+sits behind a quiet "Search QuickBooks…" (`question.search_quickbooks`) at the end of that list, a
+native `<details>` (`qube_rails/question/_search_disclosure`; open when the question shows a
+refusal, the behaviour script focusing the search box as it opens), its field's label leading
+("Not listed? Search QuickBooks") and its submit secondary. With nothing offered, the search is a
+section of its own, as a form. `decline` ("It's not in QuickBooks") sits in the footer row
 under a hairline, and `cancel` ("Don't add the invoice") last, at the far end of that row, as a
 ghost. An `answer` shows by its shape: one with fields is its own section, its submit the one filled
 button when no record is offered (only the first form's; later ones are secondary); with no picks, a
@@ -970,6 +974,7 @@ en:
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
 | `question.possible_matches` | Possible matches | over the records QuBe Sync offers (choices with role `pick`) |
+| `question.search_quickbooks` | Search QuickBooks… | the link under the possible matches that opens the search |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
 

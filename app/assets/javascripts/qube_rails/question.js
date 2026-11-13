@@ -642,6 +642,15 @@
     if (stepped(list)) updateStep(list);
   });
 
+  // "Search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native
+  // <details>): as it opens, the focus goes to its search box. "toggle" doesn't bubble.
+  document.addEventListener("toggle", function (event) {
+    var disclosure = event.target;
+    if (!disclosure.matches || !disclosure.matches("[data-qube-search-disclosure]") || !disclosure.open) return;
+    var input = disclosure.querySelector("[data-qube-search-input], input:not([type=hidden])");
+    if (input) input.focus();
+  }, true);
+
   // A refused submit (an invalid field in a row not on show): its "invalid" events come one per
   // field, in order, before the form is refused; the first shows its row.
   document.addEventListener("invalid", function (event) {
