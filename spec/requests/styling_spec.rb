@@ -29,8 +29,11 @@ RSpec.describe "Styling the screens", type: :request do
     shown = page
 
     expect(shown.at_css("section.qube-question.card")).not_to be_nil
-    expect(shown.css("button.btn-primary").size).to eq(1) # the form's submit; a pick is never a `button`
-    expect(shown.at_css("form[data-qube-choice=use] button")["class"]).to eq("qube-choice-button btn btn-primary")
+    # The first offered record's "Use this one"; a pick's row is never a `button` piece.
+    expect(shown.css(".btn-primary").size).to eq(1)
+    expect(shown.at_css("form[data-qube-choice='use:1'] .qube-pick-action")["class"])
+      .to eq("qube-pick-action qube-choice-button btn btn-primary")
+    expect(shown.at_css("form[data-qube-choice=use] button")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("form[data-qube-choice='use:1'] button")["class"]).to eq("qube-pick")
     expect(shown.at_css("form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button btn btn-link")

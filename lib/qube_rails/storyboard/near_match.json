@@ -1,6 +1,6 @@
 {
   "title": "A near match",
-  "note": "resolve's ask: QuickBooks has no record with exactly that name. The similar ones are choices (detail says why), then a search for another one, none of these, or cancel. With an add from the caller, \"None of these\" says the record is added as new (adds: true); without one it reads just \"None of these\".",
+  "note": "resolve's ask, asked for an invoice: QuickBooks has no record with exactly that name. The similar ones are the possible matches (detail says why), the first the main action; then a search for another one, \"It's not in QuickBooks\", and \"Don't add the invoice\" apart at the end. With an add from the caller, \"It's not in QuickBooks\" says the record is added as new (adds: true). Each choice's role (pick, search, decline, cancel) says how to weigh it.",
   "prompt": {
     "choices": [
       {
@@ -8,7 +8,8 @@
         "detail": "similar name · ap@riverbend.example · 512-555-0142",
         "fields": [],
         "id": "use:1",
-        "label": "Riverbend Electric"
+        "label": "Riverbend Electric",
+        "role": "pick"
       },
       {
         "description": null,
@@ -16,28 +17,31 @@
         "fields": [
           {
             "kind": "customer",
-            "label": "Search for a different one",
+            "label": "Not listed? Search QuickBooks",
             "name": "list_id",
             "required": true,
             "type": "record"
           }
         ],
         "id": "use",
-        "label": "Use this one"
+        "label": "Use this one",
+        "role": "search"
       },
       {
         "description": null,
         "detail": null,
         "fields": [],
         "id": "none",
-        "label": "None of these: add \"Riverbend\" as new"
+        "label": "It's not in QuickBooks: add \"Riverbend\" as new",
+        "role": "decline"
       },
       {
         "description": null,
         "detail": null,
         "fields": [],
         "id": "cancel",
-        "label": "Cancel"
+        "label": "Don't add the invoice",
+        "role": "cancel"
       }
     ],
     "data": {
@@ -51,7 +55,7 @@
     ],
     "id": "resolve / ask",
     "kind": "decision",
-    "message": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
+    "message": "QuickBooks has no customer named exactly “Riverbend”. Is it one of these?",
     "token": "Vq3kT9xRb2LmW8sZ"
   },
   "search": {

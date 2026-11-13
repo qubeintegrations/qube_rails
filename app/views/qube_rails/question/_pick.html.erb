@@ -1,7 +1,8 @@
 <%# One pick (a QubeRails::ChoiceView of kind :pick): an option row, a form posting choice=<id>
-    to choice.action_url with your CSRF token. %>
+    to choice.action_url with your CSRF token. An offered record (choice.style set) ends in a
+    "Use this one" button: the first primary, the rest secondary. %>
 <form class="qube-choice qube-pick-form" method="post" action="<%= choice.action_url %>" role="listitem"
-      data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick">
+      data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %>>
   <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
   <%= hidden_field_tag :choice, choice.id, id: nil %>
   <button type="submit" class="<%= qube_classes(:pick, "qube-pick") %>">
@@ -14,6 +15,10 @@
       <span class="qube-pick-description"><%= choice.description %></span>
 <% end %>
     </span>
+<% if choice.style %>
+    <span class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>"><%= QubeRails.t("question.use_pick") %></span>
+<% else %>
     <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= QubeRails.t("question.use_pick") %></span>
+<% end %>
   </button>
 </form>

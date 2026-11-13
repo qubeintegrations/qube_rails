@@ -12,23 +12,58 @@ RSpec.describe "A question's choices by kind" do
     view.choices.map { |c| [c.id, c.kind, c.style] }
   end
 
-  it "makes a choose list's items picks, a choice with fields a form, and the rest exits" do
+  def without_roles(key)
+    prompt = QubeRails::Storyboard.find(key).sample["prompt"]
+    prompt = prompt.merge("choices" => prompt["choices"].map { |c| c.except("role") })
+    QubeRails::QuestionView.new(prompt, action_url: "/q/1", search_url: "/q/1/search")
+  end
+
+  it "weighs choices by role: the offered records first, the first primary, search secondary, cancel last" do
     view = question("near_match")
 
-    expect(arranged(view)).to eq([["use:1", :pick, nil], ["use", :form, :primary], ["none", :exit, :secondary],
+    expect(view).to be_roles
+    expect(view).to be_matches
+    expect(arranged(view)).to eq([["use:1", :pick, :primary], ["use", :form, :secondary], ["none", :exit, :secondary],
                                   ["cancel", :exit, :ghost]])
     expect([view.picks, view.forms, view.exits].map { |l| l.map(&:id) }).to eq([%w[use:1], %w[use], %w[none cancel]])
     expect(view).not_to be_plain
   end
 
-  it "fills no button for a pick from a list: picks are rows, none of these secondary, cancel a ghost" do
-    expect(arranged(question("choose"))).to eq([["use:1", :pick, nil], ["use:2", :pick, nil], ["none", :exit, :secondary],
-                                                ["cancel", :exit, :ghost]])
+  it "makes the first of a list of picks primary and the rest secondary, decline secondary, cancel a ghost" do
+    expect(arranged(question("choose"))).to eq([["use:1", :pick, :primary], ["use:2", :pick, :secondary],
+                                                ["none", :exit, :secondary], ["cancel", :exit, :ghost]])
+    expect(arranged(question("record_search"))).to eq([["use:1", :pick, :primary], ["use:2", :pick, :secondary],
+                                                       ["use:3", :pick, :secondary], ["use", :form, :secondary],
+                                                       ["cancel", :exit, :ghost]])
+    expect(arranged(question("ask_about_add"))).to eq([["use_existing:1", :pick, :primary], ["add_again", :exit, :secondary],
+                                                       ["cancel", :exit, :ghost]])
   end
 
-  it "shows a pick from the records there are as rows, then the search with the one filled submit" do
-    expect(arranged(question("record_search"))).to eq([["use:1", :pick, nil], ["use:2", :pick, nil], ["use:3", :pick, nil],
-                                                       ["use", :form, :primary], ["cancel", :exit, :ghost]])
+  it "puts cancel last among the exits, whatever its place in the prompt" do
+    prompt = { "token" => "t", "message" => "?", "choices" => [
+      { "id" => "stop", "label" => "Stop", "fields" => [], "role" => "cancel" },
+      { "id" => "none", "label" => "It's not there", "fields" => [], "role" => "decline" }
+    ] }
+    view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
+    expect(view.exits.map(&:id)).to eq(%w[none stop])
+  end
+
+  it "takes a role it doesn't know as answer" do
+    prompt = { "token" => "t", "message" => "?", "choices" => [
+      { "id" => "later", "label" => "Ask me later", "fields" => [], "role" => "snooze" }
+    ] }
+    view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
+    expect(view.choices.map(&:role)).to eq(["answer"])
+  end
+
+  it "without roles, guesses from each choice's shape: picks are rows, the first form primary" do
+    expect(without_roles("near_match")).not_to be_roles
+    expect(arranged(without_roles("near_match"))).to eq([["use:1", :pick, nil], ["use", :form, :primary],
+                                                         ["none", :exit, :secondary], ["cancel", :exit, :ghost]])
+    expect(arranged(without_roles("choose"))).to eq([["use:1", :pick, nil], ["use:2", :pick, nil],
+                                                     ["none", :exit, :secondary], ["cancel", :exit, :ghost]])
+    expect(arranged(without_roles("record_search"))).to eq([["use:1", :pick, nil], ["use:2", :pick, nil], ["use:3", :pick, nil],
+                                                            ["use", :form, :primary], ["cancel", :exit, :ghost]])
   end
 
   it "fills only the first form's submit" do

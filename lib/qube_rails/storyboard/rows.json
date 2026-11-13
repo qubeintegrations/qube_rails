@@ -249,14 +249,16 @@
               }
             ]
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": "Stop here. Nothing is created.",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

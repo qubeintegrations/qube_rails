@@ -22,21 +22,24 @@
         "label": "Sales",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use:2",
         "label": "Sales:Signs",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use:3",
         "label": "Service Income",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use",
@@ -51,14 +54,16 @@
             "label": "Search for the one to use",
             "required": true
           }
-        ]
+        ],
+        "role": "search"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

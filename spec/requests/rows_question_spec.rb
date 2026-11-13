@@ -104,7 +104,7 @@ RSpec.describe "A rows question", type: :request do
     # Without the script nothing steps: every record shows, Set all with them, the submit after
     expect(field.css("[data-qube-row][hidden], [data-qube-step-line], [data-qube-step-nav]")).to be_empty
     expect(field.ancestors("form").first.at_css("button[type=submit]")["hidden"]).to be_nil
-    expect(field["data-qube-text-step"]).to eq("%{name} · %{position} of %{count}")
+    expect(field["data-qube-text-step"]).to eq("%{position} of %{count}")
     expect(field["data-qube-text-back"]).to eq("Back")
     expect(field["data-qube-text-next"]).to eq("Next")
     expect(field["data-qube-button-class"]).to eq("qube-choice-button btn btn-primary")

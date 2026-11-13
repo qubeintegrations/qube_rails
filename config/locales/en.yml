@@ -40,8 +40,9 @@ en:
     question:
       set_all: "Set all to:"
       use_pick: "Use this one"
+      possible_matches: "Possible matches"
       use_for_all: "Use for all %{count}"
-      step: "%{name} · %{position} of %{count}"
+      step: "%{position} of %{count}"
       back: "Back"
       next: "Next"
       or: "or"

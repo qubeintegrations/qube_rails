@@ -29,7 +29,8 @@
         "label": "Use the existing record",
         "description": "Carry on with the record QuickBooks already has. Nothing new is created.",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "answer"
       },
       {
         "id": "rename",
@@ -43,14 +44,16 @@
             "label": "New name",
             "required": true
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": "Stop here. Nothing is created.",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

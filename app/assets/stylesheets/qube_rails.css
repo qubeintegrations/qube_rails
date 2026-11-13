@@ -79,8 +79,8 @@
 }
 
 /* ---- Choices, by kind: picks as option rows, each form choice its own section ("or" between),
-   exits in a footer row. At most one filled button: a form's submit, or in a plain question the
-   first choice. */
+   exits in a footer row. At most one filled button: the first offered record's "Use this one", a
+   form's submit, or in a plain question the first choice. */
 
 :where(.qube-choices) {
   display: grid;
@@ -199,6 +199,11 @@
 
 :where(.qube-choice-footer .qube-choice:has(.qube-choice-description)) {
   flex-basis: 100%;
+}
+
+/* Cancel (role cancel): last, at the far end of the row */
+:where(.qube-choice-footer > [data-qube-choice-role="cancel"]) {
+  margin-inline-start: auto;
 }
 
 :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy) {

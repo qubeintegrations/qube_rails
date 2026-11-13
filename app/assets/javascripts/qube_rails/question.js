@@ -377,7 +377,7 @@
   };
 
   // ---- Steps: a rows field with more than one row shows one row at a time, in order. The script
-  // adds a step line ([data-qube-step-line], "Customer · 1 of 3", aria-live) and Back / Next
+  // adds a step line ([data-qube-step-line], "1 of 3", aria-live) and Back / Next
   // ([data-qube-step-back], [data-qube-step-next]) and keeps the step on the field
   // (data-qube-step, from 0). Rows not on show are hidden, never removed, so the one POST still
   // sends every row; "Set all to:" is hidden, and the form's submit shows on the last step only.
@@ -482,7 +482,7 @@
       else row.removeAttribute("data-qube-step-current");
     });
     var line = list.querySelector("[data-qube-step-line]");
-    line.textContent = words(list, "step", "%{name} · %{position} of %{count}")
+    line.textContent = words(list, "step", "%{position} of %{count}")
       .replace("%{name}", stepName(rows[at]))
       .replace("%{position}", String(at + 1))
       .replace("%{count}", String(rows.length));
