@@ -1,6 +1,6 @@
 {
   "title": "Records not in QuickBooks yet",
-  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. \"Set all to:\" sets every record's choice; \"Use for all\" copies a picked value to the others.",
+  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. With the behaviour script it asks one record at a time (Back, Next, the submit on the last); without it, every record shows with \"Set all to:\", which sets every record's choice. \"Use for all\" copies a picked value to the others.",
   "prompt": {
     "id": "add_transaction / ask_missing",
     "kind": "decision",

@@ -1,11 +1,17 @@
 <%# A rows field (field.rows, a QubeRails::RowsView): a block per record with the fields it asks,
     posted as data[<field>][<row key>][<column>]. A field shows only while its "when" holds. "Set
     all to:" sets the segmented column on every row, and "Use for all" copies one row's value to
-    the others (the behaviour script). %>
+    the others (the behaviour script). With the script, more than one row shows one at a time:
+    the data-qube-text-step/-back/-next words and the button classes are for its step line and
+    Back / Next. %>
 <% rows = field.rows %>
 <% set_all = rows.set_all %>
 <div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
-     data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>">
+     data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>"
+     data-qube-text-step="<%= QubeRails.t("question.step", name: "%{name}", position: "%{position}", count: "%{count}") %>"
+     data-qube-text-back="<%= QubeRails.t("question.back") %>" data-qube-text-next="<%= QubeRails.t("question.next") %>"
+     data-qube-button-class="<%= qube_classes(:button, "qube-choice-button") %>"
+     data-qube-button-secondary-class="<%= qube_classes(:button_secondary, "qube-choice-button") %>">
   <p class="<%= qube_classes(:label, "qube-rows-label") %>"><%= rows.label %></p>
 <% if set_all %>
   <div class="qube-rows-set-all" data-qube-rows-set-all="<%= set_all.name %>">

@@ -25,6 +25,16 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   it with the same Idempotency-Key once the connection is upgraded: QuBe Sync stores nothing for
   that refusal.
 
+**Questions**
+- A rows field (`add_transaction`'s `ask_missing`) of two records or more asks one record at a
+  time when the behaviour script runs: a step line ("Customer · 1 of 3", `aria-live`), Back and
+  Next (Next once the record is answered), the question's submit on the last record only, "Set all
+  to:" hidden. Every record stays in the form, so the answer is still one POST with every row.
+  Without the script the field renders as before. New keys `question.step`, `question.back`,
+  `question.next`; the rows partial carries them and the `button` / `button_secondary` classes as
+  `data-qube-*` attributes. No new CSS: the step line and buttons use classes the stylesheet
+  already styles.
+
 **Run status**
 - `run.headline`, every event's sentence for a person (`qube_runs.headline`), shown for an ended
   run whose reason doesn't already say it (`.qube-run-headline`).

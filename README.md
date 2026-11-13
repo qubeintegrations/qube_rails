@@ -651,7 +651,11 @@ column of up to three options, such as create or use, as a segmented control), t
 its answers so far call for (each column shown while its `when` holds), stacked in a grid, a search
 per record column (sent with the row). "Set all to:" sets that choice on every record, and "Use for
 all N" under a filled search or select copies it to the other records that ask it and are still
-empty. Its answer is `{"records": {row key => {column => value}}}`: each row's `key`, the columns
+empty. With the behaviour script, a rows field of more than one record asks one record at a time:
+a step line ("Customer · 1 of 3"), Back and Next (Next once that record is answered), and the
+question's submit only on the last record; "Set all to:" is hidden then. The other records stay in
+the form, hidden, so it's still one answer. Without the script every record shows at once. Its answer
+is `{"records": {row key => {column => value}}}`: each row's `key`, the columns
 that row asks (`rows[].columns`), a number column as a number and a boolean one as `true` or `false`.
 
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
@@ -705,7 +709,8 @@ so `prefers-color-scheme` carries through. An app whose dark mode is a class sho
 Motion is short and only where it says something: a button gives way on press (`scale(0.97)`),
 the search box's matches drop in from the input (150ms; they close at once, and moving through them
 with the keyboard is instant), a rows field's field fades in as it starts to apply, what "Set all to"
-or "Use for all" fills flashes a tint, and a one-shot error fades in. All of it is transform and
+or "Use for all" fills flashes a tint, a rows field's next record comes in from the side it's
+stepped from (180ms, a few px), and a one-shot error fades in. All of it is transform and
 opacity, on `cubic-bezier(0.23, 1, 0.32, 1)`; with `prefers-reduced-motion: reduce` the fades stay
 and the movement goes. Hover effects apply only on devices with a fine pointer.
 
@@ -729,7 +734,7 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `question` | the question's `<section>` |
 | `message`, `details` | its sentence, its label/value table |
 | `choice` | each choice's `<form>` |
-| `button`, `button_secondary`, `button_ghost` | the one primary button (a form choice's submit, or a plain question's first choice; the retry button), the secondary ones (other exits, later forms, redeliver, Apply), and cancel (`button_ghost`, else `button_secondary`) |
+| `button`, `button_secondary`, `button_ghost` | the one primary button (a form choice's submit, or a plain question's first choice; the retry button; a rows field's Next, made by the script), the secondary ones (other exits, later forms, redeliver, Apply, a rows field's Back), and cancel (`button_ghost`, else `button_secondary`) |
 | `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option-row button (never `button`), its detail, its "Use this one" |
 | `choice_footer`, `choice_divider` | the exits' row; the "or" between picks and a form |
 | `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
@@ -834,6 +839,22 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   table's `data-qube-text-use-for-all`, "Use for all %{count}", while the field has a value other
   records' shown fields lack; copies it to them). What either fills gets `data-qube-filled` for the
   stylesheet's tint.
+- Steps: a rows field with two records or more shows one at a time. The script marks the field
+  `data-qube-stepped` and `data-qube-step="<n>"` (from 0), the record on show
+  `data-qube-step-current`, and hides the others (`hidden` and `display: none`, never removed, so the
+  form still posts every record). It adds a step line before the records,
+  `<div class="qube-rows-step qube-row-detail" data-qube-step-line aria-live="polite">` (the record's
+  detail, else its name, from the header its `aria-labelledby` names, and its position: the field's `data-qube-text-step`, "%{name} · %{position}
+  of %{count}"), and after them `<div class="qube-rows-step-nav qube-choice-footer" data-qube-step-nav>`
+  with Back (`data-qube-step-back`, `data-qube-button="secondary"`, classes from
+  `data-qube-button-secondary-class`; hidden on the first record) and Next (`data-qube-step-next`,
+  `data-qube-button="primary"`, classes from `data-qube-button-class`; disabled until every shown
+  input of the record is valid, hidden on the last record). The form's submit shows on the last
+  record only, and `data-qube-rows-set-all` is hidden. Next and Back move the focus to the record's
+  first control. A refused submit (a field invalid in a hidden record) and Enter before the last
+  record show the first record with a problem; a page whose one-shot error (`role="alert"`) names a
+  record opens on it. Words from `data-qube-text-back` and `-next` (English without). These classes are all styled
+  by `qube_rails.css` as it was before steps, so an app's copy of it still fits.
 - A form choice (`data-qube-choice-kind="form"`) whose required fields are all searches: its submit
   is disabled until each has a pick, and again if the text is edited after (by the script only, so it
   still posts without it).
@@ -931,6 +952,8 @@ en:
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | Use for all %{count} | under a filled field other records ask too |
+| `question.step` | %{name} · %{position} of %{count} | a rows field's step line, one record at a time |
+| `question.back`, `question.next` | Back; Next | a rows field's step buttons |
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
