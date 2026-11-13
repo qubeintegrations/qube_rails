@@ -45,8 +45,8 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
   `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
   "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
-  `data-qube-choice-role`. New CSS (cancel's place in the footer row, the disclosure's link) beside one rule
-  (cancel's place in the footer); the heading and buttons use classes the stylesheet already styles.
+  `data-qube-choice-role`. New CSS only for cancel's place in the footer row and the disclosure's
+  link; the heading and buttons use classes the stylesheet already styles.
 - `question.step` reads "%{position} of %{count}" ("1 of 2"): the record's block already names its
   kind. A `%{name}` in your own wording still works.
 - The storyboard's questions carry roles and QuBe Sync's current wording ("It's not in QuickBooks",
