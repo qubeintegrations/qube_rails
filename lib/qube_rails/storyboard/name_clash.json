@@ -5,7 +5,7 @@
     "id": "ensure / ask_use",
     "kind": "decision",
     "token": "Wg5qU7vAs3PhB5dD",
-    "message": "\"Riverbend Electric\" is already in QuickBooks. Use that record, add this one under another name, or cancel.",
+    "message": "QuickBooks already has the customer “Riverbend Electric”.",
     "data": {
       "kind": "customer",
       "name": "Riverbend Electric",
@@ -13,16 +13,7 @@
         "list": "customer"
       }
     },
-    "details": [
-      {
-        "label": "Customer",
-        "value": "Riverbend Electric"
-      },
-      {
-        "label": "Held by",
-        "value": "Customer"
-      }
-    ],
+    "details": [],
     "choices": [
       {
         "id": "use_existing",

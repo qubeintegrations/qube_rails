@@ -19,7 +19,7 @@ RSpec.describe "The view-models" do
 
       expect(view.message).to eq(prompt["message"])
       expect(view.token).to eq("Vq3kT9xRb2LmW8sZ")
-      expect(view.details.map { |d| [d.label, d.value] }).to eq([%w[Customer Riverbend]])
+      expect(view.details).to eq([])
       expect(view.choices.map(&:id)).to eq(%w[use:1 use none cancel])
       expect(view.choices.first.detail).to eq("similar name")
       expect(view.choices.first.action_url).to eq("/q/1")

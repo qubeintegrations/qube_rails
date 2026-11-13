@@ -5,7 +5,7 @@
     "id": "add_transaction / ask_missing",
     "kind": "decision",
     "token": "Yj7sW9xCu5RkD7fF",
-    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
+    "message": "This invoice uses records QuickBooks doesn't have yet.",
     "data": {
       "operation": "invoice",
       "missing": [
@@ -33,10 +33,6 @@
       ]
     },
     "details": [
-      {
-        "label": "Adding",
-        "value": "Invoice"
-      },
       {
         "label": "Number",
         "value": "1042"

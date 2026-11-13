@@ -1,6 +1,6 @@
 {
   "title": "A near match",
-  "note": "resolve's ask, asked for an invoice: QuickBooks has no record with exactly that name. The similar ones are the possible matches (detail says why), the first the main action; then a search for another one, \"It's not in QuickBooks\", and \"Don't add the invoice\" apart at the end. With an add from the caller, \"It's not in QuickBooks\" says the record is added as new (adds: true). Each choice's role (pick, search, decline, cancel) says how to weigh it.",
+  "note": "resolve's ask, asked for an invoice: QuickBooks has no customer with exactly that name, and the message names it, so no detail row repeats it. The similar ones are the possible matches (detail says why), the first the main action; then a search for another one, \"It's not in QuickBooks\", and \"Don't add the invoice\" apart at the end. With an add from the caller, \"It's not in QuickBooks\" says the record is added as new (adds: true). Each choice's role (pick, search, decline, cancel) says how to weigh it.",
   "prompt": {
     "choices": [
       {
@@ -47,15 +47,10 @@
     "data": {
       "name": "Riverbend"
     },
-    "details": [
-      {
-        "label": "Customer",
-        "value": "Riverbend"
-      }
-    ],
+    "details": [],
     "id": "resolve / ask",
     "kind": "decision",
-    "message": "QuickBooks has no customer named exactly “Riverbend”. Is it one of these?",
+    "message": "QuickBooks has no customer named exactly “Riverbend”.",
     "token": "Vq3kT9xRb2LmW8sZ"
   },
   "search": {

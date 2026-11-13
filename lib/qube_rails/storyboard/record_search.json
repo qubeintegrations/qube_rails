@@ -5,17 +5,12 @@
     "id": "resolve / ask_pick",
     "kind": "decision",
     "token": "Sb4kQ2rTn8LmV1xZ",
-    "message": "QuickBooks has nothing named \"Consulting Income\". Pick the one to use instead, or cancel.",
+    "message": "QuickBooks has no account named “Consulting Income”.",
     "data": {
       "name": "Consulting Income",
       "kind": "account"
     },
-    "details": [
-      {
-        "label": "Account",
-        "value": "Consulting Income"
-      }
-    ],
+    "details": [],
     "choices": [
       {
         "id": "use:1",

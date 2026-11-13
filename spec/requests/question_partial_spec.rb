@@ -25,7 +25,7 @@ RSpec.describe "The question partial", type: :request do
 
     expect(shown.at_css("section.qube-question .qube-question-message").text).to eq(prompt["message"])
     expect(shown.css(".qube-question").size).to eq(1)
-    expect(shown.at_css(".qube-question-details th").text).to eq("Customer")
+    expect(shown.at_css(".qube-question-details")).to be_nil # nothing beside what the message says
     forms = shown.css("form.qube-choice")
     expect(forms.map { |f| f["action"] }.uniq).to eq([action])
     expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use none cancel])
