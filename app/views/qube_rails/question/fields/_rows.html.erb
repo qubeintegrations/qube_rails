@@ -8,7 +8,7 @@
 <% set_all = rows.set_all %>
 <div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
      data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>"
-     data-qube-text-step="<%= QubeRails.t("question.step", name: "%{name}", position: "%{position}", count: "%{count}") %>"
+     data-qube-text-step="<%= rows.ui_text(:step, name: "%{name}", position: "%{position}", count: "%{count}") %>"
      data-qube-text-back="<%= QubeRails.t("question.back") %>" data-qube-text-next="<%= QubeRails.t("question.next") %>"
      data-qube-button-class="<%= qube_classes(:button, "qube-choice-button") %>"
      data-qube-button-secondary-class="<%= qube_classes(:button_secondary, "qube-choice-button") %>">

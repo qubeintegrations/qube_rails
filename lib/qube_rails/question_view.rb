@@ -62,6 +62,12 @@ module QubeRails
       picks.any? { |c| c.role == "pick" }
     end
 
+    # One of the engine's own words for this question (question.<key> in the locale files). The one
+    # place they're looked up, so a later QuBe Sync can send them with the prompt.
+    def ui_text(key, **options)
+      QubeRails.t("question.#{key}", **options)
+    end
+
     private
 
     def arrange
@@ -207,7 +213,7 @@ module QubeRails
       input_name = "data[#{name}]"
       type = type_of(field, record_type: "search")
       rows = if type == "rows"
-               RowsView.new(field, input_name: input_name, search_url: question.search_url)
+               RowsView.new(field, input_name: input_name, search_url: question.search_url, question: question)
              end
       new(name: name, input_name: input_name, dom_id: "qube-#{question.token}-#{choice_index}-#{name}",
           type: type, label: field["label"] || name, required: field["required"] == true,

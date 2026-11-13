@@ -48,6 +48,12 @@ RSpec.describe "A question's choices by kind" do
     expect(view.exits.map(&:id)).to eq(%w[none stop])
   end
 
+  it "looks its own words up in one place, the rows field's step line too" do
+    view = question("rows")
+    expect(view.ui_text(:possible_matches)).to eq("Possible matches")
+    expect(view.choices.first.fields.first.rows.ui_text(:step, position: 1, count: 3)).to eq("1 of 3")
+  end
+
   it "takes a role it doesn't know as answer" do
     prompt = { "token" => "t", "message" => "?", "choices" => [
       { "id" => "later", "label" => "Ask me later", "fields" => [], "role" => "snooze" }

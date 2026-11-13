@@ -40,7 +40,9 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   rest secondary; the search after them, secondary; decline in the footer; cancel last, at the far
   end of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
   older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
-  `QuestionView#roles?` and `#matches?`; forms carry `data-qube-choice-role`. One new CSS rule
+  `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
+  "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
+  `data-qube-choice-role`. One new CSS rule
   (cancel's place in the footer); the heading and buttons use classes the stylesheet already styles.
 - `question.step` reads "%{position} of %{count}" ("1 of 2"): the record's block already names its
   kind. A `%{name}` in your own wording still works.

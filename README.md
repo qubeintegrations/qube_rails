@@ -776,7 +776,8 @@ The locals are view-models, plain Ruby objects. Their fields are the contract, k
 versions:
 
 - `QubeRails::QuestionView`: `picks`, `forms`, `exits` (cancel last), `plain?`, `roles?` (the prompt
-  says each choice's role), `matches?` (picks are offered records: "Possible matches") (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
+  says each choice's role), `matches?` (picks are offered records: "Possible matches"), `ui_text(key, **options)`
+  (the engine's own word `question.<key>`, the one place the question's partials look new words up) (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
   `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
 - `QubeRails::ChoiceView`: `id`, `label`, `detail`, `description`, `fields`, `index`, `action_url`,
   `role` (QuBe Sync's: `pick`, `search`, `decline`, `cancel` or `answer`, one it doesn't know read as
