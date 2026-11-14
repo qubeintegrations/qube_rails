@@ -133,6 +133,7 @@
     var p = parts(box);
     if (!p.input || !p.value || !p.results) return;
     p.value.value = "";
+    box.removeAttribute("data-qube-picked");
     check(box, p);
     stopTimers(box);
     var n = (asked.get(box) || 0) + 1;
@@ -168,6 +169,7 @@
     var p = parts(box);
     p.value.value = button.getAttribute("data-value");
     p.input.value = button.getAttribute("data-label");
+    box.setAttribute("data-qube-picked", "");
     close(box);
     check(box, p);
     p.value.dispatchEvent(new Event("change", { bubbles: true }));
@@ -294,6 +296,8 @@
     var hidden = cell.querySelector("[data-qube-search-value]");
     if (hidden) {
       hidden.value = value.value;
+      var picked = hidden.closest("[data-qube-search]");
+      if (picked) picked.toggleAttribute("data-qube-picked", !!value.value);
       var text = cell.querySelector("[data-qube-search-input]");
       if (text) {
         text.value = value.label || value.value;
@@ -374,6 +378,10 @@
       stepUp(list);
     });
     each(document.querySelectorAll('[data-qube-choice-kind="form"]'), gate);
+    each(document.querySelectorAll("[data-qube-search-disclosure]"), function (disclosure) {
+      disclosure.setAttribute("data-qube-closable", "");
+      each(disclosure.querySelectorAll("[data-qube-search-close]"), function (button) { button.hidden = false; });
+    });
   };
 
   // ---- Steps: a rows field with more than one row shows one row at a time, in order. The script
@@ -571,6 +579,15 @@
     });
   };
 
+  // Cancel in an open "or search QuickBooks…": closes it, and the focus goes back to its summary.
+  var closeDisclosure = function (button) {
+    var disclosure = button.closest("[data-qube-search-disclosure]");
+    if (!disclosure) return;
+    disclosure.open = false;
+    var summary = disclosure.querySelector("summary");
+    if (summary) summary.focus();
+  };
+
   // ---- Listeners
 
   document.addEventListener("input", function (event) {
@@ -619,6 +636,8 @@
     });
     var result = event.target.closest("[data-qube-search-result]");
     if (result) return pick(result);
+    var closeSearch = event.target.closest("[data-qube-search-close]");
+    if (closeSearch) return closeDisclosure(closeSearch);
     var setAllButton = event.target.closest("[data-qube-set-all]");
     if (setAllButton) return setAll(setAllButton);
     var forAll = event.target.closest("[data-qube-use-for-all]");

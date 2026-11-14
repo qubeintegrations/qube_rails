@@ -974,6 +974,7 @@ en:
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
 | `question.search_quickbooks` | or search QuickBooks… | the link under the offered records that opens the search |
+| `question.close_search` | Cancel | beside the open search's submit: closes the search, and "or search QuickBooks…" shows again |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
 

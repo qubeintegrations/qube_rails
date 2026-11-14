@@ -70,6 +70,8 @@ RSpec.describe "The storyboard", type: :request do
     disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
     expect(disclosure.at_css("summary").text).to eq("or search QuickBooks…")
     expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
+    close = disclosure.at_css("form[data-qube-choice=use] .qube-choice-actions > button[type=button][data-qube-search-close][hidden]")
+    expect(close.text).to eq("Cancel") # shown by the script, which hides the summary while it's open
     expect(near.at_css(".qube-choice-divider")).to be_nil
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
     expect(near.at_css("form[data-qube-choice=use] button[data-qube-button=secondary]")).not_to be_nil

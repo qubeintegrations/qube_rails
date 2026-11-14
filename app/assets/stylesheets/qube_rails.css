@@ -220,6 +220,19 @@
   display: none;
 }
 
+/* With the script, the open search hides "or search QuickBooks…"; its Cancel closes it again */
+:where(.qube-search-disclosure[data-qube-closable][open] > summary),
+:where([data-qube-search-close][hidden]) {
+  display: none;
+}
+
+:where(.qube-choice-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Cancel (role cancel): last, at the far end of the row */
 :where(.qube-choice-footer > [data-qube-choice-role="cancel"]) {
   margin-inline-start: auto;
@@ -377,6 +390,28 @@
 :where(.qube-search) {
   position: relative;
   max-width: 28rem;
+}
+
+/* A picked match: a check in the box and an accent edge, so its text reads as the selection */
+:where(.qube-search[data-qube-picked] .qube-search-input) {
+  padding-inline-start: 34px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--qube-accent-color) 6%, var(--qube-solid-color));
+  border-color: color-mix(in srgb, var(--qube-accent-color) 60%, var(--qube-control-border-color));
+}
+
+:where(.qube-search[data-qube-picked])::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 0;
+  width: 16px;
+  height: 100%;
+  max-height: 38px;
+  background: var(--qube-accent-color);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
+  pointer-events: none;
 }
 
 :where(.qube-search-results) {
