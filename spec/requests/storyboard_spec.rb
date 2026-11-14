@@ -43,7 +43,7 @@ RSpec.describe "The storyboard", type: :request do
     expect(panel.call("rows").css("[data-qube-row][data-qube-values]").size).to eq(3)
     expect(panel.call("missing_record").css("[data-qube-row][data-qube-values]").size).to eq(1)
     expect(panel.call("missing_record").text).to include("Create it", "Use an existing one")
-    expect(panel.call("near_match").text).to include('It\'s not in QuickBooks: add "Riverbend" as new', "Possible matches")
+    expect(panel.call("near_match").text).to include('It\'s not in QuickBooks: add "Riverbend" as new')
     expect(panel.call("near_match").at_css("[data-qube-search]")["data-qube-search"]).to eq("/qube/storyboard/near_match/search")
     expect(panel.call("failed").at_css(".qube-storyboard-files").text)
       .to include("app/views/qube_rails/run_status/_status.html.erb", "app/views/qube_rails/run_status/_detail.html.erb")
@@ -66,7 +66,7 @@ RSpec.describe "The storyboard", type: :request do
 
     expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[none exit], %w[cancel exit]])
     near = panel.call("near_match")
-    expect(near.at_css(".qube-picks[role=group] > p.qube-rows-label + .qube-picks[role=list]").text).to include("Riverbend Electric")
+    expect(near.at_css(".qube-picks[role=group] > .qube-picks[role=list]").text).to include("Riverbend Electric")
     disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
     expect(disclosure.at_css("summary").text).to eq("Search QuickBooks…")
     expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil

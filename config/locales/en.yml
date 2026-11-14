@@ -40,7 +40,6 @@ en:
     question:
       set_all: "Set all to:"
       use_pick: "Use this one"
-      possible_matches: "Possible matches"
       search_quickbooks: "Search QuickBooks…"
       use_for_all: "Use for all %{count}"
       step: "%{position} of %{count}"

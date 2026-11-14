@@ -34,9 +34,11 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   `question.next`; the rows partial carries them and the `button` / `button_secondary` classes as
   `data-qube-*` attributes. No new CSS: the step line and buttons use classes the stylesheet
   already styles.
+- The question screen has no horizontal rules: its sections (the details, the choices, the footer,
+  each record of a rows field, the "or" between choices) are set apart by space alone.
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
-  `cancel`, `answer`): the offered records under "Possible matches" (new key
-  `question.possible_matches`), the first one's "Use this one" the screen's primary button and the
+  `cancel`, `answer`): the offered records as option rows with no heading of their own (the
+  question's message says what they are), the first one's "Use this one" the screen's primary button and the
   rest secondary; the search behind a quiet "Search QuickBooks…" at the end of the matches (a native
   `<details>`, new partial `question/_search_disclosure` and key `question.search_quickbooks`, open
   after a refusal, the script focusing the search box; `QuestionView#searches`, left out of `forms`),

@@ -86,7 +86,6 @@
   display: grid;
   gap: 16px;
   padding-top: var(--qube-gap-size);
-  border-top: 1px solid var(--qube-border-color);
 }
 
 :where(.qube-choice) {
@@ -176,7 +175,6 @@
 :where(.qube-choice-divider)::after {
   content: "";
   flex: 1;
-  border-top: 1px solid var(--qube-border-color);
 }
 
 /* A form choice: its field's label leads, its submit under it */
@@ -184,7 +182,7 @@
   font-size: 1em;
 }
 
-/* The exits: one row under a hairline (no hairline when they're all there is) */
+/* The exits: one row, set apart by space, not a rule */
 :where(.qube-choice-footer) {
   display: flex;
   flex-wrap: wrap;
@@ -194,7 +192,6 @@
 
 :where(.qube-picks, .qube-choice-form) + :where(.qube-choice-footer) {
   padding-top: 16px;
-  border-top: 1px solid var(--qube-border-color);
 }
 
 :where(.qube-choice-footer .qube-choice:has(.qube-choice-description)) {
@@ -463,14 +460,12 @@
 :where(.qube-rows) {
   display: grid;
   container-type: inline-size;
-  border-top: 1px solid var(--qube-border-color);
 }
 
 :where(.qube-row) {
   display: grid;
   gap: 12px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--qube-border-color);
 }
 
 :where(.qube-row-header) {

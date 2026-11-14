@@ -64,7 +64,7 @@ module QubeRails
     end
 
     # Whether QuBe Sync said each choice's role (prompt.choices[].role): then the picks are the
-    # records it offers, under "Possible matches".
+    # records it offers (option rows, no heading).
     def roles?
       choices.any?(&:role)
     end

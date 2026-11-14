@@ -807,14 +807,14 @@ versions:
   connection the page is about (the partial's `connection:` local), else the latest run's.
 
 Choices show by the `role` QuBe Sync gives each (`prompt.choices[].role`). The records it offers
-(`pick`) are option rows under "Possible matches" (`question.possible_matches`), each ending in a
+(`pick`) are option rows, with no heading (the question's message says what they are), each ending in a
 "Use this one" button: the first is the screen's one filled button, the rest secondary. A `search`
-sits behind a quiet "Search QuickBooks…" (`question.search_quickbooks`) at the end of that list, a
+sits behind a quiet "Search QuickBooks…" (`question.search_quickbooks`) at the end of those rows, a
 native `<details>` (`qube_rails/question/_search_disclosure`; open when the question shows a
 refusal, the behaviour script focusing the search box as it opens), its field's label leading
 ("Not listed? Search QuickBooks") and its submit secondary. With nothing offered, the search is a
 section of its own, as a form. `decline` ("It's not in QuickBooks") sits in the footer row
-under a hairline, and `cancel` ("Don't add the invoice") last, at the far end of that row, as a
+below the choices, and `cancel` ("Don't add the invoice") last, at the far end of that row, as a
 ghost. An `answer` shows by its shape: one with fields is its own section, its submit the one filled
 button when no record is offered (only the first form's; later ones are secondary); with no picks, a
 plain choice before the first form is an option row (a name clash's "Use the existing record"). A
@@ -973,8 +973,7 @@ en:
 | `question.back`, `question.next` | Back; Next | a rows field's step buttons |
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
-| `question.possible_matches` | Possible matches | over the records QuBe Sync offers (choices with role `pick`) |
-| `question.search_quickbooks` | Search QuickBooks… | the link under the possible matches that opens the search |
+| `question.search_quickbooks` | Search QuickBooks… | the link under the offered records that opens the search |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
 
