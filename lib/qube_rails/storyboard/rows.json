@@ -52,13 +52,14 @@
           {
             "name": "records",
             "type": "rows",
-            "label": "For each one",
+            "label": "",
             "required": true,
             "columns": [
               {
                 "name": "action",
                 "type": "string",
                 "label": "What to do",
+                "default": "create",
                 "required": true,
                 "kind": null,
                 "enum": [
@@ -250,8 +251,7 @@
       },
       {
         "id": "cancel",
-        "label": "Don't add the invoice",
-        "description": "Stop here. Nothing is created.",
+        "label": "Cancel adding the invoice",
         "detail": null,
         "fields": [],
         "role": "cancel"

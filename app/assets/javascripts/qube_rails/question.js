@@ -202,8 +202,9 @@
     }
   };
 
-  // ---- A form choice whose required fields are all searches: its submit waits for a pick
-  // (disabled here, never in the markup, so it still posts without the script).
+  // ---- A form choice's submit waits until it can be answered: with a rows field, until every
+  // row is complete; else, when its required fields are all searches, for their picks (disabled
+  // here, never in the markup, so it still posts without the script).
 
   var gated = function (form) {
     var required = form.querySelectorAll("input[required], select[required], textarea[required]");
@@ -212,13 +213,21 @@
   };
 
   var gate = function (form) {
-    if (!form || !form.matches('[data-qube-choice-kind="form"]') || !gated(form)) return;
-    var picked = Array.prototype.every.call(form.querySelectorAll("[data-qube-search]"), function (box) {
-      var p = parts(box);
-      return !p.input || !p.input.required || (p.value && p.value.value);
-    });
+    if (!form || !form.matches('[data-qube-choice-kind="form"]')) return;
+    var lists = form.querySelectorAll("[data-qube-rows]");
+    var ready;
+    if (lists.length) {
+      ready = Array.prototype.every.call(lists, function (list) { return !firstIncomplete(list); });
+    } else if (gated(form)) {
+      ready = Array.prototype.every.call(form.querySelectorAll("[data-qube-search]"), function (box) {
+        var p = parts(box);
+        return !p.input || !p.input.required || (p.value && p.value.value);
+      });
+    } else {
+      return;
+    }
     each(form.querySelectorAll('button[type="submit"], input[type="submit"]'), function (button) {
-      button.disabled = !picked;
+      button.disabled = !ready;
     });
   };
 
@@ -601,6 +610,7 @@
     }
     var steps = event.target.closest && event.target.closest("[data-qube-rows][data-qube-stepped]");
     if (steps) updateStep(steps);
+    if (event.target.closest) gate(event.target.closest("form"));
   });
 
   document.addEventListener("keydown", function (event) {
@@ -639,9 +649,15 @@
     var closeSearch = event.target.closest("[data-qube-search-close]");
     if (closeSearch) return closeDisclosure(closeSearch);
     var setAllButton = event.target.closest("[data-qube-set-all]");
-    if (setAllButton) return setAll(setAllButton);
+    if (setAllButton) {
+      setAll(setAllButton);
+      return gate(setAllButton.closest("form"));
+    }
     var forAll = event.target.closest("[data-qube-use-for-all]");
-    if (forAll) return useForAll(forAll);
+    if (forAll) {
+      useForAll(forAll);
+      return gate(forAll.closest("form"));
+    }
     var back = event.target.closest("[data-qube-step-back]");
     if (back) return move(back, -1);
     var next = event.target.closest("[data-qube-step-next]");
@@ -659,6 +675,7 @@
     var list = row.closest("[data-qube-rows]");
     offers(list);
     if (stepped(list)) updateStep(list);
+    gate(row.closest("form"));
   });
 
   // "or search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native

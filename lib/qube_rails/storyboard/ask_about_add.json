@@ -46,7 +46,7 @@
       },
       {
         "id": "cancel",
-        "label": "Don't add the invoice",
+        "label": "Cancel adding the invoice",
         "description": null,
         "detail": null,
         "fields": [],

@@ -80,6 +80,11 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   shows it in place of "it couldn't be sent".
 - A search's picked match shows as the selection: a check in the box and an accent edge
   (`data-qube-picked`, set by the script), cleared as soon as the text changes.
+- A rows column's `default` (QuBe Sync's new prompt key, one of its `enum` values) starts checked or
+  selected, and counts for the other columns' `when`, so add_transaction's missing records start at
+  "Create it". A blank rows label shows no heading. With a rows field, the form's submit waits
+  (script) until every record is complete. The storyboards' cancel reads "Cancel adding the
+  invoice", with no note.
 - A ghost button's description (Cancel's "Stop here. Nothing is created.") starts where the
   button's text does. The storyboard's missing-records question uses QuBe Sync's new wording.
 - Motion in the question: the search drops in as "or search QuickBooks…" opens (200ms), a pick's

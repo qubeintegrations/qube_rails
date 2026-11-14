@@ -43,6 +43,12 @@ RSpec.describe "The storyboard", type: :request do
     expect(panel.call("rows").css("[data-qube-row][data-qube-values]").size).to eq(3)
     expect(panel.call("missing_record").css("[data-qube-row][data-qube-values]").size).to eq(1)
     expect(panel.call("missing_record").text).to include("Create it", "Use an existing one")
+    # The action column's default starts chosen, so Create's own fields show; a blank label, no heading.
+    missing = panel.call("missing_record")
+    expect(missing.at_css("input.qube-segment-input[value=create][checked]")).not_to be_nil
+    expect(missing.at_css("input.qube-segment-input[value=use][checked]")).to be_nil
+    expect(missing.at_css(".qube-rows-label")).to be_nil
+    expect(missing.at_css("form[data-qube-choice=cancel] .qube-choice-description")).to be_nil
     expect(panel.call("near_match").text).to include('It\'s not in QuickBooks: add "Riverbend" as new')
     expect(panel.call("near_match").at_css("[data-qube-search]")["data-qube-search"]).to eq("/qube/storyboard/near_match/search")
     expect(panel.call("failed").at_css(".qube-storyboard-files").text)
@@ -76,7 +82,7 @@ RSpec.describe "The storyboard", type: :request do
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
     expect(near.at_css("form[data-qube-choice=use] button[data-qube-button=secondary]")).not_to be_nil
     expect(near.css(".qube-choice-footer > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline cancel])
-    expect(near.at_css("form[data-qube-choice=cancel] [data-qube-button=ghost]").text).to include("Don't add the invoice")
+    expect(near.at_css("form[data-qube-choice=cancel] [data-qube-button=ghost]").text).to include("Cancel adding the invoice")
     expect(panel.call("choose").css("[data-qube-button=primary]").map(&:text)).to eq(["Use this one"])
     QubeRails::Storyboard::QUESTIONS.each do |key|
       expect(panel.call(key).css("[data-qube-button=primary]").size).to be <= 1, key

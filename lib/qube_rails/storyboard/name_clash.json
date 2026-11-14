@@ -40,8 +40,7 @@
       },
       {
         "id": "cancel",
-        "label": "Don't add the invoice",
-        "description": "Stop here. Nothing is created.",
+        "label": "Cancel adding the invoice",
         "detail": null,
         "fields": [],
         "role": "cancel"

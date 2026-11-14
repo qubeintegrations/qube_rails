@@ -62,7 +62,26 @@ RSpec.describe "The view-models" do
   end
 
   describe QubeRails::RowsView do
-    let(:rows) { question(sample("rows")).choices.first.fields.first.rows }
+    # The storyboard's action column starts at create (its default); these read the prompt
+    # without it, where nothing is chosen until the person chooses.
+    let(:rows) { question(without_default(sample("rows"))).choices.first.fields.first.rows }
+    let(:defaulted) { question(sample("rows")).choices.first.fields.first.rows }
+
+    def without_default(prompt)
+      copy = JSON.parse(prompt.to_json)
+      copy["choices"].each do |choice|
+        Array(choice["fields"]).each { |f| Array(f["columns"]).each { |c| c.delete("default") } }
+      end
+      copy
+    end
+
+    it "starts a column at its default: checked, and the cells it brings shown and required" do
+      vinyl = defaulted.rows[1]
+      action = vinyl.cells.first.field
+      expect(action.value).to eq("create")
+      income = vinyl.cells.find { |c| c.column == "income_account" }
+      expect([income.hidden?, income.field.required, income.field.disabled]).to eq([false, true, false])
+    end
 
     it "has the columns, a row per record, and a cell per column it asks or has a value for" do
       expect(rows.columns.map(&:name)).to eq(%w[action list_id item_type entity_type income_account asset_account cogs_account])

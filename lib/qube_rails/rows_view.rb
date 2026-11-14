@@ -30,14 +30,15 @@ module QubeRails
 
     # A column's control for one row (context :cell). Shown or not, it isn't required in the
     # markup while hidden (the script sets required as it shows it).
-    def cell_field(column, row_key, row_index, shown)
+    def cell_field(column, row_key, row_index, shown, value = nil)
       col = column["name"].to_s
       FieldView.new(name: col, type: FieldView.type_of(column, record_type: "search"),
                     label: column["label"] || col, input_name: "#{input_name}[#{row_key}][#{col}]",
                     dom_id: "qube-#{input_name.gsub(/[^A-Za-z0-9]+/, "-")}#{row_index}-#{col}".squeeze("-"),
                     required: column["required"] == true && shown, options: FieldView.options_of(column),
                     kind: column["kind"], search_url: search_url, search_field: "#{name}.#{col}",
-                    row_key: row_key, when_values: when_of(column), context: :cell, disabled: !shown)
+                    row_key: row_key, when_values: when_of(column), context: :cell, disabled: !shown,
+                    value: value)
     end
 
     def when_of(column)
@@ -78,6 +79,11 @@ module QubeRails
       @values = row["values"].is_a?(Hash) ? row["values"] : {}
       @index = index
       asks = Array(row["columns"]).map(&:to_s)
+      # A column's default (one of its enum values) starts chosen in a row that asks it.
+      @defaults = declared.each_with_object({}) do |column, acc|
+        col = column["name"].to_s
+        acc[col] = column["default"] if asks.include?(col) && !column["default"].nil?
+      end
       @cells = declared.filter_map do |column|
         col = column["name"].to_s
         when_values = rows.when_of(column)
@@ -85,7 +91,7 @@ module QubeRails
         required = column["required"] == true
         label = (column["label"] || col).to_s
         if asks.include?(col)
-          CellView.new(column: col, label: label, field: rows.cell_field(column, @key, index, shown),
+          CellView.new(column: col, label: label, field: rows.cell_field(column, @key, index, shown, @defaults[col]),
                        when_values: when_values, shown: shown, required: required)
         elsif !@values[col].to_s.empty?
           CellView.new(column: col, label: label, preset: preset_text(column, @values[col]), when_values: when_values,
@@ -111,7 +117,8 @@ module QubeRails
 
     # Before the user picks anything, a column shows when its "when" holds for the row's values.
     def applies?(when_values)
-      when_values.all? { |col, allowed| Array(allowed).include?(values[col]) }
+      chosen = @defaults.merge(values)
+      when_values.all? { |col, allowed| Array(allowed).include?(chosen[col]) }
     end
 
     # A value the row already has, shown as its enum label when it has one.

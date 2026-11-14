@@ -788,9 +788,10 @@ versions:
 - `QubeRails::FieldView`: `name`, `input_name` (post your value under it), `dom_id`, `type` (`text`,
   `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
   each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
-  `when`, `rows` (a `RowsView`), `disabled`, `partial`, and `labelled?`, `cell?` (a rows field's) and
+  `when`, `rows` (a `RowsView`), `disabled`, `value` (what it starts at: a column's `default`, else
+  nil), `partial`, and `labelled?`, `cell?` (a rows field's) and
   `segmented?` (a cell's enum of up to three options).
-- `QubeRails::RowsView`: `name`, `label`, `input_name`, `search_url`, `columns` (FieldViews), `rows`,
+- `QubeRails::RowsView`: `name`, `label` (blank: no heading), `input_name`, `search_url`, `columns` (FieldViews), `rows`,
   `set_all` (the column "Set all to:" sets, or nil).
   `QubeRails::RowView`: `key`, `label`, `detail`, `values`, `values_json`, `index`, `cells` (the
   columns it asks or already has a value for), `segmented_cells`, `field_cells`.
@@ -850,7 +851,9 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   each field `data-qube-col="<column>"` with `data-qube-when` (JSON) and, for a required column,
   `data-qube-required`; each input `data-qube-rows-input` (a radio counts when checked). A field
   whose `when` doesn't hold is `hidden` (and `data-qube-hidden`), its inputs disabled and not
-  required, so it's neither sent nor asked for; the script toggles all three as answers change. Optional:
+  required, so it's neither sent nor asked for; the script toggles all three as answers change. A
+  column's `default` starts checked (or selected) and counts for `when`. The form's submit stays
+  disabled (by the script) until every record is complete. Optional:
   `data-qube-rows-set-all="<column>"` holding buttons `data-qube-set-all="<value>"` (sets that column on
   every record offering the value), and a button `data-qube-use-for-all` in a field (shown, with the
   table's `data-qube-text-use-for-all`, "Use for all %{count}", while the field has a value other

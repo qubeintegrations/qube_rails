@@ -221,7 +221,7 @@ module QubeRails
     TYPES = %w[text number boolean select search rows].freeze
 
     attr_reader :name, :input_name, :dom_id, :type, :label, :required, :options, :kind,
-                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled
+                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled, :value
 
     # A choice's field, as QuBe Sync sends it.
     def self.from_prompt(field, question, choice_index)
@@ -257,7 +257,7 @@ module QubeRails
     # their label.
     def initialize(name:, type:, label:, input_name: nil, dom_id: nil, required: false, options: [], kind: nil,
                    search_url: nil, search_field: nil, row_key: nil, when_values: nil, rows: nil,
-                   context: :choice, disabled: false)
+                   context: :choice, disabled: false, value: nil)
       raise ArgumentError, "QuBe Sync: no field type #{type.inspect}" unless TYPES.include?(type)
 
       @name = name
@@ -275,6 +275,7 @@ module QubeRails
       @rows = rows
       @context = context
       @disabled = disabled
+      @value = value
     end
 
     def partial
