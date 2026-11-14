@@ -78,6 +78,9 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   failed run: `error` is `{code: "refused", message, detail}`, the message a sentence from the
   answer's body (field errors joined, or its sentence) and the detail its status. The run status
   shows it in place of "it couldn't be sent".
+- A pick's detail wraps between its parts (`similar name ·`, the email, the phone), each a
+  `.qube-detail-part`, so a phone number no longer breaks across lines and no line starts with
+  the separator.
 
 ### Compatibility
 

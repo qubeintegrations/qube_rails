@@ -9,7 +9,7 @@
     <span class="qube-pick-text">
       <span class="qube-pick-label"><%= choice.label %></span>
 <% if choice.detail %>
-      <span class="<%= qube_classes(:pick_detail, "qube-pick-detail") %>"><%= choice.detail %></span>
+      <span class="<%= qube_classes(:pick_detail, "qube-pick-detail") %>"><%= safe_join(choice.detail_parts.map { |part| tag.span(part, class: "qube-detail-part") }, " ") %></span>
 <% end %>
 <% if choice.description %>
       <span class="qube-pick-description"><%= choice.description %></span>

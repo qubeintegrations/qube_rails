@@ -149,6 +149,13 @@
   color: var(--qube-muted-color);
 }
 
+/* A detail's parts (name, email, phone) wrap between, not inside, unless one is wider than the line */
+:where(.qube-detail-part) {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 :where(.qube-pick-description) {
   flex-basis: 100%;
   font-size: 0.9286em;

@@ -156,6 +156,13 @@ module QubeRails
 
     attr_reader :id, :label, :detail, :description, :fields, :index, :action_url, :kind, :style, :role
 
+    # The detail's parts (QuBe Sync joins them with " · "), each but the last ending in its " ·",
+    # so a line breaks between parts and never starts with the separator.
+    def detail_parts
+      parts = detail.to_s.split(" · ")
+      parts.each_with_index.map { |part, i| i < parts.size - 1 ? "#{part} ·" : part }
+    end
+
     def initialize(choice, index, question)
       @id = choice["id"].to_s
       # QuBe Sync's role for it, nil when the prompt has none; one this version doesn't know is answer.
