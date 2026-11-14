@@ -233,6 +233,18 @@
   gap: 8px;
 }
 
+/* The search drops in where "or search QuickBooks…" was, as it opens; closing is instant */
+:where(.qube-search-disclosure[open] > .qube-choice) {
+  animation: qube-search-open 200ms var(--qube-ease-out);
+}
+
+@keyframes qube-search-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 /* Cancel (role cancel): last, at the far end of the row */
 :where(.qube-choice-footer > [data-qube-choice-role="cancel"]) {
   margin-inline-start: auto;
@@ -362,7 +374,7 @@
   background: var(--qube-solid-color);
   border: 1px solid var(--qube-control-border-color);
   border-radius: var(--qube-control-radius);
-  transition: border-color 150ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
 :where(.qube-input, .qube-select, .qube-search-input):where(:focus) {
@@ -412,6 +424,15 @@
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
   pointer-events: none;
+  animation: qube-picked-in 240ms var(--qube-ease-out);
+}
+
+/* The check confirms the pick: it pops in, not from nothing */
+@keyframes qube-picked-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
 }
 
 :where(.qube-search-results) {
@@ -843,6 +864,17 @@
 
   :where(.qube-segment, .qube-use-for-all):where(:active) {
     transform: none;
+  }
+
+  :where(.qube-search-disclosure[open] > .qube-choice),
+  :where(.qube-search[data-qube-picked])::before {
+    animation-name: qube-fade-in;
+  }
+}
+
+@keyframes qube-fade-in {
+  from {
+    opacity: 0;
   }
 }
 
