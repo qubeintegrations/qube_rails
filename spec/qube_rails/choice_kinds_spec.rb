@@ -25,7 +25,7 @@ RSpec.describe "A question's choices by kind" do
     expect(view).to be_matches
     expect(arranged(view)).to eq([["use:1", :pick, :primary], ["use", :form, :secondary], ["none", :exit, :secondary],
                                   ["cancel", :exit, :ghost]])
-    # The search is behind "Search QuickBooks…" under the matches, not a section of its own.
+    # The search is behind "or search QuickBooks…" under the matches, not a section of its own.
     expect([view.picks, view.forms, view.searches, view.exits].map { |l| l.map(&:id) })
       .to eq([%w[use:1], [], %w[use], %w[none cancel]])
     expect(view).not_to be_plain
@@ -60,7 +60,7 @@ RSpec.describe "A question's choices by kind" do
 
   it "looks its own words up in one place, the rows field's step line too" do
     view = question("rows")
-    expect(view.ui_text(:search_quickbooks)).to eq("Search QuickBooks…")
+    expect(view.ui_text(:search_quickbooks)).to eq("or search QuickBooks…")
     expect(view.choices.first.fields.first.rows.ui_text(:step, position: 1, count: 3)).to eq("1 of 3")
   end
 

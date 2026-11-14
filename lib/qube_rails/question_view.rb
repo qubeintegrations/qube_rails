@@ -41,12 +41,12 @@ module QubeRails
     end
 
     # The forms shown as sections. A search under offered records is left out: it's behind
-    # "Search QuickBooks…" at the end of the picks (searches).
+    # "or search QuickBooks…" at the end of the picks (searches).
     def forms
       choices.select { |c| c.kind == :form && !disclosed?(c) }
     end
 
-    # The search choices shown behind "Search QuickBooks…" under the possible matches.
+    # The search choices shown behind "or search QuickBooks…" under the possible matches.
     def searches
       choices.select { |c| disclosed?(c) }
     end

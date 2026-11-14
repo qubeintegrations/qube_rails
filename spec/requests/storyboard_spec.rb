@@ -68,7 +68,7 @@ RSpec.describe "The storyboard", type: :request do
     near = panel.call("near_match")
     expect(near.at_css(".qube-picks[role=group] > .qube-picks[role=list]").text).to include("Riverbend Electric")
     disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
-    expect(disclosure.at_css("summary").text).to eq("Search QuickBooks…")
+    expect(disclosure.at_css("summary").text).to eq("or search QuickBooks…")
     expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
     expect(near.at_css(".qube-choice-divider")).to be_nil
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil

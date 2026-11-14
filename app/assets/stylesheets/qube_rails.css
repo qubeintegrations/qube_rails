@@ -205,7 +205,7 @@
   flex-basis: 100%;
 }
 
-/* "Search QuickBooks…" under the possible matches: a quiet link that opens the search in place */
+/* "or search QuickBooks…" under the possible matches: a quiet link that opens the search in place */
 :where(.qube-search-disclosure) {
   display: grid;
   gap: 12px;

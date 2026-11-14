@@ -39,7 +39,7 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
   `cancel`, `answer`): the offered records as option rows with no heading of their own (the
   question's message says what they are), the first one's "Use this one" the screen's primary button and the
-  rest secondary; the search behind a quiet "Search QuickBooks…" at the end of the matches (a native
+  rest secondary; the search behind a quiet "or search QuickBooks…" at the end of the matches (a native
   `<details>`, new partial `question/_search_disclosure` and key `question.search_quickbooks`, open
   after a refusal, the script focusing the search box; `QuestionView#searches`, left out of `forms`),
   or a section of its own when nothing is offered; decline in the footer; cancel last, at the far

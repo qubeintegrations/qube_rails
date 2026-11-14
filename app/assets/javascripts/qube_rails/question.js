@@ -642,7 +642,7 @@
     if (stepped(list)) updateStep(list);
   });
 
-  // "Search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native
+  // "or search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native
   // <details>): as it opens, the focus goes to its search box. "toggle" doesn't bubble.
   document.addEventListener("toggle", function (event) {
     var disclosure = event.target;
