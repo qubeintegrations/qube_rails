@@ -82,8 +82,9 @@ module QubeRails
     end
 
     # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
+    # Empty browses (the list's first records, as a box is focused); one letter isn't a search.
     def searchable?(q, field)
-      q.length.between?(2, 100) && field.length.between?(1, 100)
+      (q.empty? || q.length.between?(2, 100)) && field.length.between?(1, 100)
     end
 
     def find_question

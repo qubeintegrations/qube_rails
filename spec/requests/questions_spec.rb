@@ -237,7 +237,16 @@ RSpec.describe "The question routes", type: :request do
       expect(JSON.parse(response.body)).to eq(matches)
     end
 
-    it "asks nothing for fewer than 2 or more than 100 characters" do
+    it "browses with nothing typed: the list's first records, as a box is focused" do
+      first = [{ "value" => "80000002-1", "label" => "Cost of Goods Sold", "detail" => "Account" }]
+      stub_request(:get, "#{search_url}&field=list_id&q=").to_return(json_data(first))
+
+      search("  ")
+
+      expect(JSON.parse(response.body)).to eq(first)
+    end
+
+    it "asks nothing for one character or more than 100" do
       search("r")
       expect(JSON.parse(response.body)).to eq([])
 

@@ -840,7 +840,9 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
 - A search: an element with `data-qube-search="<search URL>"`, `data-qube-field="<field>"` and, in a
   rows table, `data-qube-row="<row key>"`, holding a text input `data-qube-search-input`, a hidden
   input `data-qube-search-value` (the one with the name, which gets the picked `value`) and a
-  container `data-qube-search-results`. Typing two characters or more asks the search URL; each
+  container `data-qube-search-results`. Focusing it empty asks the search URL with `q` empty (the
+  list's first active records by name), and so does clearing it; typing two characters or more asks
+  it with what's typed; each
   match is a button (classes from `data-qube-result-class`, `role="option"`); picking one (a click,
   or the arrow keys and Enter) fills the hidden input and fires `change` on it and `qube:picked` on
   the box. Escape, a click outside or leaving the box closes the matches. The box gets

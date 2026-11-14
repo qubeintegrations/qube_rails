@@ -80,6 +80,9 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   shows it in place of "it couldn't be sent".
 - A search's picked match shows as the selection: a check in the box and an accent edge
   (`data-qube-picked`, set by the script), cleared as soon as the text changes.
+- A search box focused empty (or cleared) lists the first active records of its list (QuBe Sync's
+  search with `q` empty), so an account can be picked without knowing its name; the search route
+  passes an empty `q` through.
 - A rows column's `default` (QuBe Sync's new prompt key, one of its `enum` values) starts checked or
   selected, and counts for the other columns' `when`, so add_transaction's missing records start at
   "Create it". A blank rows label shows no heading. With a rows field, the form's submit waits

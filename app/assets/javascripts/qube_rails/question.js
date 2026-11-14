@@ -139,7 +139,9 @@
     var n = (asked.get(box) || 0) + 1;
     asked.set(box, n);
     var q = p.input.value.trim();
-    if (q.length < 2) {
+    // Nothing typed in the focused box: the list's first records (QuBe Sync's browse). One
+    // letter waits for another.
+    if (q.length === 1 || (q === "" && document.activeElement !== p.input)) {
       p.results.textContent = "";
       setOpen(box, p, false, false);
       return;
@@ -161,7 +163,7 @@
           clearTimeout(slow.get(box));
           note(box, p, words(box, "search-failed", "Search isn't available right now."), "failed");
         });
-    }, 250));
+    }, q ? 250 : 0));
   };
 
   var pick = function (button) {
@@ -630,6 +632,16 @@
     if (!option || option.getAttribute("aria-selected") === "true") return;
     var box = option.closest("[data-qube-search]");
     if (box) highlight(parts(box), option, false);
+  });
+
+  // An empty search box offers its list's first records as it's focused (not when the focus
+  // only moves within it, from one of its matches).
+  document.addEventListener("focusin", function (event) {
+    var input = event.target.closest && event.target.closest("[data-qube-search-input]");
+    var box = input && input.closest("[data-qube-search]");
+    if (!box || input.disabled || input.value.trim() !== "") return;
+    if (event.relatedTarget && box.contains(event.relatedTarget)) return;
+    search(box);
   });
 
   document.addEventListener("focusout", function (event) {
