@@ -319,18 +319,21 @@ module QuickbooksDesktop
       })
     end
 
-    # How the run ended: event.outcome says which, and event.output has that outcome's own keys
-    # (add_transaction's added: record and references). Keep the QuickBooks ids on the connection.
-    def ended(event)
-      # The records the add named, found or made, by the input's path: linked, so the next run
-      # refers to them by id. A cancelled ending can carry some too.
-      link_references(event) do |path, _entry|
-        if path == "customer_ref"
-          record.customer
-        elsif (line = path[/\Ainvoice_line_add\.(\d+)\.item_ref\z/, 1])
-          record.lines[line.to_i]&.item
-        end
+    # Which of your records each QuickBooks record links to, by where the input named it.
+    def linked_record(path, _entry)
+      if path == "customer_ref"
+        record.customer
+      elsif (line = path[/\Ainvoice_line_add\.(\d+)\.item_ref\z/, 1])
+        record.lines[line.to_i]&.item
       end
+    end
+
+    # How the run ended: event.outcome says which, and event.output has that outcome's own keys
+    # (add_transaction's added: record and links). Keep the QuickBooks ids on the connection.
+    def ended(event)
+      # Every record the add named, by the input's path (output.links), linked so the next run
+      # refers to it by id. A cancelled ending carries the ones settled before it stopped.
+      link_references(event) { |path, entry| linked_record(path, entry) }
       return unless event.outcome == "added"
 
       txn = event.dig("output", "record") || {}
@@ -344,8 +347,10 @@ module QuickbooksDesktop
       record.update!(status: "failed")
     end
 
-    # What a running workflow sends along (a sync's pages): taken once per delivery_id.
+    # What a running workflow sends along, taken once per delivery_id: add_transaction's
+    # "records" (what each pass settled, linked as it comes, before the ending), a sync's pages.
     def notification(event)
+      link_references(event) { |path, entry| linked_record(path, entry) } if event.name == "records"
       log_event(event)
     end
 

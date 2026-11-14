@@ -80,6 +80,12 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   shows it in place of "it couldn't be sent".
 - A search's picked match shows as the selection: a check in the box and an accent edge
   (`data-qube-picked`, set by the script), cleared as soon as the text changes.
+- `link_references` takes add_transaction's new shapes (QuBe Sync's docs/workflow-record-events.md): a
+  `records` notification (`data.records`, each with `paths`, `action`, `kind`, `sent` and `record`,
+  linked as each pass settles them, with the record's name and edit sequence) or an ending's
+  `output.links` (`{path => {list_id, type}}`). The block still gets the path and an entry
+  (`list_id`, `type`, and from a notification `kind`, `action`, `full_name`, `edit_sequence`, `sent`).
+  `output.references` is no longer read: QuBe Sync doesn't send it.
 - A search box focused empty (or cleared) lists the first active records of its list (QuBe Sync's
   search with `q` empty), so an account can be picked without knowing its name; the search route
   passes an empty `q` through.
