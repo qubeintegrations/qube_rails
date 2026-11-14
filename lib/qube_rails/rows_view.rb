@@ -10,7 +10,8 @@ module QubeRails
   class RowsView
     attr_reader :name, :label, :input_name, :search_url, :columns, :rows
 
-    def initialize(field, input_name:, search_url:)
+    def initialize(field, input_name:, search_url:, question: nil)
+      @question = question
       @name = field["name"].to_s
       @label = (field["label"] || @name).to_s
       @input_name = input_name
@@ -20,6 +21,11 @@ module QubeRails
       @rows = Array(field["rows"]).select { |r| r.is_a?(Hash) }.each_with_index.map do |row, n|
         RowView.new(row, declared, self, n)
       end
+    end
+
+    # The question's words (QuestionView#ui_text), else the locale files'.
+    def ui_text(key, **options)
+      @question ? @question.ui_text(key, **options) : QubeRails.t("question.#{key}", **options)
     end
 
     # A column's control for one row (context :cell). Shown or not, it isn't required in the

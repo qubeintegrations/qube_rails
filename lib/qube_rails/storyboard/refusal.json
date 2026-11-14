@@ -6,7 +6,7 @@
     "id": "ensure / ask_rename",
     "kind": "decision",
     "token": "Zk8tX1yDv6SmE8gG",
-    "message": "\"Riverbend Electric\" already belongs to a record of another list (Vendor), and QuickBooks keeps names unique across customers, vendors, employees and other names, and across every type of item. Add this one under another name, or cancel.",
+    "message": "QuickBooks already has the vendor “Riverbend Electric”, so the customer can't have that name too.",
     "data": {
       "kind": "customer",
       "name": "Riverbend Electric",
@@ -14,16 +14,7 @@
         "list": "vendor"
       }
     },
-    "details": [
-      {
-        "label": "Customer",
-        "value": "Riverbend Electric"
-      },
-      {
-        "label": "Held by",
-        "value": "Vendor"
-      }
-    ],
+    "details": [],
     "choices": [
       {
         "id": "rename",
@@ -37,14 +28,16 @@
             "label": "New name",
             "required": true
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": "Stop here. Nothing is created.",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

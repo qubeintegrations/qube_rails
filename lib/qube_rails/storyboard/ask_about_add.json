@@ -5,7 +5,7 @@
     "id": "add_transaction / ask_about_add",
     "kind": "decision",
     "token": "Xh6rV8wBt4QjC6eE",
-    "message": "QuickBooks didn't confirm whether this invoice went in. If it's the one below, use it; if it isn't there, add it again.",
+    "message": "QuickBooks never answered when the invoice was added, so it isn't known whether it went in.",
     "data": {
       "operation": "invoice",
       "why": "lost_answer",
@@ -14,10 +14,6 @@
       "not_found": null
     },
     "details": [
-      {
-        "label": "Adding",
-        "value": "Invoice"
-      },
       {
         "label": "Number",
         "value": "1042"
@@ -37,21 +33,24 @@
         "label": "1042",
         "description": null,
         "detail": "2026-10-20 · Riverbend Electric · 1250.00",
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "add_again",
         "label": "None of them: add it again",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "decline"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

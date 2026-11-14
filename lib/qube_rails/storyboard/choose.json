@@ -21,28 +21,32 @@
         "label": "1042",
         "description": null,
         "detail": "2026-10-20 · Riverbend Electric · 1250.00",
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use:2",
         "label": "1042-B",
         "description": null,
         "detail": "2026-10-21 · Riverbend Electric · 310.50",
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "none",
         "label": "None of these",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "decline"
       },
       {
         "id": "cancel",
         "label": "Cancel",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

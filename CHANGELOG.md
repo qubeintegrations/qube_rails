@@ -25,6 +25,35 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   it with the same Idempotency-Key once the connection is upgraded: QuBe Sync stores nothing for
   that refusal.
 
+**Questions**
+- A rows field (`add_transaction`'s `ask_missing`) of two records or more asks one record at a
+  time when the behaviour script runs: a step line ("1 of 3", `aria-live`), Back and
+  Next (Next once the record is answered), the question's submit on the last record only, "Set all
+  to:" hidden. Every record stays in the form, so the answer is still one POST with every row.
+  Without the script the field renders as before. New keys `question.step`, `question.back`,
+  `question.next`; the rows partial carries them and the `button` / `button_secondary` classes as
+  `data-qube-*` attributes. No new CSS: the step line and buttons use classes the stylesheet
+  already styles.
+- The question screen has no horizontal rules: its sections (the details, the choices, the footer,
+  each record of a rows field, the "or" between choices) are set apart by space alone.
+- Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
+  `cancel`, `answer`): the offered records as option rows with no heading of their own (the
+  question's message says what they are), the first one's "Use this one" the screen's primary button and the
+  rest secondary; the search behind a quiet "Search QuickBooks…" at the end of the matches (a native
+  `<details>`, new partial `question/_search_disclosure` and key `question.search_quickbooks`, open
+  after a refusal, the script focusing the search box; `QuestionView#searches`, left out of `forms`),
+  or a section of its own when nothing is offered; decline in the footer; cancel last, at the far
+  end of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
+  older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
+  `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
+  "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
+  `data-qube-choice-role`. New CSS only for cancel's place in the footer row and the disclosure's
+  link; the heading and buttons use classes the stylesheet already styles.
+- `question.step` reads "%{position} of %{count}" ("1 of 2"): the record's block already names its
+  kind. A `%{name}` in your own wording still works.
+- The storyboard's questions carry roles and QuBe Sync's current wording ("It's not in QuickBooks",
+  "Not listed? Search QuickBooks", "Don't add the invoice").
+
 **Run status**
 - `run.headline`, every event's sentence for a person (`qube_runs.headline`), shown for an ended
   run whose reason doesn't already say it (`.qube-run-headline`).
@@ -49,6 +78,9 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   failed run: `error` is `{code: "refused", message, detail}`, the message a sentence from the
   answer's body (field errors joined, or its sentence) and the detail its status. The run status
   shows it in place of "it couldn't be sent".
+- A pick's detail wraps between its parts (`similar name ·`, the email, the phone), each a
+  `.qube-detail-part`, so a phone number no longer breaks across lines and no line starts with
+  the separator.
 
 ### Compatibility
 

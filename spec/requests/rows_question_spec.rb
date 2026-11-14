@@ -96,6 +96,23 @@ RSpec.describe "A rows question", type: :request do
     expect(field.css("[data-qube-rows-pick], [data-qube-rows-all], [data-qube-bulk]")).to be_empty
   end
 
+  it "renders every record at once, and gives the script its step words and button classes" do
+    QubeRails.config.ui_classes = { button: "btn btn-primary", button_secondary: "btn btn-outline" }
+    get "/invoices/#{invoice.id}", headers: signed_in
+    field = Nokogiri::HTML(response.body).at_css("[data-qube-rows]")
+
+    # Without the script nothing steps: every record shows, Set all with them, the submit after
+    expect(field.css("[data-qube-row][hidden], [data-qube-step-line], [data-qube-step-nav]")).to be_empty
+    expect(field.ancestors("form").first.at_css("button[type=submit]")["hidden"]).to be_nil
+    expect(field["data-qube-text-step"]).to eq("%{position} of %{count}")
+    expect(field["data-qube-text-back"]).to eq("Back")
+    expect(field["data-qube-text-next"]).to eq("Next")
+    expect(field["data-qube-button-class"]).to eq("qube-choice-button btn btn-primary")
+    expect(field["data-qube-button-secondary-class"]).to eq("qube-choice-button btn btn-outline")
+  ensure
+    QubeRails.config.ui_classes = {}
+  end
+
   it "answers with each row's filled columns, by row key" do
     answered = stub_request(:post, decisions).with(
       body: {

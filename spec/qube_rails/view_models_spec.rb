@@ -19,7 +19,7 @@ RSpec.describe "The view-models" do
 
       expect(view.message).to eq(prompt["message"])
       expect(view.token).to eq("Vq3kT9xRb2LmW8sZ")
-      expect(view.details.map { |d| [d.label, d.value] }).to eq([%w[Customer Riverbend]])
+      expect(view.details).to eq([])
       expect(view.choices.map(&:id)).to eq(%w[use:1 use none cancel])
       expect(view.choices.first.detail).to eq("similar name")
       expect(view.choices.first.action_url).to eq("/q/1")
@@ -27,7 +27,8 @@ RSpec.describe "The view-models" do
 
       field = view.choices[1].fields.first
       expect([field.type, field.name, field.input_name, field.dom_id, field.label, field.required])
-        .to eq(["search", "list_id", "data[list_id]", "qube-Vq3kT9xRb2LmW8sZ-1-list_id", "The one to use", true])
+        .to eq(["search", "list_id", "data[list_id]", "qube-Vq3kT9xRb2LmW8sZ-1-list_id", "Not listed? Search QuickBooks",
+               true])
       expect([field.search_url, field.search_field, field.kind, field.partial])
         .to eq(["/q/1/search", "list_id", "customer", "qube_rails/question/fields/search"])
       expect(field).to be_labelled

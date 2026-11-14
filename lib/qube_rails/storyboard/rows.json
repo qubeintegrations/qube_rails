@@ -1,11 +1,11 @@
 {
   "title": "Records not in QuickBooks yet",
-  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. \"Set all to:\" sets every record's choice; \"Use for all\" copies a picked value to the others.",
+  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. With the behaviour script it asks one record at a time (Back, Next, the submit on the last); without it, every record shows with \"Set all to:\", which sets every record's choice. \"Use for all\" copies a picked value to the others.",
   "prompt": {
     "id": "add_transaction / ask_missing",
     "kind": "decision",
     "token": "Yj7sW9xCu5RkD7fF",
-    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
+    "message": "This invoice uses records QuickBooks doesn't have yet.",
     "data": {
       "operation": "invoice",
       "missing": [
@@ -33,10 +33,6 @@
       ]
     },
     "details": [
-      {
-        "label": "Adding",
-        "value": "Invoice"
-      },
       {
         "label": "Number",
         "value": "1042"
@@ -249,14 +245,16 @@
               }
             ]
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Don't add the invoice",
         "description": "Stop here. Nothing is created.",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

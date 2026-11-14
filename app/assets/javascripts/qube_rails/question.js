@@ -1,4 +1,4 @@
-// qube_rails: the behaviour of a QuickBooks question (search boxes, a rows field) and the
+// qube_rails: the behaviour of a QuickBooks question (search boxes, a rows field and its steps) and the
 // storyboard's copy buttons. Listeners sit on document and key only on data-qube-* attributes, so
 // any markup carrying them works, after Turbo navigation too. Plain JavaScript, no build. README,
 // "Styling", has the attribute contract.
@@ -371,9 +371,193 @@
     each(document.querySelectorAll("[data-qube-rows]"), function (list) {
       each(rowsOf(list), refresh);
       offers(list);
+      stepUp(list);
     });
     each(document.querySelectorAll('[data-qube-choice-kind="form"]'), gate);
   };
+
+  // ---- Steps: a rows field with more than one row shows one row at a time, in order. The script
+  // adds a step line ([data-qube-step-line], "1 of 3", aria-live) and Back / Next
+  // ([data-qube-step-back], [data-qube-step-next]) and keeps the step on the field
+  // (data-qube-step, from 0). Rows not on show are hidden, never removed, so the one POST still
+  // sends every row; "Set all to:" is hidden, and the form's submit shows on the last step only.
+
+  // Shows or hides with the hidden attribute and display, so a stylesheet that sets display on
+  // the element can't show it anyway.
+  var conceal = function (el, hide) {
+    el.hidden = hide;
+    el.style.display = hide ? "none" : "";
+  };
+
+  var stepped = function (list) {
+    return list.hasAttribute("data-qube-stepped");
+  };
+
+  // Every shown input of the row valid: its choice picked, its required fields filled, a search's
+  // text matched to a pick.
+  var complete = function (row) {
+    return Array.prototype.every.call(row.querySelectorAll("input, select, textarea"), function (input) {
+      return input.disabled || input.type === "hidden" || input.validity.valid;
+    });
+  };
+
+  var firstIncomplete = function (list) {
+    return Array.prototype.find.call(rowsOf(list), function (row) { return !complete(row); });
+  };
+
+  // A row's header (its aria-labelledby): its name, then its detail ("Customer"), if any.
+  var header = function (row) {
+    var id = row.getAttribute("aria-labelledby");
+    var el = id && document.getElementById(id);
+    return el ? el.children : [];
+  };
+
+  var rowName = function (row) {
+    var parts = header(row);
+    return parts.length ? parts[0].textContent.trim() : "";
+  };
+
+  // What the step line calls a row: its detail, else its name, else its key.
+  var stepName = function (row) {
+    var parts = header(row);
+    var named = parts[1] || parts[0];
+    return named ? named.textContent.trim() : row.getAttribute("data-qube-row");
+  };
+
+  var stepButton = function (list, kind, label, primary) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = list.getAttribute(primary ? "data-qube-button-class" : "data-qube-button-secondary-class") ||
+      "qube-choice-button";
+    button.setAttribute("data-qube-button", primary ? "primary" : "secondary");
+    button.setAttribute("data-qube-step-" + kind, "");
+    button.textContent = label;
+    return button;
+  };
+
+  var submits = function (list) {
+    var form = list.closest("form");
+    return form ? form.querySelectorAll('button[type="submit"], input[type="submit"]') : [];
+  };
+
+  // The step's controls as its row stands: Next only once the row is answered.
+  var updateStep = function (list) {
+    var rows = rowsOf(list);
+    var at = Number(list.getAttribute("data-qube-step")) || 0;
+    var next = list.querySelector("[data-qube-step-next]");
+    var last = at === rows.length - 1;
+    if (next) {
+      conceal(next, last);
+      next.disabled = !complete(rows[at]);
+    }
+    each(submits(list), function (button) { conceal(button, !last); });
+  };
+
+  // The first control of a row a person answers (a picked radio over the first one).
+  var firstControl = function (row) {
+    var controls = Array.prototype.filter.call(row.querySelectorAll("input, select, textarea, button"), function (el) {
+      return !el.disabled && el.type !== "hidden" && !el.closest("[hidden]");
+    });
+    var first = controls[0];
+    if (first && first.type === "radio") {
+      first = controls.find(function (el) { return el.name === first.name && el.checked; }) || first;
+    }
+    return first;
+  };
+
+  var reduced = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+
+  // Shows step `at`: its row in (opacity and a few px from the side it comes from, 180ms), the
+  // others hidden at once.
+  var showStep = function (list, at, focus) {
+    var rows = rowsOf(list);
+    at = Math.max(0, Math.min(at, rows.length - 1));
+    var was = Number(list.getAttribute("data-qube-step"));
+    list.setAttribute("data-qube-step", String(at));
+    each(rows, function (row, n) {
+      conceal(row, n !== at);
+      if (n === at) row.setAttribute("data-qube-step-current", "");
+      else row.removeAttribute("data-qube-step-current");
+    });
+    var line = list.querySelector("[data-qube-step-line]");
+    line.textContent = words(list, "step", "%{position} of %{count}")
+      .replace("%{name}", stepName(rows[at]))
+      .replace("%{position}", String(at + 1))
+      .replace("%{count}", String(rows.length));
+    conceal(list.querySelector("[data-qube-step-back]"), at === 0);
+    updateStep(list);
+    if (!isNaN(was) && was !== at && rows[at].animate) {
+      var from = reduced() ? "none" : "translateX(" + (at > was ? 8 : -8) + "px)";
+      rows[at].animate([{ opacity: 0, transform: from }, { opacity: 1, transform: "none" }],
+        { duration: 180, easing: "cubic-bezier(0.23, 1, 0.32, 1)" });
+    }
+    if (focus) {
+      var control = firstControl(rows[at]);
+      if (control) control.focus();
+    }
+  };
+
+  // The row a refusal on the page names (its message holds the row's name), if any.
+  var namedInError = function (list) {
+    var question = list.closest("[data-qube-question]") || list.closest("form");
+    var error = question && question.querySelector('[role="alert"]');
+    var text = error ? error.textContent : "";
+    if (!text) return -1;
+    return Array.prototype.findIndex.call(rowsOf(list), function (row) {
+      var name = rowName(row);
+      return name && text.indexOf(name) !== -1;
+    });
+  };
+
+  // Turns a rows field of two rows or more into steps (once: the markup it adds is the state).
+  var stepUp = function (list) {
+    var rows = rowsOf(list);
+    if (stepped(list) || rows.length < 2) return;
+    var table = list.querySelector("[data-qube-row]").parentNode;
+    list.setAttribute("data-qube-stepped", "");
+    var setAllLine = list.querySelector("[data-qube-rows-set-all]");
+    if (setAllLine) conceal(setAllLine, true);
+    var line = document.createElement("div");
+    line.className = "qube-rows-step qube-row-detail";
+    line.setAttribute("data-qube-step-line", "");
+    line.setAttribute("aria-live", "polite");
+    table.parentNode.insertBefore(line, table);
+    var nav = document.createElement("div");
+    nav.className = "qube-rows-step-nav qube-choice-footer";
+    nav.setAttribute("data-qube-step-nav", "");
+    nav.appendChild(stepButton(list, "back", words(list, "back", "Back"), false));
+    nav.appendChild(stepButton(list, "next", words(list, "next", "Next"), true));
+    table.parentNode.insertBefore(nav, table.nextSibling);
+    var named = namedInError(list);
+    showStep(list, named === -1 ? 0 : named, false);
+  };
+
+  var move = function (button, by) {
+    var list = button.closest("[data-qube-rows]");
+    var at = Number(list.getAttribute("data-qube-step")) || 0;
+    if (by > 0 && !complete(rowsOf(list)[at])) return;
+    showStep(list, at + by, true);
+  };
+
+  // The browser refuses a form whose invalid field sits in a hidden row (and can't point at it):
+  // show the first row with a problem instead, and say what it is there.
+  var showProblem = function (list) {
+    var row = firstIncomplete(list);
+    if (!row) return false;
+    showStep(list, Array.prototype.indexOf.call(rowsOf(list), row), false);
+    var bad = Array.prototype.find.call(row.querySelectorAll("input, select, textarea"), function (input) {
+      return !input.disabled && input.type !== "hidden" && !input.validity.valid;
+    });
+    if (bad) {
+      bad.focus();
+      if (bad.reportValidity) bad.reportValidity();
+    }
+    return true;
+  };
+
+  var problemShown = new WeakSet();
 
   // ---- The storyboard: [data-qube-copy] copies its value.
 
@@ -398,6 +582,8 @@
       var list = box.closest("[data-qube-rows]");
       if (list) offers(list);
     }
+    var steps = event.target.closest && event.target.closest("[data-qube-rows][data-qube-stepped]");
+    if (steps) updateStep(steps);
   });
 
   document.addEventListener("keydown", function (event) {
@@ -437,6 +623,10 @@
     if (setAllButton) return setAll(setAllButton);
     var forAll = event.target.closest("[data-qube-use-for-all]");
     if (forAll) return useForAll(forAll);
+    var back = event.target.closest("[data-qube-step-back]");
+    if (back) return move(back, -1);
+    var next = event.target.closest("[data-qube-step-next]");
+    if (next) return move(next, 1);
     var copyButton = event.target.closest("[data-qube-copy]");
     if (copyButton) copy(copyButton);
   });
@@ -447,8 +637,46 @@
     var row = target.closest("[data-qube-rows] [data-qube-row][data-qube-values]");
     if (!row) return;
     refresh(row);
-    offers(row.closest("[data-qube-rows]"));
+    var list = row.closest("[data-qube-rows]");
+    offers(list);
+    if (stepped(list)) updateStep(list);
   });
+
+  // "Search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native
+  // <details>): as it opens, the focus goes to its search box. "toggle" doesn't bubble.
+  document.addEventListener("toggle", function (event) {
+    var disclosure = event.target;
+    if (!disclosure.matches || !disclosure.matches("[data-qube-search-disclosure]") || !disclosure.open) return;
+    var input = disclosure.querySelector("[data-qube-search-input], input:not([type=hidden])");
+    if (input) input.focus();
+  }, true);
+
+  // A refused submit (an invalid field in a row not on show): its "invalid" events come one per
+  // field, in order, before the form is refused; the first shows its row.
+  document.addEventListener("invalid", function (event) {
+    var list = event.target.closest && event.target.closest("[data-qube-rows][data-qube-stepped]");
+    if (!list || problemShown.has(list)) return;
+    var current = list.querySelector("[data-qube-step-current]");
+    if (current && current.contains(event.target)) return; // the browser points at it itself
+    event.preventDefault();
+    problemShown.add(list);
+    setTimeout(function () {
+      problemShown.delete(list);
+      showProblem(list);
+    }, 0);
+  }, true);
+
+  // Enter in a step before the last: the next step, not the form's submit.
+  document.addEventListener("submit", function (event) {
+    var list = event.target.querySelector && event.target.querySelector("[data-qube-rows][data-qube-stepped]");
+    if (!list) return;
+    var rows = rowsOf(list);
+    var at = Number(list.getAttribute("data-qube-step")) || 0;
+    if (at >= rows.length - 1) return;
+    event.preventDefault();
+    if (complete(rows[at])) showStep(list, at + 1, true);
+    else showProblem(list);
+  }, true);
 
   ["DOMContentLoaded", "turbo:load", "turbo:render", "turbo:frame-load"].forEach(function (name) {
     document.addEventListener(name, sweep);
