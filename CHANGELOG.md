@@ -80,6 +80,8 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   shows it in place of "it couldn't be sent".
 - A search's picked match shows as the selection: a check in the box and an accent edge
   (`data-qube-picked`, set by the script), cleared as soon as the text changes.
+- A ghost button's description (Cancel's "Stop here. Nothing is created.") starts where the
+  button's text does. The storyboard's missing-records question uses QuBe Sync's new wording.
 - Motion in the question: the search drops in as "or search QuickBooks…" opens (200ms), a pick's
   check pops in (240ms) and the box's tint eases in; fades only under reduced motion.
 - The open "or search QuickBooks…" hides its summary and shows a Cancel (`question.close_search`)

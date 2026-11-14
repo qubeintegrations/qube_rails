@@ -329,6 +329,11 @@
   color: var(--qube-muted-color);
 }
 
+/* Under a ghost button (no box), the description starts where the button's text does */
+:where([data-qube-button="ghost"] ~ .qube-choice-description) {
+  padding-inline-start: 14px;
+}
+
 /* ---- Focus: always visible from the keyboard, never removed */
 
 :where(.qube-question, .qube-run-status, .qube-storyboard) :where(:focus-visible) {

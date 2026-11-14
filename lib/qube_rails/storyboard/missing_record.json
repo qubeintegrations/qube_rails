@@ -5,7 +5,7 @@
     "id": "add_transaction / ask_missing",
     "kind": "decision",
     "token": "Mc7pR4tKw2NbY9xQ",
-    "message": "This invoice uses records QuickBooks doesn't have yet.",
+    "message": "This invoice names records QuickBooks doesn't have. Create each one, or use one it has.",
     "data": {
       "operation": "invoice",
       "missing": [
@@ -45,14 +45,14 @@
     "choices": [
       {
         "id": "proceed",
-        "label": "Add the transaction",
+        "label": "Add the invoice",
         "description": null,
         "detail": null,
         "fields": [
           {
             "name": "records",
             "type": "rows",
-            "label": "Not in QuickBooks yet",
+            "label": "For each one",
             "required": true,
             "columns": [
               {
@@ -76,7 +76,7 @@
               {
                 "name": "list_id",
                 "type": "record",
-                "label": "Existing record",
+                "label": "Which one",
                 "required": true,
                 "kind": null,
                 "enum": null,
