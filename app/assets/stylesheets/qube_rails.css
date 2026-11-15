@@ -932,6 +932,33 @@
     }
   }
 
+  /* ---- Sections: what it's about, the choices, then the way out, each under a hairline */
+
+  :where(.qube-choices) {
+    border-top: 1px solid var(--qube-border-color);
+  }
+
+  /* The exits' row, or a lone form's button row, is the card's footer */
+  :where(.qube-choice-footer:not([data-qube-plain])),
+  :where(.qube-choices > .qube-choice-form:not(:has(~ .qube-choice-footer)) > .qube-choice-actions) {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--qube-border-color);
+  }
+
+  /* A card that is one form is as wide as the form, so its lines and buttons end together */
+  :where(.qube-question:not(:has(.qube-picks, .qube-rows-field)):has(.qube-choice-form)) {
+    max-width: calc(var(--qube-form-width, 36rem) + 2 * clamp(16px, 3vw, 24px) + 2px);
+  }
+
+  /* The open search: a panel of its own under the offered records */
+  :where(.qube-search-disclosure[open]) {
+    padding: 14px;
+    border: 1px solid var(--qube-border-color);
+    border-radius: var(--qube-control-radius);
+    background: var(--qube-tint-color);
+  }
+
   /* ---- Narrow screens: choices stack, full width */
 
   @media (max-width: 30rem) {
