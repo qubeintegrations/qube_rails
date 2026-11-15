@@ -43,7 +43,12 @@ en:
       use_pick: "Use this one"
       search_quickbooks: "or search QuickBooks…"
       close_search: "Cancel"
-      use_for_all: "Use for all %{count}"
+      use_for_all:
+        one: "Use for the other record too"
+        other: "Use for the other %{count} records too"
+      used_for_all:
+        one: "Also filled in on the other record."
+        other: "Also filled in on the other %{count} records."
       step: "%{position} of %{count}"
       back: "Back"
       next: "Next"

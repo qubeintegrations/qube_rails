@@ -353,26 +353,52 @@
     });
   };
 
-  // "Use for all N" under each filled field that other rows could take.
+  // A word with a count: data-qube-text-<name>-one for 1, else -other (or <name>).
+  var counted = function (el, name, n, fallbackOne, fallbackOther) {
+    var text = n === 1 ? words(el, name + "-one", fallbackOne)
+      : words(el, name + "-other", words(el, name, fallbackOther));
+    return text.replace("%{count}", n);
+  };
+
+  // "Use for the other N records too" under each filled field that other rows could take, unless
+  // its note says that was just done (and the value hasn't changed since).
   var offers = function (list) {
-    var template = list.getAttribute("data-qube-text-use-for-all") || "Use for all %{count}";
+    each(list.querySelectorAll("[data-qube-used-for-all]"), function (line) {
+      var cell = line.closest("[data-qube-col]");
+      if (!cell || cell.hidden || valueOf(cell).value !== line.getAttribute("data-qube-used-for-all")) line.remove();
+    });
     each(list.querySelectorAll("[data-qube-use-for-all]"), function (button) {
       var cell = button.closest("[data-qube-col]");
       var n = !cell || cell.hidden || !valueOf(cell).value ? 0 : targets(list, cell).length;
       button.hidden = n === 0;
-      if (n) button.textContent = template.replace("%{count}", n);
+      if (n) {
+        button.textContent = counted(list, "use-for-all", n, "Use for the other record too",
+          "Use for the other %{count} records too");
+      }
     });
   };
 
+  // Fills the other records' empty field with this one's, says so where the button was, and tints
+  // each as it comes on show (a record in a later step is hidden now).
   var useForAll = function (button) {
     var cell = button.closest("[data-qube-col]");
     var list = cell.closest("[data-qube-rows]");
     var value = valueOf(cell);
-    targets(list, cell).forEach(function (other) {
+    var others = targets(list, cell);
+    others.forEach(function (other) {
       setValue(other, value);
-      refresh(other.closest("[data-qube-row]"));
-      filled(other);
+      var row = other.closest("[data-qube-row]");
+      refresh(row);
+      if (row.hidden) other.setAttribute("data-qube-filled-later", "");
+      else filled(other);
     });
+    var line = document.createElement("div");
+    line.className = "qube-used-for-all";
+    line.setAttribute("data-qube-used-for-all", value.value);
+    line.setAttribute("role", "status");
+    line.textContent = counted(list, "used-for-all", others.length, "Also filled in on the other record.",
+      "Also filled in on the other %{count} records.");
+    button.parentNode.insertBefore(line, button.nextSibling);
     offers(list);
   };
 
@@ -433,12 +459,41 @@
   // Shows or hides with the hidden attribute and display, so a stylesheet that sets display on
   // the element can't show it anyway.
   var conceal = function (el, hide) {
+    if (!el) return;
     el.hidden = hide;
     el.style.display = hide ? "none" : "";
   };
 
   var stepped = function (list) {
     return list.hasAttribute("data-qube-stepped");
+  };
+
+  // A stepped list's Back / Next row (it sits where the form's submit was, maybe outside the list).
+  var navs = new WeakMap();
+  var navLists = new WeakMap();
+  // Found again in the markup after a Turbo cache restore (the maps hold the first elements).
+  var navOf = function (list) {
+    var nav = navs.get(list);
+    if (!nav) {
+      nav = (list.closest("form") || list).querySelector("[data-qube-step-nav]");
+      if (nav) { navs.set(list, nav); navLists.set(nav, list); }
+    }
+    return nav;
+  };
+
+  var listOf = function (nav) {
+    if (!nav) return null;
+    var list = navLists.get(nav);
+    if (!list) {
+      list = (nav.closest("form") || document).querySelector("[data-qube-rows][data-qube-stepped]");
+      if (list) { navs.set(list, nav); navLists.set(nav, list); }
+    }
+    return list;
+  };
+
+  var stepControl = function (list, kind) {
+    var nav = navOf(list);
+    return nav ? nav.querySelector("[data-qube-step-" + kind + "]") : null;
   };
 
   // Every shown input of the row valid: its choice picked, its required fields filled, a search's
@@ -492,7 +547,7 @@
   var updateStep = function (list) {
     var rows = rowsOf(list);
     var at = Number(list.getAttribute("data-qube-step")) || 0;
-    var next = list.querySelector("[data-qube-step-next]");
+    var next = stepControl(list, "next");
     var last = at === rows.length - 1;
     if (next) {
       conceal(next, last);
@@ -534,8 +589,12 @@
       .replace("%{name}", stepName(rows[at]))
       .replace("%{position}", String(at + 1))
       .replace("%{count}", String(rows.length));
-    conceal(list.querySelector("[data-qube-step-back]"), at === 0);
+    conceal(stepControl(list, "back"), at === 0);
     updateStep(list);
+    each(rows[at].querySelectorAll("[data-qube-filled-later]"), function (cell) {
+      cell.removeAttribute("data-qube-filled-later");
+      filled(cell);
+    });
     if (!isNaN(was) && was !== at && rows[at].animate) {
       var from = reduced() ? "none" : "translateX(" + (at > was ? 8 : -8) + "px)";
       rows[at].animate([{ opacity: 0, transform: from }, { opacity: 1, transform: "none" }],
@@ -577,13 +636,23 @@
     nav.setAttribute("data-qube-step-nav", "");
     nav.appendChild(stepButton(list, "back", words(list, "back", "Back"), false));
     nav.appendChild(stepButton(list, "next", words(list, "next", "Next"), true));
-    table.parentNode.insertBefore(nav, table.nextSibling);
+    // Where the form's submit is, and holding it, so the last step's Back and submit share a row.
+    navs.set(list, nav);
+    navLists.set(nav, list);
+    var buttons = submits(list);
+    if (buttons.length) {
+      buttons[0].parentNode.insertBefore(nav, buttons[0]);
+      each(buttons, function (button) { nav.appendChild(button); });
+    } else {
+      table.parentNode.insertBefore(nav, table.nextSibling);
+    }
     var named = namedInError(list);
     showStep(list, named === -1 ? 0 : named, false);
   };
 
   var move = function (button, by) {
-    var list = button.closest("[data-qube-rows]");
+    var list = listOf(button.closest("[data-qube-step-nav]"));
+    if (!list) return;
     var at = Number(list.getAttribute("data-qube-step")) || 0;
     if (by > 0 && !complete(rowsOf(list)[at])) return;
     showStep(list, at + by, true);

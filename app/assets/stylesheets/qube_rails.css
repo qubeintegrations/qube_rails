@@ -738,6 +738,16 @@
   }
 }
 
+/* What "Use for the other records too" just did, where the button was */
+:where(.qube-used-for-all) {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 2px;
+  font-size: 0.9286em;
+  color: var(--qube-muted-color);
+}
+
 /* What "Set all to" or "Use for all" just filled: a tint that fades out */
 @keyframes qube-filled {
   from {

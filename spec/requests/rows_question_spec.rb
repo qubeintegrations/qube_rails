@@ -109,6 +109,11 @@ RSpec.describe "A rows question", type: :request do
     expect(field["data-qube-text-next"]).to eq("Next")
     expect(field["data-qube-button-class"]).to eq("qube-choice-button btn btn-primary")
     expect(field["data-qube-button-secondary-class"]).to eq("qube-choice-button btn btn-outline")
+    # "Use for all" says it fills the other records, and what it did after: by count, for the script
+    expect(field["data-qube-text-use-for-all-one"]).to eq("Use for the other record too")
+    expect(field["data-qube-text-use-for-all-other"]).to eq("Use for the other %{count} records too")
+    expect(field["data-qube-text-used-for-all-one"]).to eq("Also filled in on the other record.")
+    expect(field["data-qube-text-used-for-all-other"]).to eq("Also filled in on the other %{count} records.")
   ensure
     QubeRails.config.ui_classes = {}
   end
