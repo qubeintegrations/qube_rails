@@ -27,13 +27,11 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 
 **Questions**
 - A rows field (`add_transaction`'s `ask_missing`) of two records or more asks one record at a
-  time when the behaviour script runs: a step line ("1 of 3", `aria-live`), Back and
-  Next (Next once the record is answered), the question's submit on the last record only, "Set all
-  to:" hidden. Every record stays in the form, so the answer is still one POST with every row.
-  Without the script the field renders as before. New keys `question.step`, `question.back`,
-  `question.next`; the rows partial carries them and the `button` / `button_secondary` classes as
-  `data-qube-*` attributes. No new CSS: the step line and buttons use classes the stylesheet
-  already styles.
+  time: a step count ("1 of 3", `aria-live`), Back and Next in the form's button row (see
+  Changed), the question's submit on the last record only, "Set all to:" hidden. Every record
+  stays in the form, so the answer is still one POST with every row. It needs the script (see
+  Changed). New keys `question.step`, `question.back`, `question.next`; the rows partial carries
+  them and the `button` / `button_secondary` classes as `data-qube-*` attributes.
 - The question screen has no horizontal rules: its sections (the details, the choices, the footer,
   each record of a rows field, the "or" between choices) are set apart by space alone.
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
@@ -61,6 +59,59 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   didn't go through" (`status.done_with_errors`) and adds `.qube-run-with-errors`.
 
 ### Changed
+
+**The question's layout: one button row**
+- A form choice ends in one button row (`.qube-choice-actions`, new `ui_classes` piece
+  `choice_actions`): cancel at the start, as a ghost; at the end, the right edge of the fields
+  above, the submit with any other exit beside it. When a question has one form, no picks and no
+  exit with a description, its exits' buttons join that row and submit their own (hidden, empty)
+  forms through the `form` attribute, so it works without the script; new partials
+  `question/_submit` and `question/_exit_button`. Otherwise the exits have their own row, laid out
+  the same way: cancel at the start, decline and the like at the end, or stacked with cancel last
+  when they have descriptions. Cancel is now always at the start (it was at the far right, or the
+  left when it had a description).
+- A rows field in steps puts its step count ("2 of 3"), Back and Next in that row, before the
+  submit, instead of a step line above the records and a row of its own; the row reads cancel …
+  2 of 3, Back, Next (or the submit on the last record).
+- A form's fields and button row share one column (`--qube-form-width`, 36rem; a rows field takes
+  the whole width), so the submit lines up with the fields' right edge.
+- On a narrow question (a container under 30rem) the row's end comes first, its buttons filling
+  the line, and cancel goes under it.
+- A choice promoted to an option row (name clash's "Use the existing record") ends in a secondary
+  "Use this one" button, as an offered record's does, not a link.
+- The question card keeps a gap under the record's status when it follows it.
+
+**Decisions from the review**
+- No submit or Next is disabled any more: the browser's own validation (required fields, a search's
+  "Pick one of the matches.") says what's missing and focuses it, and Next on an incomplete record
+  does the same.
+- After a pick in the search behind "or search QuickBooks…", the search's submit is the primary
+  button and the offered record's "Use this one" secondary (the script swaps their `button` and
+  `button_secondary` classes); editing the text or closing the search undoes it. The search's own
+  close button reads "Close search" (`question.close_search`), so only one cancel shows.
+- A field that isn't required says "(optional)" after its label (`question.optional`); a checkbox
+  doesn't.
+- After a cancel is posted the status reads "Cancelling…" (`status.cancelling`, run state
+  `cancelling`, the engine's own) until the run's next event; a quiet one offers redelivery as a
+  running one does.
+- A rows field needs the script: it and its submit are hidden until the script runs, and a
+  `<noscript>` line says answering needs JavaScript (`question.needs_script`). Cancel still works.
+- A ghost button with no `button_ghost` piece takes no host class (it took `button_secondary`'s), so
+  cancel, "or search QuickBooks…" and "Close search" keep the engine's quiet look.
+
+**Styling and Tailwind**
+- The stylesheet sits in the `components` cascade layer, after declaring `@layer theme, base,
+  components, utilities;`. Unlayered, the engine's rules beat every Tailwind v4 utility class
+  (`ui_classes` couldn't change a padding or a background); now utilities and any unlayered app CSS
+  win, and Tailwind v4's preflight (`@layer base`) still doesn't strip the engine's look. Tailwind
+  v3's preflight is unlayered and does reset borders, button backgrounds and paddings: give those
+  pieces classes, or use v4 (README, "Styling").
+- The generated initializer, `Configuration#ui_classes=` and the README show Tailwind classes first;
+  Bootstrap is a second, shorter example (with `form-check-input mt-0`).
+- `qube_rails_assets` adds `data-turbo-track="reload"` to both tags: under Turbo Drive a page kept
+  the old script after an update (and the script's once-per-page guard skipped the new one), which
+  is how a browser could still show Back and the submit on two rows after that fix.
+
 
 - A failed run's `error` is QuBe Sync's `{code, type, message, quickbooks_message, hint}`:
   `reason_text` is its message and `error_detail` its hint. An error stored by 0.2.0 (a sentence,
@@ -91,15 +142,15 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   passes an empty `q` through.
 - A rows column's `default` (QuBe Sync's new prompt key, one of its `enum` values) starts checked or
   selected, and counts for the other columns' `when`, so add_transaction's missing records start at
-  "Create it". A blank rows label shows no heading. With a rows field, the form's submit waits
-  (script) until every record is complete. The storyboards' cancel reads "Cancel adding the
+  "Create it". A blank rows label shows no heading. The storyboards' cancel reads "Cancel adding the
   invoice", with no note.
 - A ghost button's description (Cancel's "Stop here. Nothing is created.") starts where the
   button's text does. The storyboard's missing-records question uses QuBe Sync's new wording.
 - Motion in the question: the search drops in as "or search QuickBooks…" opens (200ms), a pick's
   check pops in (240ms) and the box's tint eases in; fades only under reduced motion.
-- The open "or search QuickBooks…" hides its summary and shows a Cancel (`question.close_search`)
-  beside the search's submit, which closes it again; without the script the summary stays.
+- The open "or search QuickBooks…" hides its summary and shows "Close search"
+  (`question.close_search`) at the start of the search's button row, which closes it again;
+  without the script the summary stays.
 - A pick's detail wraps between its parts (`similar name ·`, the email, the phone), each a
   `.qube-detail-part`, so a phone number no longer breaks across lines and no line starts with
   the separator.
