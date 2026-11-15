@@ -37,7 +37,7 @@ en:
       question_changed: "This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest."
       answer_refused: "That answer couldn't be used. Check it and try again."
       answer_refused_with: "That answer couldn't be used: %{detail}"
-      question_moved_on: "This question was answered or changed since the page loaded, so your answer wasn't sent. What happens next shows here once QuickBooks' sync service says."
+      question_moved_on: "This question was already answered or has changed, so your answer wasn't sent. If QuickBooks needs anything else, it will ask here."
     question:
       set_all: "Set all to:"
       use_pick: "Use this one"

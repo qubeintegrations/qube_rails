@@ -991,7 +991,7 @@ en:
 | `errors.disconnect_unreachable` | Couldn't reach QuickBooks' sync service just now. Try disconnecting again in a minute. | a disconnect QuBe Sync didn't answer |
 | `errors.still_syncing` | Something is still syncing with this company file. Let it finish, or answer its question, then disconnect. | a disconnect while work is going |
 | `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
-| `errors.question_moved_on` | This question was answered or changed since the page loaded, so your answer wasn't sent. What happens next shows here once QuickBooks' sync service says. | an answer QuBe Sync says came too late (409, or a 400 such as `not_awaiting_input`) |
+| `errors.question_moved_on` | This question was already answered or has changed, so your answer wasn't sent. If QuickBooks needs anything else, it will ask here. | an answer QuBe Sync says came too late (409, or a 400 such as `not_awaiting_input`) |
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |

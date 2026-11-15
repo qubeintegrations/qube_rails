@@ -112,7 +112,8 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - After a 409 (or a 400 such as `not_awaiting_input`) for an answer, the run reads as running
   ("Syncing with QuickBooks") rather than "Needs your answer" with no question shown, and the
   message (new key `errors.question_moved_on`) no longer says the page shows the latest. A newer
-  question already on the run is left alone. In 0.2.0 too.
+  question already on the run is left alone. In 0.2.0 too. A one-shot error now shows under the
+  status line, inside the status block, not above it.
 - "Use for all N" is now "Use for the other record too" / "Use for the other %{count} records too"
   (`question.use_for_all`, pluralized; a plain string still works), and once pressed it's replaced
   by a note, "Also filled in on the other record." (new key `question.used_for_all`), until the
