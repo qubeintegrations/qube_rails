@@ -5,6 +5,11 @@ Every question screen the engine draws, rendered in headless Chrome (2x) from th
 [PR #5](https://github.com/qubeintegrations/qube_rails/pull/5). Screens 19 to 30 and a few others use extra
 sample prompts built from the shipped charts in QuBe Sync's `priv/workflows/templates/` (not added to the engine).
 
+Retaken after the review fixes (same method, 2x, same file names) wherever a fix changed the
+screen: 01-10, 13, 15, 18, 21, 25, 26, 29, 36, 38, 40-42, 44, 45, 48, 49, 56-59, 61, 63, 64. Most
+of the near-match ones changed only because buttons got 8px block padding and the open search now
+hides "or search QuickBooks…". 65-69 are new.
+
 | # | Screen | What it shows | Image |
 | --- | --- | --- | --- |
 | 01 | Near match (resolve ask) | roles pick, search (behind the disclosure), decline, cancel | [01-near-match-pick-search-decline-cancel.png](01-near-match-pick-search-decline-cancel.png) |
@@ -31,7 +36,7 @@ sample prompts built from the shipped charts in QuBe Sync's `priv/workflows/temp
 | 22 | ensure ask_use (name clash) | promoted plain choice + rename form, descriptions | [22-ensure-ask-use-name-clash.png](22-ensure-ask-use-name-clash.png) |
 | 23 | upsert 3100 name taken | ensure ask_use for a vendor holding the name | [23-upsert-3100-name-taken.png](23-upsert-3100-name-taken.png) |
 | 24 | ensure ask_rename | rename only | [24-ensure-ask-rename.png](24-ensure-ask-rename.png) |
-| 25 | ensure ask_rename refused (422) | refusal shown in the question | [25-ensure-ask-rename-refused-422.png](25-ensure-ask-rename-refused-422.png) |
+| 25 | ensure ask_rename refused (422) | refusal shown in the question, with what was typed | [25-ensure-ask-rename-refused-422.png](25-ensure-ask-rename-refused-422.png) |
 | 26 | add_transaction ask_about_add | lost answer with a candidate | [26-add-transaction-lost-answer.png](26-add-transaction-lost-answer.png) |
 | 27 | ask_about_add, no candidates | plain question: decline primary | [27-add-transaction-lost-answer-no-candidates.png](27-add-transaction-lost-answer-no-candidates.png) |
 | 28 | record_payment ask_over | plain question, three choices with descriptions | [28-record-payment-overpayment.png](28-record-payment-overpayment.png) |
@@ -44,18 +49,18 @@ sample prompts built from the shipped charts in QuBe Sync's `priv/workflows/temp
 | 35 | Step 1 picked | Next enabled | [35-rows-step-1-picked-next-enabled.png](35-rows-step-1-picked-next-enabled.png) |
 | 36 | Step 2 of 3 | item: item type + income account, Back | [36-rows-step-2-of-3-create-item.png](36-rows-step-2-of-3-create-item.png) |
 | 37 | Step 2 income account browse | focused empty search | [37-rows-step-2-income-account-browse.png](37-rows-step-2-income-account-browse.png) |
-| 38 | Step 2 filled | Use for all 1 | [38-rows-step-2-filled-use-for-all.png](38-rows-step-2-filled-use-for-all.png) |
+| 38 | Step 2 filled | "Use for the other record too" | [38-rows-step-2-filled-use-for-all.png](38-rows-step-2-filled-use-for-all.png) |
 | 39 | Step 2 inventory part | asset and COGS accounts appear | [39-rows-step-2-inventory-part-extra-accounts.png](39-rows-step-2-inventory-part-extra-accounts.png) |
-| 40 | Step 3 of 3 (last) | preset item type, submit shown but disabled | [40-rows-step-3-of-3-last.png](40-rows-step-3-of-3-last.png) |
-| 41 | Step 3 complete | submit enabled | [41-rows-step-3-complete-submit.png](41-rows-step-3-complete-submit.png) |
+| 40 | Step 3 of 3 (last) | preset item type; Back and the (disabled) submit on one row | [40-rows-step-3-of-3-last.png](40-rows-step-3-of-3-last.png) |
+| 41 | Step 3 complete | submit enabled, beside Back | [41-rows-step-3-complete-submit.png](41-rows-step-3-complete-submit.png) |
 | 42 | Back to step 2 | values kept | [42-rows-back-to-step-2.png](42-rows-back-to-step-2.png) |
 | 43 | Final submit | storyboard no-op: Storyboard: nothing was sent. | [43-rows-submitted-nothing-sent.png](43-rows-submitted-nothing-sent.png) |
 | 44 | Rows without the script | every record at once, Set all to | [44-rows-without-script.png](44-rows-without-script.png) |
 | 45 | Invoice page asking | real dummy-app page: status + question | [45-invoice-page-asking.png](45-invoice-page-asking.png) |
 | 46 | Invoice page answered | 200 from decisions: question gone, Syncing | [46-invoice-page-answered.png](46-invoice-page-answered.png) |
 | 47 | Asked another | next question after an answer | [47-invoice-page-asked-another.png](47-invoice-page-asked-another.png) |
-| 48 | Answer expired (409) | question forgotten, error shown | [48-invoice-page-answer-expired-409.png](48-invoice-page-answer-expired-409.png) |
-| 49 | Answer refused (422) | real 422 round trip | [49-invoice-page-answer-refused-422.png](49-invoice-page-answer-refused-422.png) |
+| 48 | Answer expired (409) | question forgotten, status "Syncing with QuickBooks", error says what's next | [48-invoice-page-answer-expired-409.png](48-invoice-page-answer-expired-409.png) |
+| 49 | Answer refused (422) | real 422 round trip: refusal inside the question, typed name kept, field marked | [49-invoice-page-answer-refused-422.png](49-invoice-page-answer-refused-422.png) |
 | 50 | Cancel posted | after Cancel adding the invoice | [50-invoice-page-cancel-posted.png](50-invoice-page-cancel-posted.png) |
 | 51 | Status: waiting for an answer | storyboard run status | [51-status-waiting-for-an-answer.png](51-status-waiting-for-an-answer.png) |
 | 52 | Status: cancelled | storyboard run status | [52-status-cancelled.png](52-status-cancelled.png) |
@@ -70,4 +75,9 @@ sample prompts built from the shipped charts in QuBe Sync's `priv/workflows/temp
 | 61 | Phone 390px: record_payment ask_invoice |  | [61-phone-record-payment-missing-invoice.png](61-phone-record-payment-missing-invoice.png) |
 | 62 | Phone 390px: resolve ask_detail |  | [62-phone-resolve-ask-detail.png](62-phone-resolve-ask-detail.png) |
 | 63 | Keyboard: first Tab | focus ring on the first pick | [63-keyboard-focus-first-tab.png](63-keyboard-focus-first-tab.png) |
-| 64 | Search open without the script | the Cancel shows though it can't work | [64-near-match-search-open-without-script.png](64-near-match-search-open-without-script.png) |
+| 64 | Search open without the script | summary stays (the only way to close it); the Cancel that can't work stays hidden | [64-near-match-search-open-without-script.png](64-near-match-search-open-without-script.png) |
+| 65 | Customer page asking | a question about a customer (not an invoice), on the dummy app's account page, `sync_customer` |  [65-customer-page-asking.png](65-customer-page-asking.png) |
+| 66 | Search answered 409 | the search route's 409: "This question has changed. Reload the page to see the latest." | [66-search-answered-409-question-changed.png](66-search-answered-409-question-changed.png) |
+| 67 | Use for the other record, pressed | the button replaced by "Also filled in on the other record." | [67-rows-step-2-used-for-the-other-record.png](67-rows-step-2-used-for-the-other-record.png) |
+| 68 | Next after Use for the other record | step 3's income account already filled (it tints as it shows) | [68-rows-step-3-filled-by-use-for-other.png](68-rows-step-3-filled-by-use-for-other.png) |
+| 69 | Phone 390px: last step complete | Back and submit share a row | [69-phone-rows-step-3-last-back-and-submit.png](69-phone-rows-step-3-last-back-and-submit.png) |
