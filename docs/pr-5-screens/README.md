@@ -5,10 +5,11 @@ Every question screen the engine draws, rendered in headless Chrome (2x) from th
 [PR #5](https://github.com/qubeintegrations/qube_rails/pull/5). Screens 19 to 30 and a few others use extra
 sample prompts built from the shipped charts in QuBe Sync's `priv/workflows/templates/` (not added to the engine).
 
-Retaken after the review fixes (same method, 2x, same file names) wherever a fix changed the
-screen: 01-10, 13, 15, 18, 21, 25, 26, 29, 36, 38, 40-42, 44, 45, 48, 49, 56-59, 61, 63, 64. Most
-of the near-match ones changed only because buttons got 8px block padding and the open search now
-hides "or search QuickBooks…". 65-69 are new.
+Second review (button-row rework, Tailwind): every screen except 46, 48 and 51-53 retaken with the
+same method. Every question now ends in one button row, cancel at its start and the submit (or a
+rows field's step count, Back and Next) at its end. 54-56 are Tailwind-themed now (Tailwind v4 via
+its browser build, loaded by the screenshot harness only; renamed from `-bootstrap-`); 70 is the
+Bootstrap one.
 
 | # | Screen | What it shows | Image |
 | --- | --- | --- | --- |
@@ -17,10 +18,10 @@ hides "or search QuickBooks…". 65-69 are new.
 | 03 | Search with results | typed q, matches with details | [03-near-match-search-results.png](03-near-match-search-results.png) |
 | 04 | Keyboard highlight | ArrowDown moves the highlighted match | [04-near-match-search-keyboard-highlight.png](04-near-match-search-keyboard-highlight.png) |
 | 05 | No matches | search answered [] | [05-near-match-search-no-matches.png](05-near-match-search-no-matches.png) |
-| 06 | Picked match | check, tint, the search form's own submit enabled | [06-near-match-search-picked.png](06-near-match-search-picked.png) |
+| 06 | Picked match | check, tint; the search's submit is now the primary, the offered record's secondary; "Close search" | [06-near-match-search-picked.png](06-near-match-search-picked.png) |
 | 07 | Search failed | fetch network error | [07-near-match-search-failed.png](07-near-match-search-failed.png) |
 | 08 | Searching… | slow answer (>150 ms) | [08-near-match-search-slow-searching.png](08-near-match-search-slow-searching.png) |
-| 09 | Unpicked text | typed text but no pick: submit disabled, input invalid | [09-near-match-unpicked-text-submit.png](09-near-match-unpicked-text-submit.png) |
+| 09 | Unpicked text | typed text but no pick: input invalid, submit enabled (pressing it says "Pick one of the matches.") | [09-near-match-unpicked-text-submit.png](09-near-match-unpicked-text-submit.png) |
 | 10 | Several offered records | first primary, rest secondary | [10-record-search-several-picks.png](10-record-search-several-picks.png) |
 | 11 | Search only, nothing offered | search is a section of its own (resolve ask_pick with no active records) | [11-search-only-nothing-offered.png](11-search-only-nothing-offered.png) |
 | 12 | Search only, focused | browse list | [12-search-only-browse-focused.png](12-search-only-browse-focused.png) |
@@ -44,30 +45,30 @@ hides "or search QuickBooks…". 65-69 are new.
 | 30 | ask_invoice, none open | form + cancel only | [30-record-payment-missing-invoice-none-open.png](30-record-payment-missing-invoice-none-open.png) |
 | 31 | Missing record, one row | rows of one: no steps, Create it default | [31-missing-record-one-row-create.png](31-missing-record-one-row-create.png) |
 | 32 | Missing record, use existing | Which one search appears | [32-missing-record-use-existing.png](32-missing-record-use-existing.png) |
-| 33 | Rows step 1 of 3 | step line, Next, submit hidden | [33-rows-step-1-of-3.png](33-rows-step-1-of-3.png) |
+| 33 | Rows step 1 of 3 | button row: cancel … 1 of 3, Next | [33-rows-step-1-of-3.png](33-rows-step-1-of-3.png) |
 | 34 | Step 1, use existing, searching | row search open | [34-rows-step-1-use-existing-search.png](34-rows-step-1-use-existing-search.png) |
 | 35 | Step 1 picked | Next enabled | [35-rows-step-1-picked-next-enabled.png](35-rows-step-1-picked-next-enabled.png) |
-| 36 | Step 2 of 3 | item: item type + income account, Back | [36-rows-step-2-of-3-create-item.png](36-rows-step-2-of-3-create-item.png) |
+| 36 | Step 2 of 3 | item: item type ("Choose…") + income account; cancel … 2 of 3, Back, Next | [36-rows-step-2-of-3-create-item.png](36-rows-step-2-of-3-create-item.png) |
 | 37 | Step 2 income account browse | focused empty search | [37-rows-step-2-income-account-browse.png](37-rows-step-2-income-account-browse.png) |
 | 38 | Step 2 filled | "Use for the other record too" | [38-rows-step-2-filled-use-for-all.png](38-rows-step-2-filled-use-for-all.png) |
 | 39 | Step 2 inventory part | asset and COGS accounts appear | [39-rows-step-2-inventory-part-extra-accounts.png](39-rows-step-2-inventory-part-extra-accounts.png) |
-| 40 | Step 3 of 3 (last) | preset item type; Back and the (disabled) submit on one row | [40-rows-step-3-of-3-last.png](40-rows-step-3-of-3-last.png) |
+| 40 | Step 3 of 3 (last) | preset item type; cancel … 3 of 3, Back, Add the invoice (never disabled) | [40-rows-step-3-of-3-last.png](40-rows-step-3-of-3-last.png) |
 | 41 | Step 3 complete | submit enabled, beside Back | [41-rows-step-3-complete-submit.png](41-rows-step-3-complete-submit.png) |
 | 42 | Back to step 2 | values kept | [42-rows-back-to-step-2.png](42-rows-back-to-step-2.png) |
 | 43 | Final submit | storyboard no-op: Storyboard: nothing was sent. | [43-rows-submitted-nothing-sent.png](43-rows-submitted-nothing-sent.png) |
-| 44 | Rows without the script | every record at once, Set all to | [44-rows-without-script.png](44-rows-without-script.png) |
+| 44 | Rows without the script | "Answering this needs JavaScript", cancel only | [44-rows-without-script.png](44-rows-without-script.png) |
 | 45 | Invoice page asking | real dummy-app page: status + question | [45-invoice-page-asking.png](45-invoice-page-asking.png) |
 | 46 | Invoice page answered | 200 from decisions: question gone, Syncing | [46-invoice-page-answered.png](46-invoice-page-answered.png) |
 | 47 | Asked another | next question after an answer | [47-invoice-page-asked-another.png](47-invoice-page-asked-another.png) |
 | 48 | Answer expired (409) | question forgotten, status "Syncing with QuickBooks", error says what's next | [48-invoice-page-answer-expired-409.png](48-invoice-page-answer-expired-409.png) |
 | 49 | Answer refused (422) | real 422 round trip: refusal inside the question, typed name kept, field marked | [49-invoice-page-answer-refused-422.png](49-invoice-page-answer-refused-422.png) |
-| 50 | Cancel posted | after Cancel adding the invoice | [50-invoice-page-cancel-posted.png](50-invoice-page-cancel-posted.png) |
+| 50 | Cancel posted | status "Cancelling…" until the run's next event | [50-invoice-page-cancel-posted.png](50-invoice-page-cancel-posted.png) |
 | 51 | Status: waiting for an answer | storyboard run status | [51-status-waiting-for-an-answer.png](51-status-waiting-for-an-answer.png) |
 | 52 | Status: cancelled | storyboard run status | [52-status-cancelled.png](52-status-cancelled.png) |
 | 53 | One-shot error | question_changed message | [53-one-shot-error.png](53-one-shot-error.png) |
-| 54 | Themed (Bootstrap ui_classes + variables): near match |  | [54-themed-bootstrap-near-match.png](54-themed-bootstrap-near-match.png) |
-| 55 | Themed: number and boolean |  | [55-themed-bootstrap-number-boolean.png](55-themed-bootstrap-number-boolean.png) |
-| 56 | Themed: rows step 2 |  | [56-themed-bootstrap-rows-step-2.png](56-themed-bootstrap-rows-step-2.png) |
+| 54 | Themed (Tailwind v4 ui_classes + --qube-accent): near match |  | [54-themed-tailwind-near-match.png](54-themed-tailwind-near-match.png) |
+| 55 | Themed (Tailwind): number and boolean |  | [55-themed-tailwind-number-boolean.png](55-themed-tailwind-number-boolean.png) |
+| 56 | Themed (Tailwind): rows step 2 |  | [56-themed-tailwind-rows-step-2.png](56-themed-tailwind-rows-step-2.png) |
 | 57 | Dark canvas: near match |  | [57-dark-near-match.png](57-dark-near-match.png) |
 | 58 | Dark canvas: rows step 2 |  | [58-dark-rows-step-2.png](58-dark-rows-step-2.png) |
 | 59 | Phone 390px: near match |  | [59-phone-near-match.png](59-phone-near-match.png) |
@@ -75,9 +76,10 @@ hides "or search QuickBooks…". 65-69 are new.
 | 61 | Phone 390px: record_payment ask_invoice |  | [61-phone-record-payment-missing-invoice.png](61-phone-record-payment-missing-invoice.png) |
 | 62 | Phone 390px: resolve ask_detail |  | [62-phone-resolve-ask-detail.png](62-phone-resolve-ask-detail.png) |
 | 63 | Keyboard: first Tab | focus ring on the first pick | [63-keyboard-focus-first-tab.png](63-keyboard-focus-first-tab.png) |
-| 64 | Search open without the script | summary stays (the only way to close it); the Cancel that can't work stays hidden | [64-near-match-search-open-without-script.png](64-near-match-search-open-without-script.png) |
+| 64 | Search open without the script | summary stays (the only way to close it); "Close search", which can't work, stays hidden | [64-near-match-search-open-without-script.png](64-near-match-search-open-without-script.png) |
 | 65 | Customer page asking | a question about a customer (not an invoice), on the dummy app's account page, `sync_customer` |  [65-customer-page-asking.png](65-customer-page-asking.png) |
 | 66 | Search answered 409 | the search route's 409: "This question has changed. Reload the page to see the latest." | [66-search-answered-409-question-changed.png](66-search-answered-409-question-changed.png) |
 | 67 | Use for the other record, pressed | the button replaced by "Also filled in on the other record." | [67-rows-step-2-used-for-the-other-record.png](67-rows-step-2-used-for-the-other-record.png) |
 | 68 | Next after Use for the other record | step 3's income account already filled (it tints as it shows) | [68-rows-step-3-filled-by-use-for-other.png](68-rows-step-3-filled-by-use-for-other.png) |
 | 69 | Phone 390px: last step complete | Back and submit share a row | [69-phone-rows-step-3-last-back-and-submit.png](69-phone-rows-step-3-last-back-and-submit.png) |
+| 70 | Themed (Bootstrap ui_classes + variables): near match |  | [70-themed-bootstrap-near-match.png](70-themed-bootstrap-near-match.png) |
