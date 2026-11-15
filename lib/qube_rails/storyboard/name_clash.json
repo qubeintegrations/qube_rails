@@ -26,7 +26,7 @@
       {
         "id": "rename",
         "label": "Add it under another name",
-        "description": "Try the add again under a name you choose.",
+        "description": "Try the add again with a different name.",
         "detail": null,
         "fields": [
           {
