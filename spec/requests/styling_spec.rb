@@ -99,6 +99,15 @@ RSpec.describe "Styling the screens", type: :request do
     end
   end
 
+  it "lets a form choice's fields fill its column, after the rules that cap their width" do
+    css = File.read(QubeRails::Engine.root.join("app/assets/stylesheets/qube_rails.css")).gsub(%r{/\*.*?\*/}m, "")
+    cap = css.rindex(/max-width: 28rem/)
+    fill = css.index(/:where\(\.qube-choice-form\) :where\(\.qube-input[^{]*\{\s*max-width: none/)
+
+    expect(fill).not_to be_nil
+    expect(fill).to be > cap
+  end
+
   # Every rule has zero specificity, so a later rule wins: the ones that hide the open search's
   # "or search QuickBooks…" and the no-script Cancel must come after the buttons' display.
   it "hides the open search's summary and the no-script Cancel after the button rules that show them" do

@@ -208,10 +208,6 @@
     font-size: 1em;
   }
 
-  :where(.qube-choice-form) :where(.qube-input, .qube-select, .qube-search-input, .qube-search) {
-    max-width: none;
-  }
-
   /* "(optional)" after a label */
   :where(.qube-optional) {
     font-weight: 400;
@@ -475,6 +471,11 @@
   :where(.qube-search) {
     position: relative;
     max-width: 28rem;
+  }
+
+  /* In a form choice they fill its column, so the submit lines up (after the widths above) */
+  :where(.qube-choice-form) :where(.qube-input, .qube-select, .qube-search-input, .qube-search) {
+    max-width: none;
   }
 
   /* A picked match: a check in the box and an accent edge, so its text reads as the selection */
