@@ -204,6 +204,11 @@
     max-width: none;
   }
 
+  /* Beside full-width picks a form takes the width too, so every button shares one right edge */
+  :where(.qube-question:has(.qube-picks) .qube-choice-form) {
+    max-width: none;
+  }
+
   :where(.qube-choice-form .qube-label) {
     font-size: 1em;
   }
@@ -278,6 +283,10 @@
   :where(.qube-search-disclosure) {
     display: grid;
     gap: 12px;
+  }
+
+  :where(.qube-search-disclosure[open]) {
+    margin-top: 12px;
   }
 
   :where(.qube-search-disclosure > summary) {

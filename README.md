@@ -699,7 +699,7 @@ no global styles.
 
 - **Tailwind v4** (preflight in `@layer base`): works as it is, in any load order; your
   `ui_classes` utilities override the engine's look.
-- **Tailwind v3** (unlayered preflight): preflight's `*`, `button`, `input` and `[type=submit]`
+- **Tailwind v3** (unlayered preflight) isn't supported with the engine's stylesheet: preflight's `*`, `button`, `input` and `[type=submit]`
   rules beat a layered stylesheet, so the engine's borders, button backgrounds and paddings are
   reset. Give every button and input piece classes (the example below does the main ones; add
   `pick`, `button_ghost`, `search_result` and `segment`), or move to v4.
