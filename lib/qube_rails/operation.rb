@@ -408,14 +408,15 @@ module QubeRails
     # After your user's choice is in: the question is forgotten, unless the run has asked another
     # since (its token is the question's own). taken: the run has moved past the question (QuBe
     # Sync took this answer, or said it was answered or asked again), so it reads as running until
-    # its next webhook (which waits on the Web Connector's next poll).
-    def answered(token, taken: false)
+    # its next webhook (which waits on the Web Connector's next poll). cancelling: the answer was
+    # its cancel, so it reads "Cancelling…" (state "cancelling", this engine's own) until then.
+    def answered(token, taken: false, cancelling: false)
       run.with_lock do
         question = run.open_question
         if question && question["token"] == token
           run.question = nil
           run.links = nil
-          run.state = "running" if taken
+          run.state = cancelling ? "cancelling" : "running" if taken
           run.save!
         end
       end

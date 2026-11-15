@@ -18,6 +18,7 @@ en:
       starting: "Sending to QuickBooks"
       unconfirmed: "Still waiting for QuickBooks"
       running: "Syncing with QuickBooks"
+      cancelling: "Cancelling…"
       quiet: "No update from QuickBooks for a while."
       check_for_updates: "Check for updates"
       try_again: "Try sending again"

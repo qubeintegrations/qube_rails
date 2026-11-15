@@ -60,6 +60,19 @@ RSpec.describe "The question routes", type: :request do
       expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
     end
 
+    it "reads \"Cancelling…\" after a cancel is posted, until the run's next event" do
+      stub_request(:post, decisions).to_return(json_data("state" => "running"))
+      run.update!(question: question.merge("choices" => question["choices"] + [{ "id" => "cancel", "label" => "Cancel", "fields" => [] }]))
+
+      answer(choice: "cancel")
+
+      expect(run.reload.state).to eq("cancelling")
+      expect(run.summary_text).to eq("Cancelling…")
+      expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
+      follow_redirect!(headers: signed_in)
+      expect(Nokogiri::HTML(response.body).at_css(".qube-run-summary").text).to include("Cancelling…")
+    end
+
     it "sends an unticked checkbox as false, and a number it can't read as typed" do
       answered = stub_request(:post, decisions)
                  .with(body: { choice: "add", data: { count: "three", taxable: false } })

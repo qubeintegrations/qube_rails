@@ -40,7 +40,7 @@ module QubeRails
       return back_with_error(CHANGED) unless choice && @links["decisions"]
 
       QubeRails.client.answer(@links["decisions"], choice: choice["id"], data: answer_data(choice))
-      @operation.answered(@question["token"], taken: true)
+      @operation.answered(@question["token"], taken: true, cancelling: cancel?(choice))
       redirect_back fallback_location: "/", status: :see_other
     rescue Backend::APIError => e
       raise unless [400, 409, 422].include?(e.status)
@@ -126,6 +126,11 @@ module QubeRails
           data[name] = field["type"] == "number" ? number(text) : text
         end
       end
+    end
+
+    # A cancel: its role, or without roles its id (as ChoiceView#cancel? reads it).
+    def cancel?(choice)
+      choice.key?("role") ? choice["role"] == "cancel" : choice["id"] == "cancel"
     end
 
     def number(text)

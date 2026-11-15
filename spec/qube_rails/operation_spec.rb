@@ -412,6 +412,17 @@ RSpec.describe QubeRails::Operation do
 
       expect(run.reload).to have_attributes(state: "running", question: nil)
     end
+
+    it "reads as cancelling once QuBe Sync took a cancel, and offers redelivery if nothing comes" do
+      run.update!(state: "awaiting_input", question: { "token" => "t-1" }, links: { "decisions" => "x" }, qube_run_id: "run-c")
+      QuickbooksDesktop::CreateInvoice.new(invoice, run).answered("t-1", taken: true, cancelling: true)
+
+      expect(run.reload).to have_attributes(state: "cancelling", question: nil)
+      expect(run.summary_text).to eq("Cancelling…")
+      expect(run).not_to be_ended
+      run.update_column(:updated_at, Time.now - QubeRails::Run::QUIET_AFTER_SECONDS - 1)
+      expect(run).to be_looks_stuck
+    end
   end
 
   describe "#quickbooks_ref" do
