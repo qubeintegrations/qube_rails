@@ -103,6 +103,37 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - A pick's detail wraps between its parts (`similar name ·`, the email, the phone), each a
   `.qube-detail-part`, so a phone number no longer breaks across lines and no line starts with
   the separator.
+- The open "or search QuickBooks…" really hides its summary now, and the no-script Cancel stays
+  hidden: the stylesheet's hiding rule came before the button rule that set `display`, so it lost
+  (both have zero specificity). It now comes after, and the script also hides the summary inline
+  while the search is open, so a `ui_classes` button class can't show it either.
+- On the last record of a rows field, Back and the question's submit share a row: the step nav
+  (`data-qube-step-nav`) now sits where the form's submit was and holds it, after Back and Next.
+- After a 409 (or a 400 such as `not_awaiting_input`) for an answer, the run reads as running
+  ("Syncing with QuickBooks") rather than "Needs your answer" with no question shown, and the
+  message (new key `errors.question_moved_on`) no longer says the page shows the latest. A newer
+  question already on the run is left alone. In 0.2.0 too.
+- "Use for all N" is now "Use for the other record too" / "Use for the other %{count} records too"
+  (`question.use_for_all`, pluralized; a plain string still works), and once pressed it's replaced
+  by a note, "Also filled in on the other record." (new key `question.used_for_all`), until the
+  value changes. A record filled while hidden in a later step flashes the fill tint as it comes on
+  show, so nothing changes out of sight unannounced.
+- A refused answer (422) keeps what was typed: the choice's text, number, select and checkbox
+  fields come back filled, marked `aria-invalid` and described by the refusal, which now shows
+  inside the question rather than above the run status. The refusal travels in
+  `flash[:qube_rails_refusal]` (`token`, `choice`, `message`, `values`), shown only on the question
+  it was for; values over 1,000 characters aren't kept (cookie sessions). `_error` takes an `id:`.
+- Phone width: a wrapped button no longer touches its border (`.qube-choice-button` has 8px block
+  padding, `box-sizing: border-box`); under 30rem an offered record's "Use this one" goes under its
+  text, full width, so an email in its detail isn't broken mid-word; a search match's detail is
+  split into `.qube-detail-part`s like a pick's, so a phone number doesn't break at its hyphen.
+- With a host class on the search input (Bootstrap's `form-control`), the picked check no longer
+  overlaps the text: the script sets the room for it inline. A segment's label stays centred when
+  a reset sets `label { display: inline-block }` (padding and `text-align`, not flex alone).
+- A select starts on "Choose…" (new key `question.choose`) rather than a blank row.
+- A search the route answers 409 (the question changed) says "This question has changed. Reload
+  the page to see the latest." (new key `question.search_changed`, `data-qube-text-search-changed`)
+  rather than "No matches"; any other failed answer says the search isn't available.
 
 ### Compatibility
 

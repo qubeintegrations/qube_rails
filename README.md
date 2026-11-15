@@ -630,9 +630,15 @@ cause is known. A question waiting on your user isn't affected. When the connect
 resumes, the engine tells the pages of the records with a run still going on it to refresh (by the
 runs' connection index, at most 200), so the status changes without a reload.
 
-An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
-answer's data, the start was confirmed meanwhile) goes back to the page with the reason in
-`flash[:qube_rails_error]`, which the partials show once, so it shows under Turbo too.
+An answer or a start retry that can't go through (the question changed, the start was confirmed
+meanwhile) goes back to the page with the reason in `flash[:qube_rails_error]`, which the partials
+show once, so it shows under Turbo too. When QuBe Sync says the question was answered or asked
+again since (409, or a 400 such as `not_awaiting_input`), the question is forgotten and the run reads
+as running ("Syncing with QuickBooks") until its next webhook. An answer QuBe Sync refuses (422)
+goes back in `flash[:qube_rails_refusal]` (`token`, `choice`, `message`, `values`): the question
+partial shows the message inside the question, refills that choice's text, number, select and
+checkbox fields with what was typed (not a search's pick or a rows field; nothing when it's over
+1,000 characters, for a cookie session), and marks them `aria-invalid`, described by the message.
 
 ## Questions
 
@@ -714,7 +720,8 @@ so `prefers-color-scheme` carries through. An app whose dark mode is a class sho
 Motion is short and only where it says something: a button gives way on press (`scale(0.97)`),
 the search box's matches drop in from the input (150ms; they close at once, and moving through them
 with the keyboard is instant), a rows field's field fades in as it starts to apply, what "Set all to"
-or "Use for all" fills flashes a tint, a rows field's next record comes in from the side it's
+or "Use for the other records too" fills flashes a tint (a record in a later step flashes as it comes
+on show), a rows field's next record comes in from the side it's
 stepped from (180ms, a few px), and a one-shot error fades in. All of it is transform and
 opacity, on `cubic-bezier(0.23, 1, 0.32, 1)`; with `prefers-reduced-motion: reduce` the fades stay
 and the movement goes. Hover effects apply only on devices with a fine pointer.
@@ -748,7 +755,7 @@ config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", in
 | `search`, `search_results`, `search_result` | a search box's wrapper, its matches' container, each match (made by the script) |
 | `rows`, `row`, `row_header`, `row_fields` | a rows field's list of records, each record, its name, its fields' grid |
 | `segmented`, `segment` | a record's choice as a segmented control, each option |
-| `use_for_all` | the "Use for all N" button under a field |
+| `use_for_all` | the "Use for the other N records too" button under a field |
 | `status`, `summary`, `detail` | the run status, its sentence, a failure's detail |
 | `stall` | why it waits on a stalled connection |
 | `error` | a one-shot error |
@@ -776,7 +783,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
-| `qube_rails/_error` | `message` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
+| `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
 versions:
@@ -853,7 +860,11 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   the box. Escape, a click outside or leaving the box closes the matches. The box gets
   `data-qube-open` while they show, and the input `aria-expanded` and `aria-activedescendant`. Until a
   match is picked, the text input is invalid, so the form isn't sent. Its words come from the box's
-  `data-qube-text-no-matches`, `-searching`, `-search-failed` and `-pick-a-match` (English without).
+  `data-qube-text-no-matches`, `-searching`, `-search-failed`, `-search-changed` (the search
+  answered 409: the question changed) and `-pick-a-match` (English without). A match's detail is
+  split into `.qube-detail-part` spans at " · ", so a line breaks between parts. A picked box gets
+  `data-qube-picked` and an inline `padding-inline-start` for its check, so your input class's
+  padding can't put the check over the text.
 - A rows field: `data-qube-rows` around it; each record `data-qube-row` with `data-qube-values` (JSON);
   each field `data-qube-col="<column>"` with `data-qube-when` (JSON) and, for a required column,
   `data-qube-required`; each input `data-qube-rows-input` (a radio counts when checked). A field
@@ -863,17 +874,21 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   disabled (by the script) until every record is complete. Optional:
   `data-qube-rows-set-all="<column>"` holding buttons `data-qube-set-all="<value>"` (sets that column on
   every record offering the value), and a button `data-qube-use-for-all` in a field (shown, with the
-  table's `data-qube-text-use-for-all`, "Use for all %{count}", while the field has a value other
-  records' shown fields lack; copies it to them). What either fills gets `data-qube-filled` for the
-  stylesheet's tint.
+  field's `data-qube-text-use-for-all-one` / `-other`, "Use for the other record too" / "Use for the
+  other %{count} records too", while the field has a value other records' shown fields lack; copies
+  it to them, then shows `<div class="qube-used-for-all" data-qube-used-for-all role="status">` with
+  `data-qube-text-used-for-all-one` / `-other` in its place until the value changes). What either
+  fills gets `data-qube-filled` for the stylesheet's tint; a record not on show gets it as it's
+  shown.
 - Steps: a rows field with two records or more shows one at a time. The script marks the field
   `data-qube-stepped` and `data-qube-step="<n>"` (from 0), the record on show
   `data-qube-step-current`, and hides the others (`hidden` and `display: none`, never removed, so the
   form still posts every record). It adds a step line before the records,
   `<div class="qube-rows-step qube-row-detail" data-qube-step-line aria-live="polite">` (the record's
   position: the field's `data-qube-text-step`, "%{position} of %{count}"; a `%{name}` in your own
-  wording is the record's detail, else its name, from the header its `aria-labelledby` names), and after them `<div class="qube-rows-step-nav qube-choice-footer" data-qube-step-nav>`
-  with Back (`data-qube-step-back`, `data-qube-button="secondary"`, classes from
+  wording is the record's detail, else its name, from the header its `aria-labelledby` names), and `<div class="qube-rows-step-nav qube-choice-footer" data-qube-step-nav>` where the form's submit
+  was, holding Back, Next and the form's submit (so the last record's Back and submit share a row):
+  Back (`data-qube-step-back`, `data-qube-button="secondary"`, classes from
   `data-qube-button-secondary-class`; hidden on the first record) and Next (`data-qube-step-next`,
   `data-qube-button="primary"`, classes from `data-qube-button-class`; disabled until every shown
   input of the record is valid, hidden on the last record). The form's submit shows on the last
@@ -976,9 +991,12 @@ en:
 | `errors.disconnect_unreachable` | Couldn't reach QuickBooks' sync service just now. Try disconnecting again in a minute. | a disconnect QuBe Sync didn't answer |
 | `errors.still_syncing` | Something is still syncing with this company file. Let it finish, or answer its question, then disconnect. | a disconnect while work is going |
 | `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
+| `errors.question_moved_on` | This question was answered or changed since the page loaded, so your answer wasn't sent. What happens next shows here once QuickBooks' sync service says. | an answer QuBe Sync says came too late (409, or a 400 such as `not_awaiting_input`) |
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
-| `question.use_for_all` | Use for all %{count} | under a filled field other records ask too |
+| `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |
+| `question.used_for_all` | one: Also filled in on the other record.; other: Also filled in on the other %{count} records. | where that button was, once pressed |
+| `question.choose` | Choose… | a select's first, empty option |
 | `question.step` | %{position} of %{count} | a rows field's step line, one record at a time (`%{name}`, the record's kind or name, may be added) |
 | `question.back`, `question.next` | Back; Next | a rows field's step buttons |
 | `question.or` | or | between picks and a form choice |
@@ -987,6 +1005,7 @@ en:
 | `question.close_search` | Cancel | beside the open search's submit: closes the search, and "or search QuickBooks…" shows again |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
+| `question.search_changed` | This question has changed. Reload the page to see the latest. | the search box's matches, when the search answers 409 |
 
 `QubeRails.t(key, **options)` looks one up as the engine does. A question's own words (its message,
 details, choices and field labels) are QuBe Sync's prompt, in English. The route constants
