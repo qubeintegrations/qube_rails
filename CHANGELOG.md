@@ -74,7 +74,8 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   submit, instead of a step line above the records and a row of its own; the row reads cancel …
   2 of 3, Back, Next (or the submit on the last record).
 - The question card has sections: a hairline under what it's about, another above the way out
-  (the exits' row, or a lone form's button row), and the open search is a tinted panel of its own.
+  (the exits' row, or a lone form's button row), and a third above the open search, which is a
+  section of its own under the offered records.
   A card that is one form is as wide as the form.
 - Beside full-width picks (a near match, a name clash) a form takes the full width too, so its
   submit shares the picks' and exits' right edge; the open search keeps a gap under the picks.
