@@ -35,6 +35,13 @@
     p.input.setCustomValidity(unpicked ? words(box, "pick-a-match", "Pick one of the matches.") : "");
   };
 
+  // A picked match: the box's check, and room for it in the input as an inline style, so a host
+  // class on the input (its own padding) can't put the check over the text.
+  var markPicked = function (box, input, on) {
+    box.toggleAttribute("data-qube-picked", on);
+    if (input) input.style.paddingInlineStart = on ? "34px" : "";
+  };
+
   var searchUrl = function (box, q) {
     var url = box.getAttribute("data-qube-search");
     url += (url.indexOf("?") === -1 ? "?" : "&") +
@@ -121,7 +128,15 @@
       if (match.detail) {
         var detail = document.createElement("span");
         detail.setAttribute("data-qube-search-detail", "");
-        detail.textContent = match.detail;
+        // Its parts (QuBe Sync joins them with " · ") wrap between, not inside, as a pick's do.
+        var bits = String(match.detail).split(" · ");
+        bits.forEach(function (bit, i) {
+          var part = document.createElement("span");
+          part.className = "qube-detail-part";
+          part.textContent = i < bits.length - 1 ? bit + " ·" : bit;
+          detail.appendChild(part);
+          if (i < bits.length - 1) detail.appendChild(document.createTextNode(" "));
+        });
         pick.appendChild(detail);
       }
       p.results.appendChild(pick);
@@ -133,7 +148,7 @@
     var p = parts(box);
     if (!p.input || !p.value || !p.results) return;
     p.value.value = "";
-    box.removeAttribute("data-qube-picked");
+    markPicked(box, p.input, false);
     check(box, p);
     stopTimers(box);
     var n = (asked.get(box) || 0) + 1;
@@ -152,10 +167,17 @@
         if (asked.get(box) === n) note(box, p, words(box, "searching", "Searching…"), "loading");
       }, 150));
       fetch(searchUrl(box, q), { headers: { Accept: "application/json" }, credentials: "same-origin" })
-        .then(function (res) { return res.ok ? res.json() : []; })
+        .then(function (res) {
+          if (res.ok) return res.json();
+          if (res.status === 409) return { changed: true };
+          throw new Error("search " + res.status);
+        })
         .then(function (matches) {
           if (asked.get(box) !== n) return; // a later search, or a close, since
           clearTimeout(slow.get(box));
+          if (matches && matches.changed) {
+            return note(box, p, words(box, "search-changed", "This question has changed. Reload the page to see the latest."), "changed");
+          }
           showMatches(box, p, matches);
         })
         .catch(function () {
@@ -171,7 +193,7 @@
     var p = parts(box);
     p.value.value = button.getAttribute("data-value");
     p.input.value = button.getAttribute("data-label");
-    box.setAttribute("data-qube-picked", "");
+    markPicked(box, p.input, true);
     close(box);
     check(box, p);
     p.value.dispatchEvent(new Event("change", { bubbles: true }));
@@ -308,8 +330,8 @@
     if (hidden) {
       hidden.value = value.value;
       var picked = hidden.closest("[data-qube-search]");
-      if (picked) picked.toggleAttribute("data-qube-picked", !!value.value);
       var text = cell.querySelector("[data-qube-search-input]");
+      if (picked) markPicked(picked, text, !!value.value);
       if (text) {
         text.value = value.label || value.value;
         text.setCustomValidity("");
@@ -391,8 +413,15 @@
     each(document.querySelectorAll('[data-qube-choice-kind="form"]'), gate);
     each(document.querySelectorAll("[data-qube-search-disclosure]"), function (disclosure) {
       disclosure.setAttribute("data-qube-closable", "");
-      each(disclosure.querySelectorAll("[data-qube-search-close]"), function (button) { button.hidden = false; });
+      each(disclosure.querySelectorAll("[data-qube-search-close]"), function (button) { conceal(button, false); });
+      closable(disclosure);
     });
+  };
+
+  // An open search hides "or search QuickBooks…" (its Cancel closes it again).
+  var closable = function (disclosure) {
+    var summary = disclosure.querySelector("summary");
+    if (summary) conceal(summary, disclosure.open);
   };
 
   // ---- Steps: a rows field with more than one row shows one row at a time, in order. The script
@@ -596,7 +625,9 @@
     if (!disclosure) return;
     disclosure.open = false;
     var summary = disclosure.querySelector("summary");
-    if (summary) summary.focus();
+    if (!summary) return;
+    conceal(summary, false); // before "toggle" comes, so it can take the focus
+    summary.focus();
   };
 
   // ---- Listeners
@@ -694,7 +725,9 @@
   // <details>): as it opens, the focus goes to its search box. "toggle" doesn't bubble.
   document.addEventListener("toggle", function (event) {
     var disclosure = event.target;
-    if (!disclosure.matches || !disclosure.matches("[data-qube-search-disclosure]") || !disclosure.open) return;
+    if (!disclosure.matches || !disclosure.matches("[data-qube-search-disclosure]")) return;
+    if (disclosure.hasAttribute("data-qube-closable")) closable(disclosure);
+    if (!disclosure.open) return;
     var input = disclosure.querySelector("[data-qube-search-input], input:not([type=hidden])");
     if (input) input.focus();
   }, true);

@@ -52,3 +52,4 @@ en:
       no_matches: "No matches"
       searching: "Searching…"
       search_failed: "Search isn't available right now. Try again in a moment."
+      search_changed: "This question has changed. Reload the page to see the latest."

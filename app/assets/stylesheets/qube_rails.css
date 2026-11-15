@@ -220,12 +220,6 @@
   display: none;
 }
 
-/* With the script, the open search hides "or search QuickBooks…"; its Cancel closes it again */
-:where(.qube-search-disclosure[data-qube-closable][open] > summary),
-:where([data-qube-search-close][hidden]) {
-  display: none;
-}
-
 :where(.qube-choice-actions) {
   display: flex;
   flex-wrap: wrap;
@@ -327,6 +321,13 @@
   margin: -4px 0 0;
   font-size: 0.9286em;
   color: var(--qube-muted-color);
+}
+
+/* With the script, the open search hides "or search QuickBooks…"; its Cancel closes it again.
+   After the button rules, which set display with the same (zero) specificity. */
+:where(.qube-search-disclosure[data-qube-closable][open] > summary),
+:where([data-qube-search-close][hidden]) {
+  display: none;
 }
 
 /* Under a ghost button (no box), the description starts where the button's text does */
@@ -491,7 +492,6 @@
 }
 
 :where(.qube-search-result [data-qube-search-detail]) {
-  overflow-wrap: anywhere;
   font-size: 0.9286em;
   color: var(--qube-muted-color);
 }

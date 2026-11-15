@@ -94,6 +94,18 @@ RSpec.describe "Styling the screens", type: :request do
     end
   end
 
+  # Every rule has zero specificity, so a later rule wins: the ones that hide the open search's
+  # "or search QuickBooks…" and the no-script Cancel must come after the buttons' display.
+  it "hides the open search's summary and the no-script Cancel after the button rules that show them" do
+    css = File.read(QubeRails::Engine.root.join("app/assets/stylesheets/qube_rails.css")).gsub(%r{/\*.*?\*/}m, "")
+    buttons = css.index(/:where\(\.qube-choice-button, [^{]*\{[^}]*display: inline-flex/)
+    hide = css.index(/\[data-qube-closable\]\[open\] > summary\),\s*:where\(\[data-qube-search-close\]\[hidden\]\)\s*\{\s*display: none/)
+
+    expect(buttons).not_to be_nil
+    expect(hide).not_to be_nil
+    expect(hide).to be > buttons
+  end
+
   it "renders an app's own piece instead of the engine's, from the view-model alone" do
     asking(QubeRails::Storyboard.find("number_boolean").sample["prompt"])
     expect(page.at_css("input.qube-checkbox[name='data[allow_negative]']")).not_to be_nil
