@@ -70,6 +70,15 @@ module QubeRails
       picks.empty? && forms.empty?
     end
 
+    # The one form whose button row also holds the exits (cancel left, the rest beside its
+    # submit): a question with no picks, one form, and exits without descriptions. Else nil, and
+    # the exits have a footer row of their own.
+    def joined_form
+      return nil unless picks.empty? && forms.size == 1 && exits.none?(&:description)
+
+      forms.first
+    end
+
     # Whether QuBe Sync said each choice's role (prompt.choices[].role): then the picks are the
     # records it offers (option rows, no heading).
     def roles?
@@ -115,13 +124,19 @@ module QubeRails
       plain = picks.empty? && all_forms.empty?
       primary = offered.first || (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
       @choices.each do |choice|
-        style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : nil)
+        style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : promoted_style(choice))
                 elsif choice.equal?(primary) then :primary
                 elsif choice.cancel? then :ghost
                 else :secondary
                 end
         choice.arrange(choice.kind, style)
       end
+    end
+
+    # A choice promoted to an option row ends in a secondary "Use this one", as an offered
+    # record's does, not a bare link beside the form's filled button.
+    def promoted_style(choice)
+      Array(@promoted).include?(choice) ? :secondary : nil
     end
 
     def button_style(choice, primary)
@@ -134,7 +149,7 @@ module QubeRails
       promote_rows
       primary = plain? ? @choices.find { |c| !c.cancel? } : forms.first
       @choices.each do |choice|
-        style = if choice.kind == :pick then nil
+        style = if choice.kind == :pick then promoted_style(choice)
                 elsif choice.equal?(primary) then :primary
                 elsif choice.cancel? then :ghost
                 else :secondary
@@ -150,7 +165,10 @@ module QubeRails
       return unless (first_form = @choices.index { |c| c.kind == :form })
 
       @choices.first(first_form).each do |c|
-        c.arrange(:pick, nil) unless c.cancel? || %w[decline cancel].include?(c.role)
+        next if c.cancel? || %w[decline cancel].include?(c.role)
+
+        c.arrange(:pick, nil)
+        (@promoted ||= []) << c
       end
     end
   end
@@ -184,6 +202,7 @@ module QubeRails
       @description = presence(choice["description"])
       @index = index
       @action_url = question.action_url
+      @token = question.token
       @refused = question.refused_choice == @id
       @fields = Array(choice["fields"]).select { |f| f.is_a?(Hash) }.map do |field|
         FieldView.from_prompt(field, question, index, refused: @refused)
@@ -207,7 +226,7 @@ module QubeRails
     def button_piece
       case style
       when :primary then :button
-      when :ghost then QubeRails.config.ui_classes.key?(:button_ghost) ? :button_ghost : :button_secondary
+      when :ghost then :button_ghost # no host class unless ui_classes has one: the engine's ghost look
       else :button_secondary
       end
     end
@@ -218,6 +237,16 @@ module QubeRails
     end
 
     alias secondary? cancel?
+
+    # Its form's id: an exit's button in another form's row names it (the form attribute).
+    def form_id
+      "qube-#{@token}-choice-#{index}"
+    end
+
+    # Whether one of its fields is a rows field (which needs the behaviour script).
+    def rows?
+      fields.any? { |f| f.type == "rows" }
+    end
 
     # Whether QuBe Sync just refused this choice's answer (a 422): its fields are marked invalid.
     def refused?
@@ -279,7 +308,7 @@ module QubeRails
     # their label.
     def initialize(name:, type:, label:, input_name: nil, dom_id: nil, required: false, options: [], kind: nil,
                    search_url: nil, search_field: nil, row_key: nil, when_values: nil, rows: nil,
-                   context: :choice, disabled: false, value: nil, error_id: nil)
+                   context: :choice, disabled: false, value: nil, error_id: nil, optional: nil)
       raise ArgumentError, "QuBe Sync: no field type #{type.inspect}" unless TYPES.include?(type)
 
       @name = name
@@ -299,6 +328,13 @@ module QubeRails
       @disabled = disabled
       @value = value
       @error_id = error_id
+      @optional = optional.nil? ? !required : optional
+    end
+
+    # Whether it may be left empty: its label says "(optional)". A rows cell's column decides it,
+    # though a hidden cell isn't required in the markup yet.
+    def optional?
+      @optional && !%w[boolean rows].include?(type)
     end
 
     # Whether it's in a refused answer: aria-invalid, described by the refusal.

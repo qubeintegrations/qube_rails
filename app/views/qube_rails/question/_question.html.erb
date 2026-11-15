@@ -1,7 +1,10 @@
 <%# A question (a QubeRails::QuestionView): a refusal, its message, what it's about, then its
     choices by kind: the picks (option rows), each form choice ("or" between), and the exits in a
-    footer. A question with neither picks nor forms shows its choices in one row. %>
-<section class="<%= qube_classes(:question, "qube-question") %>" data-qube-question="<%= question.token %>">
+    footer. With one form and no picks, the exits share that form's button row instead (question.
+    joined_form). A question with neither picks nor forms shows its choices in one row.
+    data-qube-button-*-class are the script's, for swapping a button's weight after a search pick. %>
+<section class="<%= qube_classes(:question, "qube-question") %>" data-qube-question="<%= question.token %>"
+         data-qube-button-class="<%= qube_classes(:button) %>" data-qube-button-secondary-class="<%= qube_classes(:button_secondary) %>">
   <%= render "qube_rails/error", message: question.error, id: question.error_id %>
   <%= render "qube_rails/question/message", question: question %>
 <% if question.details.any? %>
@@ -11,13 +14,19 @@
 <% if question.picks.any? %>
     <%= render "qube_rails/question/picks", question: question %>
 <% end %>
+<% joined = question.joined_form %>
 <% question.forms.each_with_index do |choice, n| %>
 <%   if n.positive? || question.picks.any? %>
     <div class="<%= qube_classes(:choice_divider, "qube-choice-divider") %>" role="separator"><span><%= QubeRails.t("question.or") %></span></div>
 <%   end %>
-    <%= render "qube_rails/question/choice", question: question, choice: choice %>
+    <%= render "qube_rails/question/choice", question: question, choice: choice,
+                                             exits: (choice.equal?(joined) ? question.exits : []) %>
 <% end %>
-<% if question.exits.any? %>
+<% if joined %>
+<%   question.exits.each do |choice| %>
+    <%= render "qube_rails/question/choice", question: question, choice: choice, detached: true %>
+<%   end %>
+<% elsif question.exits.any? %>
     <%= render "qube_rails/question/footer", question: question %>
 <% end %>
   </div>

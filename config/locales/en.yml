@@ -43,8 +43,10 @@ en:
       set_all: "Set all to:"
       use_pick: "Use this one"
       search_quickbooks: "or search QuickBooks…"
-      close_search: "Cancel"
+      close_search: "Close search"
       choose: "Choose…"
+      optional: "(optional)"
+      needs_script: "Answering this needs JavaScript. Turn it on for this page, or answer from a browser that has it."
       use_for_all:
         one: "Use for the other record too"
         other: "Use for the other %{count} records too"

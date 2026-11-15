@@ -1,12 +1,13 @@
-<%# The wrapper every field piece renders its control (control, HTML) in: a choice's field gets
-    its label; inside a rows table, the control stands alone. %>
+<%# The wrapper every field piece renders its control (control, HTML) in, with its label; a field
+    that isn't required says "(optional)" (question.optional) after it (not a checkbox). %>
 <% if field.labelled? %>
 <div class="<%= qube_classes(:field, "qube-field", "qube-field-#{field.type}") %>">
 <%   if field.type == "boolean" %>
   <%= control %>
   <%= label_tag field.dom_id, field.label, class: qube_classes(:label, "qube-label") %>
 <%   else %>
-  <%= label_tag field.dom_id, field.label, class: qube_classes(:label, "qube-label") %>
+<%   optional = field.optional? ? tag.span(QubeRails.t("question.optional"), class: "qube-optional") : nil %>
+  <%= label_tag field.dom_id, safe_join([field.label, optional].compact, " "), class: qube_classes(:label, "qube-label") %>
   <%= control %>
 <%   end %>
 </div>

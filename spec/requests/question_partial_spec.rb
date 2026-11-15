@@ -28,7 +28,7 @@ RSpec.describe "The question partial", type: :request do
     expect(shown.at_css(".qube-question-details")).to be_nil # nothing beside what the message says
     forms = shown.css("form.qube-choice")
     expect(forms.map { |f| f["action"] }.uniq).to eq([action])
-    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use none cancel])
+    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use cancel none])
     expect(forms.first.at_css("button.qube-pick").text).to include("Riverbend Electric", "similar name")
 
     search = shown.at_css(".qube-search")
@@ -60,6 +60,63 @@ RSpec.describe "The question partial", type: :request do
     asking(QubeRails::Run.last, prompt)
     expect(page.at_css("[data-qube-search]")["data-qube-text-search-changed"])
       .to eq("This question has changed. Reload the page to see the latest.")
+  end
+
+  it "puts a lone form's submit and the exits in one row: cancel at the start, the rest at the end" do
+    asking(make_run(invoice, connection), QubeRails::Storyboard.find("refusal").sample["prompt"]
+             .then { |p| p.merge("choices" => p["choices"] + [{ "id" => "skip", "label" => "Skip it", "fields" => [], "role" => "decline" }]) })
+    shown = page
+    form = shown.at_css("form[data-qube-choice=rename]")
+    row = form.at_css(".qube-choice-actions")
+
+    cancel = row.at_css(".qube-choice-actions-start > button[data-qube-exit=cancel]")
+    expect(cancel["form"]).to eq(shown.at_css("form[data-qube-choice=cancel]")["id"])
+    expect(cancel["data-qube-button"]).to eq("ghost")
+    expect(row.css(".qube-choice-actions-end > button").map { |b| [b["data-qube-exit"], b["form"], b.text.strip] })
+      .to eq([["skip", shown.at_css("form[data-qube-choice=skip]")["id"], "Skip it"], [nil, nil, "Add it under another name"]])
+    # The exits' own forms are there, empty and hidden, for those buttons to submit; no footer
+    expect(shown.css("form[data-qube-choice=cancel][hidden], form[data-qube-choice=skip][hidden]").size).to eq(2)
+    expect(shown.at_css("form[data-qube-choice=cancel] button")).to be_nil
+    expect(shown.at_css(".qube-choice-footer")).to be_nil
+  end
+
+  it "keeps the exits in their own row when there are picks, or an exit has a description" do
+    asking(make_run(invoice, connection), prompt)
+    shown = page
+    expect(shown.at_css(".qube-choice-footer-start form[data-qube-choice=cancel] button")).not_to be_nil
+    expect(shown.at_css(".qube-choice-footer-end form[data-qube-choice=none] button")).not_to be_nil
+    expect(shown.at_css("[data-qube-exit]")).to be_nil
+
+    asking(QubeRails::Run.last, QubeRails::Storyboard.find("name_clash").sample["prompt"]
+             .then { |p| p.merge("choices" => [p["choices"][1], p["choices"][2].merge("description" => "Stop here.")]) })
+    expect(page.at_css(".qube-choice-footer-start form[data-qube-choice=cancel] .qube-choice-description").text).to eq("Stop here.")
+  end
+
+  it "says \"(optional)\" after the label of a field that isn't required" do
+    asking(make_run(invoice, connection), QubeRails::Storyboard.find("number_boolean").sample["prompt"]
+             .then { |p| p.merge("choices" => [p["choices"][0].merge("fields" => [
+               { "name" => "name", "type" => "string", "label" => "Name", "required" => true },
+               { "name" => "note", "type" => "string", "label" => "Note" },
+               { "name" => "flag", "type" => "boolean", "label" => "Taxable" }
+             ])] + p["choices"][1..]) })
+    shown = page
+    labels = shown.css("form[data-qube-choice=adjust] label.qube-label").to_h { |l| [l["for"].split("-").last, l.at_css(".qube-optional")&.text] }
+
+    expect(labels).to eq("name" => nil, "note" => "(optional)", "flag" => nil)
+  end
+
+  it "hides a rows field and its submit until the script shows them, and says why without it" do
+    asking(make_run(invoice, connection), QubeRails::Storyboard.find("rows").sample["prompt"])
+    shown = page
+    form = shown.at_css("form[data-qube-choice=proceed]")
+
+    expect(form.at_css("[data-qube-rows][data-qube-needs-script][hidden]")).not_to be_nil
+    expect(form.at_css("button[type=submit]:not([form])")["hidden"]).not_to be_nil
+    expect(form.at_css("button[type=submit]:not([form])")["data-qube-needs-script"]).not_to be_nil
+    expect(form.at_css("noscript").text).to include("needs JavaScript")
+    expect(form.at_css("button[data-qube-exit=cancel]")["hidden"]).to be_nil # cancel works without it
+    # No rows field's step label "(optional)": each column says it for itself
+    expect(form.css(".qube-optional")).to be_empty
   end
 
   it "shows nothing for a record with no runs" do

@@ -1,7 +1,15 @@
-<%# The exits (question.exits: decline, cancel and the like, cancel last) in a row; in a plain
-    question (no picks, no forms) every choice, the first primary. %>
+<%# The exits (question.exits) in one row: cancel on the left, the rest (decline and the like)
+    on the right. In a plain question (no picks, no forms) every choice, the first primary. With
+    descriptions they stack, cancel last. %>
 <div class="<%= qube_classes(:choice_footer, "qube-choice-footer") %>"<%= " data-qube-plain" if question.plain? %>>
-<% question.exits.each do |choice| %>
-  <%= render "qube_rails/question/choice", question: question, choice: choice %>
+  <div class="qube-choice-footer-start">
+<% question.exits.select(&:cancel?).each do |choice| %>
+    <%= render "qube_rails/question/choice", question: question, choice: choice %>
 <% end %>
+  </div>
+  <div class="qube-choice-footer-end">
+<% question.exits.reject(&:cancel?).each do |choice| %>
+    <%= render "qube_rails/question/choice", question: question, choice: choice %>
+<% end %>
+  </div>
 </div>

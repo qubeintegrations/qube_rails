@@ -95,7 +95,8 @@ RSpec.describe "A question's choices by kind" do
   end
 
   it "shows a plain choice before the first form as a pick when there are none (a name clash)" do
-    expect(arranged(question("name_clash"))).to eq([["use_existing", :pick, nil], ["rename", :form, :primary],
+    # Its "Use this one" is a secondary button, as an offered record's, not a bare link
+    expect(arranged(question("name_clash"))).to eq([["use_existing", :pick, :secondary], ["rename", :form, :primary],
                                                     ["cancel", :exit, :ghost]])
   end
 

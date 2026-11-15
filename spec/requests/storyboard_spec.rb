@@ -73,18 +73,20 @@ RSpec.describe "The storyboard", type: :request do
     panel = ->(key) { shown.at_css("[data-qube-storyboard='#{key}']") }
     kinds = ->(key) { panel.call(key).css("form[data-qube-choice]").map { |f| [f["data-qube-choice"], f["data-qube-choice-kind"]] } }
 
-    expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[none exit], %w[cancel exit]])
+    expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[cancel exit], %w[none exit]])
     near = panel.call("near_match")
     expect(near.at_css(".qube-picks[role=group] > .qube-picks[role=list]").text).to include("Riverbend Electric")
     disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
     expect(disclosure.at_css("summary").text).to eq("or search QuickBooks…")
     expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
-    close = disclosure.at_css("form[data-qube-choice=use] .qube-choice-actions > button[type=button][data-qube-search-close][hidden]")
-    expect(close.text).to eq("Cancel") # shown by the script, which hides the summary while it's open
+    close = disclosure.at_css("form[data-qube-choice=use] .qube-choice-actions-start > button[type=button][data-qube-search-close][hidden]")
+    expect(close.text).to eq("Close search") # shown by the script, which hides the summary while it's open
     expect(near.at_css(".qube-choice-divider")).to be_nil
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
     expect(near.at_css("form[data-qube-choice=use] button[data-qube-button=secondary]")).not_to be_nil
-    expect(near.css(".qube-choice-footer > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline cancel])
+    # The footer: cancel at the start, decline at the end
+    expect(near.css(".qube-choice-footer-start > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[cancel])
+    expect(near.css(".qube-choice-footer-end > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline])
     expect(near.at_css("form[data-qube-choice=cancel] [data-qube-button=ghost]").text).to include("Cancel adding the invoice")
     expect(panel.call("choose").css("[data-qube-button=primary]").map(&:text)).to eq(["Use this one"])
     QubeRails::Storyboard::QUESTIONS.each do |key|

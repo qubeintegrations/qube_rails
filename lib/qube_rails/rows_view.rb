@@ -38,7 +38,7 @@ module QubeRails
                     required: column["required"] == true && shown, options: FieldView.options_of(column),
                     kind: column["kind"], search_url: search_url, search_field: "#{name}.#{col}",
                     row_key: row_key, when_values: when_of(column), context: :cell, disabled: !shown,
-                    value: value)
+                    value: value, optional: column["required"] != true)
     end
 
     def when_of(column)

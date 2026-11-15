@@ -16,7 +16,7 @@
 <% end %>
     </span>
 <% if choice.style %>
-    <span class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>"><%= QubeRails.t("question.use_pick") %></span>
+    <span class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>"><%= QubeRails.t("question.use_pick") %></span>
 <% else %>
     <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= QubeRails.t("question.use_pick") %></span>
 <% end %>

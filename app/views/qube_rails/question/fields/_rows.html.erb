@@ -3,10 +3,12 @@
     all to:" sets the segmented column on every row, and "Use for the other records too" copies one
     row's value to the others' empty field and says so (the behaviour script). With the script, more than one row shows one at a time:
     the data-qube-text-step/-back/-next words and the button classes are for its step line and
-    Back / Next. %>
+    Back / Next. It needs the script: hidden until the script shows it, with a <noscript> line
+    saying so. %>
 <% rows = field.rows %>
 <% set_all = rows.set_all %>
-<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
+<noscript><p class="<%= qube_classes(:error, "qube-error") %>"><%= QubeRails.t("question.needs_script") %></p></noscript>
+<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows data-qube-needs-script hidden
      data-qube-text-use-for-all-one="<%= QubeRails.t("question.use_for_all", count: 1) %>"
      data-qube-text-use-for-all-other="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>"
      data-qube-text-used-for-all-one="<%= QubeRails.t("question.used_for_all", count: 1) %>"

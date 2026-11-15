@@ -37,6 +37,11 @@
 
 /* ---- The question card: the message first, then what it's about, then the choices */
 
+/* Under the record's status, not touching it */
+:where(.qube-run-status ~ .qube-question) {
+  margin-top: var(--qube-gap-size, 16px);
+}
+
 :where(.qube-question) {
   display: grid;
   gap: var(--qube-gap-size);
@@ -86,6 +91,7 @@
   display: grid;
   gap: 16px;
   padding-top: var(--qube-gap-size);
+  container: qube-choices / inline-size;
 }
 
 :where(.qube-choice) {
@@ -184,25 +190,87 @@
   flex: 1;
 }
 
-/* A form choice: its field's label leads, its submit under it */
+/* A form choice: its fields, then its button row, in one column (a rows field takes the width) */
+:where(.qube-choice-form) {
+  max-width: var(--qube-form-width, 36rem);
+}
+
+:where(.qube-choice-form:has(.qube-rows-field)) {
+  max-width: none;
+}
+
 :where(.qube-choice-form .qube-label) {
   font-size: 1em;
 }
 
-/* The exits: one row, set apart by space, not a rule */
-:where(.qube-choice-footer) {
+:where(.qube-choice-form) :where(.qube-input, .qube-select, .qube-search-input, .qube-search) {
+  max-width: none;
+}
+
+/* "(optional)" after a label */
+:where(.qube-optional) {
+  font-weight: 400;
+  color: var(--qube-muted-color);
+}
+
+/* A button row: cancel at the start, the rest (step count, Back, Next or the submit) at the end,
+   which is the right edge of the fields above. The exits' own row (the footer) is laid out the same. */
+:where(.qube-choice-actions, .qube-choice-footer) {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+:where(.qube-choice-actions-start, .qube-choice-actions-end, .qube-choice-footer-start, .qube-choice-footer-end) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+:where(.qube-choice-actions-end, .qube-choice-footer-end) {
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
+
+:where(.qube-choice-actions-start:empty, .qube-choice-footer-start:empty, .qube-choice-footer-end:empty) {
+  display: none;
+}
+
+/* A ghost (cancel) at the start of a row: its text lines up with the fields' left edge */
+:where(.qube-choice-actions-start, .qube-choice-footer-start) :where([data-qube-button="ghost"]) {
+  margin-inline-start: -14px;
 }
 
 :where(.qube-picks, .qube-choice-form) + :where(.qube-choice-footer) {
   padding-top: 16px;
 }
 
-:where(.qube-choice-footer .qube-choice:has(.qube-choice-description)) {
-  flex-basis: 100%;
+/* Exits with descriptions stack, each with its own, cancel last (still at the start) */
+:where(.qube-choice-footer:has(.qube-choice-description)) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+
+:where(.qube-choice-footer:has(.qube-choice-description)) :where(.qube-choice-footer-start, .qube-choice-footer-end) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  margin-inline-start: 0;
+}
+
+:where(.qube-choice-footer:has(.qube-choice-description) .qube-choice-footer-start) {
+  order: 1;
+}
+
+/* Where a rows field is in its steps: "2 of 3", before Back */
+:where(.qube-rows-step) {
+  margin-inline-end: 4px;
+  font-size: 0.9286em;
+  font-variant-numeric: tabular-nums;
+  color: var(--qube-muted-color);
 }
 
 /* "or search QuickBooks…" under the possible matches: a quiet link that opens the search in place */
@@ -220,13 +288,6 @@
   display: none;
 }
 
-:where(.qube-choice-actions) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
 /* The search drops in where "or search QuickBooks…" was, as it opens; closing is instant */
 :where(.qube-search-disclosure[open] > .qube-choice) {
   animation: qube-search-open 200ms var(--qube-ease-out);
@@ -237,11 +298,6 @@
     opacity: 0;
     transform: translateY(-4px);
   }
-}
-
-/* Cancel (role cancel): last, at the far end of the row */
-:where(.qube-choice-footer > [data-qube-choice-role="cancel"]) {
-  margin-inline-start: auto;
 }
 
 :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy) {
@@ -324,16 +380,21 @@
   color: var(--qube-muted-color);
 }
 
-/* With the script, the open search hides "or search QuickBooks…"; its Cancel closes it again.
+/* With the script, the open search hides "or search QuickBooks…"; "Close search" closes it again.
    After the button rules, which set display with the same (zero) specificity. */
 :where(.qube-search-disclosure[data-qube-closable][open] > summary),
 :where([data-qube-search-close][hidden]) {
   display: none;
 }
 
-/* Under a ghost button (no box), the description starts where the button's text does */
+/* Under a ghost button (no box), the description starts where the button's text does; at the
+   start of a row the ghost's text is already at the edge */
 :where([data-qube-button="ghost"] ~ .qube-choice-description) {
   padding-inline-start: 14px;
+}
+
+:where(.qube-choice-actions-start, .qube-choice-footer-start) :where([data-qube-button="ghost"] ~ .qube-choice-description) {
+  padding-inline-start: 0;
 }
 
 /* ---- Focus: always visible from the keyboard, never removed */
@@ -859,14 +920,6 @@
 /* ---- Narrow screens: choices stack, full width */
 
 @media (max-width: 30rem) {
-  :where(.qube-choice-footer > .qube-choice) {
-    flex-basis: 100%;
-  }
-
-  :where(.qube-choice-button) {
-    justify-self: stretch;
-  }
-
   /* An offered record: its "Use this one" under its text, so the text has the whole width */
   :where(.qube-pick) {
     flex-wrap: wrap;
@@ -876,6 +929,33 @@
   :where(.qube-pick-action.qube-choice-button) {
     flex-grow: 1;
     justify-content: center;
+  }
+}
+
+/* A narrow question: a button row's end (step count, Back, the primary) on top, wrapping only if
+   it must, and cancel under it; stacked exits fill the width */
+@container qube-choices (max-width: 30rem) {
+  :where(.qube-choice-actions, .qube-choice-footer) {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  :where(.qube-choice-actions-end, .qube-choice-footer-end) {
+    margin-inline-start: 0;
+  }
+
+  :where(.qube-choice-actions-start, .qube-choice-footer-start) {
+    justify-content: flex-start;
+  }
+
+  :where(.qube-choice-footer-end) :where(.qube-choice, .qube-choice-button),
+  :where(.qube-choice-actions-end > .qube-choice-button) {
+    flex-grow: 1;
+    justify-content: center;
+  }
+
+  :where(.qube-choice-footer:has(.qube-choice-description)) :where(.qube-choice-button) {
+    justify-self: stretch;
   }
 }
 
@@ -1231,4 +1311,10 @@
   min-height: 28px;
   padding: 0 10px;
   font-size: 0.9231em;
+}
+
+/* What needs the script (a rows field and its submit) stays hidden without it. Last, so no
+   rule above that sets display wins the zero-specificity tie. */
+:where([data-qube-needs-script][hidden]) {
+  display: none;
 }

@@ -33,10 +33,12 @@ RSpec.describe "Styling the screens", type: :request do
     expect(shown.css(".btn-primary").size).to eq(1)
     expect(shown.at_css("form[data-qube-choice='use:1'] .qube-pick-action")["class"])
       .to eq("qube-pick-action qube-choice-button btn btn-primary")
-    expect(shown.at_css("form[data-qube-choice=use] button")["class"]).to eq("qube-choice-button btn btn-link")
+    expect(shown.at_css("form[data-qube-choice=use] button[type=submit]")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("form[data-qube-choice='use:1'] button")["class"]).to eq("qube-pick")
     expect(shown.at_css("form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn btn-link")
-    expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button btn btn-link")
+    # Cancel is a ghost: with no button_ghost piece it takes no host class (the engine's look)
+    expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button")
+    expect(shown.at_css(".qube-search-disclosure > summary")["class"]).to eq("qube-choice-button")
     expect(shown.at_css("input.qube-search-input.form-control")).not_to be_nil
     expect(shown.at_css("label.qube-label.form-label")).not_to be_nil
     expect(shown.at_css("[data-qube-search]")["data-qube-result-class"]).to eq("qube-search-result list-group-item")
@@ -104,6 +106,8 @@ RSpec.describe "Styling the screens", type: :request do
     expect(buttons).not_to be_nil
     expect(hide).not_to be_nil
     expect(hide).to be > buttons
+    # What needs the script is hidden by the layer's last rule
+    expect(css.rstrip).to end_with(":where([data-qube-needs-script][hidden]) {\n  display: none;\n}")
   end
 
   it "renders an app's own piece instead of the engine's, from the view-model alone" do
