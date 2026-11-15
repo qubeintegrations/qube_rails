@@ -63,9 +63,15 @@ QubeRails.configure do |config|
   # config.dedupe = QubeRails::CacheDedupe.new(Rails.cache, expires_in: 1.day)
 
   # Your CSS framework's classes for the engine's screens, by piece, added beside their qube-
-  # classes (pieces: QubeRails::Configuration::UI_PIECES; see the README's "Styling"):
-  # config.ui_classes = { button: "btn btn-primary", button_secondary: "btn btn-link",
-  #                       input: "form-control", select: "form-select", label: "form-label" }
+  # classes (pieces: QubeRails::Configuration::UI_PIECES; see the README's "Styling"). Tailwind:
+  # config.ui_classes = {
+  #   button: "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500",
+  #   button_secondary: "rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50",
+  #   input: "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none",
+  #   select: "rounded-md border border-gray-300 px-3 py-2 text-sm",
+  #   label: "text-sm font-medium text-gray-900",
+  #   error: "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+  # }
 
   # GET /qube/storyboard: every screen with sample data, in your layout. On in development.
   # config.storyboard = Rails.env.development?

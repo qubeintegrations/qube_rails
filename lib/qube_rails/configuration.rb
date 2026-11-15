@@ -44,7 +44,8 @@ module QubeRails
 
     # Your CSS framework's classes for the engine's screens, by piece, added beside each element's
     # qube- classes (a String, or an Array of them):
-    #   config.ui_classes = { button: "btn btn-primary", input: "form-control", select: "form-select" }
+    #   config.ui_classes = { button: "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white",
+    #                         input: "rounded-md border border-gray-300 px-3 py-2 text-sm" }
     # A piece not in UI_PIECES raises, naming them.
     def ui_classes=(map)
       raise ArgumentError, "ui_classes is a Hash of piece => CSS classes, in #{FILE}" unless map.respond_to?(:each_pair)

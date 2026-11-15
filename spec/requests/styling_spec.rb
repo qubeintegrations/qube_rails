@@ -70,6 +70,9 @@ RSpec.describe "Styling the screens", type: :request do
     expect(shown.css("script:not([src])")).to be_empty
     expect(shown.at_css("script[src*='qube_rails/question']")["defer"]).not_to be_nil
     expect(shown.at_css("link[rel=stylesheet][href*='qube_rails']")).not_to be_nil
+    # Under Turbo Drive a changed asset reloads the page rather than keeping the old script
+    expect(shown.at_css("script[src*='qube_rails/question']")["data-turbo-track"]).to eq("reload")
+    expect(shown.at_css("link[rel=stylesheet][href*='qube_rails']")["data-turbo-track"]).to eq("reload")
   end
 
   it "serves the script and the stylesheet through the app's asset pipeline" do
@@ -107,7 +110,19 @@ RSpec.describe "Styling the screens", type: :request do
     expect(hide).not_to be_nil
     expect(hide).to be > buttons
     # What needs the script is hidden by the layer's last rule
-    expect(css.rstrip).to end_with(":where([data-qube-needs-script][hidden]) {\n  display: none;\n}")
+    expect(css.rstrip.delete_suffix("}").rstrip).to end_with(":where([data-qube-needs-script][hidden]) {\n    display: none;\n  }")
+  end
+
+  # Tailwind v4 puts preflight in @layer base and utilities in @layer utilities. Unlayered, the
+  # engine's rules beat every utility class; in "components", declared in Tailwind's order before
+  # anything else, they beat preflight and lose to utilities and to any unlayered app CSS.
+  it "puts every rule in the components layer, after declaring Tailwind's layer order" do
+    css = File.read(QubeRails::Engine.root.join("app/assets/stylesheets/qube_rails.css")).gsub(%r{/\*.*?\*/}m, "").strip
+
+    expect(css).to start_with("@layer theme, base, components, utilities;\n\n@layer components {\n")
+    expect(css).to end_with("}")
+    body = css.delete_prefix("@layer theme, base, components, utilities;").strip.delete_prefix("@layer components {")
+    expect(body.scan(/^\S/)).to eq(["}"]) # nothing outside the layer block
   end
 
   it "renders an app's own piece instead of the engine's, from the view-model alone" do
