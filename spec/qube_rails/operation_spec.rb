@@ -437,7 +437,7 @@ RSpec.describe QubeRails::Operation do
   describe "#link_references" do
     let(:customer) { Customer.create!(account: account, name: "Riverbend Electric") }
     let(:widget) { Customer.create!(account: account, name: "Widget (an item, here)") }
-    let(:links) do
+    let(:refs) do
       {
         "customer_ref" => { "list_id" => "80000001-1", "type" => "customer" },
         "invoice_line_add.0.item_ref" => { "list_id" => "80000002-1", "type" => "item_service" },
@@ -454,10 +454,10 @@ RSpec.describe QubeRails::Operation do
                                                                           "data" => { "records" => records }))
     end
 
-    it "links each of an ending's links to the app record the block returns, by its type" do
+    it "links each of an ending's refs to the app record the block returns, by its type" do
       operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
       seen = []
-      linked = operation.link_references(event_with("workflow_run.completed", "links" => links)) do |path, entry|
+      linked = operation.link_references(event_with("workflow_run.completed", "refs" => refs)) do |path, entry|
         seen << [path, entry["type"]]
         { "customer_ref" => customer, "invoice_line_add.0.item_ref" => widget, "class_ref" => invoice }[path]
       end
@@ -492,15 +492,15 @@ RSpec.describe QubeRails::Operation do
       expect(connection.quickbooks_record("80000001-1", kind: "customer"))
         .to have_attributes(record: customer, edit_sequence: "17", name: "Riverbend Electric")
 
-      # The ending's links, after: the name and edit sequence the notification stored stay.
-      operation.link_references(event_with("workflow_run.completed", "links" => links.slice("customer_ref"))) { customer }
+      # The ending's refs, after: the name and edit sequence the notification stored stay.
+      operation.link_references(event_with("workflow_run.completed", "refs" => refs.slice("customer_ref"))) { customer }
       expect(connection.quickbooks_record("80000001-1", kind: "customer"))
         .to have_attributes(edit_sequence: "17", name: "Riverbend Electric")
     end
 
     it "skips what the block returns nil for, and works on a cancelled ending" do
       operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
-      cancelled = event_with("workflow_run.cancelled", "links" => links.slice("customer_ref"))
+      cancelled = event_with("workflow_run.cancelled", "refs" => refs.slice("customer_ref"))
 
       expect(operation.link_references(cancelled) { |_path, _entry| customer }.size).to eq(1)
       expect(operation.link_references(cancelled) { |_path, _entry| nil }).to eq([])

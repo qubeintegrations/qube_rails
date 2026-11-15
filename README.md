@@ -331,7 +331,7 @@ module QuickbooksDesktop
     # How the run ended: event.outcome says which, and event.output has that outcome's own keys
     # (add_transaction's added: record and links). Keep the QuickBooks ids on the connection.
     def ended(event)
-      # Every record the add named, by the input's path (output.links), linked so the next run
+      # Every record the add named, by the input's path (output.refs), linked so the next run
       # refers to it by id. A cancelled ending carries the ones settled before it stopped.
       link_references(event) { |path, entry| linked_record(path, entry) }
       return unless event.outcome == "added"

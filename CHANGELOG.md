@@ -83,7 +83,7 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - `link_references` takes add_transaction's new shapes (QuBe Sync's docs/workflow-record-events.md): a
   `records` notification (`data.records`, each with `paths`, `action`, `kind`, `sent` and `record`,
   linked as each pass settles them, with the record's name and edit sequence) or an ending's
-  `output.links` (`{path => {list_id, type}}`). The block still gets the path and an entry
+  `output.refs` (`{path => {list_id, type}}`). The block still gets the path and an entry
   (`list_id`, `type`, and from a notification `kind`, `action`, `full_name`, `edit_sequence`, `sent`).
   `output.references` is no longer read: QuBe Sync doesn't send it.
 - A search box focused empty (or cleared) lists the first active records of its list (QuBe Sync's

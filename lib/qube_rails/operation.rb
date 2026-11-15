@@ -360,7 +360,7 @@ module QubeRails
     # QuBe Sync):
     #   - a "records" notification, sent as each pass settles them: event.data["records"], each
     #     with paths, action (picked, created, ...), kind, sent and record;
-    #   - an ending: event.output["links"], { path => { list_id, type } } for every reference.
+    #   - an ending: event.output["refs"], { path => { list_id, type } } for every reference.
     # The block gets the input's path ("customer_ref", "invoice_line_add.0.item_ref") and the
     # entry (list_id, type, and from a notification also kind, action, full_name, edit_sequence,
     # sent), and returns your record, or nil to skip it. Returns the rows linked.
@@ -384,10 +384,10 @@ module QubeRails
       return linkable_records(records) if records.is_a?(Array)
 
       output = event["output"]
-      links = output.is_a?(Hash) ? output["links"] : nil
-      return [] unless links.is_a?(Hash)
+      refs = output.is_a?(Hash) ? output["refs"] : nil
+      return [] unless refs.is_a?(Hash)
 
-      links.filter_map do |path, entry|
+      refs.filter_map do |path, entry|
         next unless entry.is_a?(Hash) && !entry["list_id"].to_s.empty?
 
         [path, { "list_id" => entry["list_id"], "type" => entry["type"] }]
