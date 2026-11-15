@@ -13,7 +13,10 @@
 <%= turbo_stream_from(record, :qube_rails) if respond_to?(:turbo_stream_from) %>
 <% error = flash[:qube_rails_error] %>
 <% flash.delete(:qube_rails_error) # shown once, by whichever partial comes first %>
-<% question = QubeRails::QuestionView.from_run(run, qube_rails, error: error) %>
+<%# A refused answer (422): shown in its question, with what was typed. %>
+<% refusal = flash[:qube_rails_refusal] %>
+<% flash.delete(:qube_rails_refusal) %>
+<% question = QubeRails::QuestionView.from_run(run, qube_rails, error: error, refusal: refusal) %>
 <% if question %>
 <%= render "qube_rails/question/question", question: question %>
 <% else %>

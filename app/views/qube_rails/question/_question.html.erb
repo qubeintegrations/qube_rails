@@ -2,7 +2,7 @@
     choices by kind: the picks (option rows), each form choice ("or" between), and the exits in a
     footer. A question with neither picks nor forms shows its choices in one row. %>
 <section class="<%= qube_classes(:question, "qube-question") %>" data-qube-question="<%= question.token %>">
-  <%= render "qube_rails/error", message: question.error %>
+  <%= render "qube_rails/error", message: question.error, id: question.error_id %>
   <%= render "qube_rails/question/message", question: question %>
 <% if question.details.any? %>
   <%= render "qube_rails/question/details", question: question %>

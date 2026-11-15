@@ -6,22 +6,29 @@ module QubeRails
   # The open question of a run, as the question partials render it: the override contract, kept
   # stable across versions (README, "Styling"). Built from the prompt QuBe Sync sent.
   class QuestionView
-    attr_reader :prompt, :message, :details, :choices, :token, :action_url, :search_url, :error
+    attr_reader :prompt, :message, :details, :choices, :token, :action_url, :search_url, :error,
+                :refused_choice, :refused_values
 
     # The question run is asking, or nil when it isn't asking. urls answers question_path(run):
-    # the engine's route proxy (qube_rails) in a view.
-    def self.from_run(run, urls, error: nil)
+    # the engine's route proxy (qube_rails) in a view. refusal is flash[:qube_rails_refusal] (a
+    # 422 for one of its choices: token, choice, message, values), used when it's this question's.
+    def self.from_run(run, urls, error: nil, refusal: nil)
       prompt = run && run.open_question
       return nil unless prompt
 
       action = urls.question_path(run)
-      new(prompt, action_url: action, search_url: "#{action}/search", error: error)
+      new(prompt, action_url: action, search_url: "#{action}/search", error: error, refusal: refusal)
     end
 
-    def initialize(prompt, action_url:, search_url:, error: nil)
+    def initialize(prompt, action_url:, search_url:, error: nil, refusal: nil)
       @prompt = prompt
       @message = prompt["message"].to_s
       @token = prompt["token"].to_s
+      if refusal.is_a?(Hash) && refusal["token"].to_s == @token
+        error ||= refusal["message"]
+        @refused_choice = refusal["choice"].to_s
+        @refused_values = refusal["values"].is_a?(Hash) ? refusal["values"] : {}
+      end
       @details = Array(prompt["details"]).select { |row| row.is_a?(Hash) }
                                          .map { |row| DetailView.new(row["label"], row["value"]) }
       @action_url = action_url
@@ -77,6 +84,11 @@ module QubeRails
     # place they're looked up, so a later QuBe Sync can send them with the prompt.
     def ui_text(key, **options)
       QubeRails.t("question.#{key}", **options)
+    end
+
+    # The id of the refusal's message, which the refused choice's fields point at (aria-describedby).
+    def error_id
+      "qube-error-#{token}"
     end
 
     private
@@ -172,8 +184,9 @@ module QubeRails
       @description = presence(choice["description"])
       @index = index
       @action_url = question.action_url
+      @refused = question.refused_choice == @id
       @fields = Array(choice["fields"]).select { |f| f.is_a?(Hash) }.map do |field|
-        FieldView.from_prompt(field, question, index)
+        FieldView.from_prompt(field, question, index, refused: @refused)
       end
       @kind = if fields.any? then :form
               elsif @id.match?(/:\d+\z/) then :pick
@@ -206,6 +219,11 @@ module QubeRails
 
     alias secondary? cancel?
 
+    # Whether QuBe Sync just refused this choice's answer (a 422): its fields are marked invalid.
+    def refused?
+      @refused
+    end
+
     private
 
     def presence(value)
@@ -221,10 +239,12 @@ module QubeRails
     TYPES = %w[text number boolean select search rows].freeze
 
     attr_reader :name, :input_name, :dom_id, :type, :label, :required, :options, :kind,
-                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled, :value
+                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled, :value,
+                :error_id
 
-    # A choice's field, as QuBe Sync sends it.
-    def self.from_prompt(field, question, choice_index)
+    # A choice's field, as QuBe Sync sends it; refused: its choice's answer was just refused, so
+    # it's marked invalid and holds what was typed.
+    def self.from_prompt(field, question, choice_index, refused: false)
       name = field["name"].to_s
       input_name = "data[#{name}]"
       type = type_of(field, record_type: "search")
@@ -234,7 +254,9 @@ module QubeRails
       new(name: name, input_name: input_name, dom_id: "qube-#{question.token}-#{choice_index}-#{name}",
           type: type, label: field["label"] || name, required: field["required"] == true,
           options: options_of(field), kind: field["kind"], search_url: question.search_url,
-          search_field: name, rows: rows)
+          search_field: name, rows: rows,
+          value: (refused && type != "rows" ? question.refused_values.to_h[name] : nil),
+          error_id: (refused ? question.error_id : nil))
     end
 
     # What a prompt field shows as: a record a search, an enum a select, else by its type.
@@ -257,7 +279,7 @@ module QubeRails
     # their label.
     def initialize(name:, type:, label:, input_name: nil, dom_id: nil, required: false, options: [], kind: nil,
                    search_url: nil, search_field: nil, row_key: nil, when_values: nil, rows: nil,
-                   context: :choice, disabled: false, value: nil)
+                   context: :choice, disabled: false, value: nil, error_id: nil)
       raise ArgumentError, "QuBe Sync: no field type #{type.inspect}" unless TYPES.include?(type)
 
       @name = name
@@ -276,6 +298,17 @@ module QubeRails
       @context = context
       @disabled = disabled
       @value = value
+      @error_id = error_id
+    end
+
+    # Whether it's in a refused answer: aria-invalid, described by the refusal.
+    def invalid?
+      !error_id.nil?
+    end
+
+    # The aria attributes that say so.
+    def aria_invalid
+      invalid? ? { "aria-invalid": "true", "aria-describedby": error_id } : {}
     end
 
     def partial

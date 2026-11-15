@@ -1,7 +1,8 @@
 {
   "title": "An answer QuBe Sync refused (422)",
-  "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail), from flash[:qube_rails_error].",
-  "error": "That answer couldn't be used: a new name is required.",
+  "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail) and what was typed, from flash[:qube_rails_refusal].",
+  "error": "That answer couldn't be used: a new name can't be one QuickBooks already has.",
+  "refused": { "choice": "rename", "values": { "name": "Riverbend Electric" } },
   "prompt": {
     "id": "ensure / ask_rename",
     "kind": "decision",

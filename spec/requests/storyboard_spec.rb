@@ -39,7 +39,10 @@ RSpec.describe "The storyboard", type: :request do
     expect(panel.call("stalled_quickbooks_unavailable").at_css(".qube-run-stall").text).to include("can't open QuickBooks")
     expect(panel.call("failed").at_css(".qube-run-error-detail").text).to include("active in QuickBooks")
     expect(panel.call("error").at_css(".qube-error")).not_to be_nil
-    expect(panel.call("refusal").at_css(".qube-question .qube-error").text).to include("couldn't be used")
+    refusal = panel.call("refusal")
+    expect(refusal.at_css(".qube-question .qube-error").text).to include("couldn't be used")
+    expect(refusal.at_css("input[name='data[name]']")["value"]).to eq("Riverbend Electric") # what was typed
+    expect(refusal.at_css("input[name='data[name]']")["aria-describedby"]).to eq(refusal.at_css(".qube-error")["id"])
     expect(panel.call("rows").css("[data-qube-row][data-qube-values]").size).to eq(3)
     expect(panel.call("missing_record").css("[data-qube-row][data-qube-values]").size).to eq(1)
     expect(panel.call("missing_record").text).to include("Create it", "Use an existing one")
