@@ -50,6 +50,18 @@ RSpec.describe "The question partial", type: :request do
     expect(page.at_css(".qube-question-message").inner_html).to include("&lt;script&gt;")
   end
 
+  it "starts a select on \"Choose…\", and gives a search box its words for a question that changed" do
+    asking(make_run(invoice, connection), QubeRails::Storyboard.find("enum_select").sample["prompt"])
+    shown = page
+
+    first = shown.at_css("select.qube-select option")
+    expect([first["value"], first.text]).to eq(["", "Choose…"])
+
+    asking(QubeRails::Run.last, prompt)
+    expect(page.at_css("[data-qube-search]")["data-qube-text-search-changed"])
+      .to eq("This question has changed. Reload the page to see the latest.")
+  end
+
   it "shows nothing for a record with no runs" do
     expect(page.at_css(".qube-question")).to be_nil
   end

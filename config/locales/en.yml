@@ -43,12 +43,14 @@ en:
       use_pick: "Use this one"
       search_quickbooks: "or search QuickBooks…"
       close_search: "Cancel"
+      choose: "Choose…"
       use_for_all:
         one: "Use for the other record too"
         other: "Use for the other %{count} records too"
       used_for_all:
         one: "Also filled in on the other record."
         other: "Also filled in on the other %{count} records."
+      search_changed: "This question has changed. Reload the page to see the latest."
       step: "%{position} of %{count}"
       back: "Back"
       next: "Next"
@@ -57,4 +59,3 @@ en:
       no_matches: "No matches"
       searching: "Searching…"
       search_failed: "Search isn't available right now. Try again in a moment."
-      search_changed: "This question has changed. Reload the page to see the latest."

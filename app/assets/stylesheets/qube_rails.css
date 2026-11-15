@@ -250,7 +250,8 @@
   justify-self: start;
   gap: 8px;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 8px 14px;
+  box-sizing: border-box;
   font: inherit;
   font-weight: 500;
   line-height: 1.25;
@@ -387,7 +388,7 @@
   border-color: var(--qube-accent-color);
 }
 
-:where(.qube-input, .qube-select, .qube-search-input):where(:user-invalid) {
+:where(.qube-input, .qube-select, .qube-search-input):where(:user-invalid, [aria-invalid="true"]) {
   border-color: var(--qube-error-color);
 }
 
@@ -650,8 +651,11 @@
   align-items: center;
   justify-content: center;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 7px 14px;
+  box-sizing: border-box;
   font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
   color: var(--qube-muted-color);
   border-radius: var(--qube-control-radius);
   cursor: pointer;
@@ -861,6 +865,17 @@
 
   :where(.qube-choice-button) {
     justify-self: stretch;
+  }
+
+  /* An offered record: its "Use this one" under its text, so the text has the whole width */
+  :where(.qube-pick) {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  :where(.qube-pick-action.qube-choice-button) {
+    flex-grow: 1;
+    justify-content: center;
   }
 }
 
