@@ -42,8 +42,12 @@ en:
     question:
       set_all: "Set all to:"
       use_pick: "Use this one"
-      search_quickbooks: "or search QuickBooks…"
-      close_search: "Close search"
+      none_of_these:
+        one: "Not this one"
+        other: "None of these"
+      back_to_offered:
+        one: "← Back to the possible match"
+        other: "← Back to the %{count} possible matches"
       choose: "Choose…"
       optional: "(optional)"
       needs_script: "Answering this needs JavaScript. Turn it on for this page, or answer from a browser that has it."

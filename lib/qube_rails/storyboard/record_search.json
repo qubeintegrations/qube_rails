@@ -1,6 +1,6 @@
 {
   "title": "A pick from the records there are",
-  "note": "resolve's ask_pick: nothing has that name and nothing may be created for it (an account here), so the person picks one: the first active records as rows, then a search over every record of the kind. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
+  "note": "resolve's ask_pick: nothing has that name and nothing may be created for it (an account here), so the person picks one: the first active records as rows, then, after \"None of these\", a search over every record of the kind. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
   "prompt": {
     "id": "resolve / ask_pick",
     "kind": "decision",

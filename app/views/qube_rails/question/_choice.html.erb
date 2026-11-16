@@ -4,13 +4,14 @@
     Sync's role for it, when the prompt has roles.
     A form choice ends in its button row (.qube-choice-actions): cancel on the left, its submit on
     the right, with the exits passed as exits: (their buttons name their own forms, form=). With
-    detached: true it renders only the form, for a button elsewhere to submit. closable: a search
-    behind "or search QuickBooks…", whose row starts with "Close search". %>
+    detached: true it renders only the form, for a button elsewhere to submit. A form in a chain
+    carries its branch (data-qube-branch-part), hidden when that isn't the one on show. %>
 <% exits = local_assigns[:exits] || [] %>
 <% detached = local_assigns[:detached] %>
-<% row = choice.kind == :form || local_assigns[:closable] %>
+<% row = choice.kind == :form %>
+<% part = question.branch_part(choice) unless detached %>
 <form class="<%= qube_classes(:choice, "qube-choice", choice.kind == :form ? "qube-choice-form" : nil) %>" method="post"
-      action="<%= choice.action_url %>" id="<%= choice.form_id %>" data-qube-choice="<%= choice.id %>" data-qube-choice-kind="<%= choice.kind %>"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %><%= " hidden" if detached %>>
+      action="<%= choice.action_url %>" id="<%= choice.form_id %>" data-qube-choice="<%= choice.id %>" data-qube-choice-kind="<%= choice.kind %>"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %><% if part %> data-qube-branch-part="<%= part %>"<% end %><%= " hidden" if detached || !question.shown_part?(part) %>>
   <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
   <%= hidden_field_tag :choice, choice.id, id: nil %>
 <% unless detached %>
@@ -23,9 +24,6 @@
 <%     end %>
   <div class="<%= qube_classes(:choice_actions, "qube-choice-actions") %>" data-qube-actions>
     <div class="qube-choice-actions-start">
-<%     if local_assigns[:closable] %>
-      <button type="button" class="<%= qube_classes(:button_ghost, "qube-choice-button") %>" data-qube-button="ghost" data-qube-search-close hidden><%= question.ui_text(:close_search) %></button>
-<%     end %>
 <%     exits.select(&:cancel?).each do |exit_choice| %>
       <%= render "qube_rails/question/exit_button", choice: exit_choice %>
 <%     end %>

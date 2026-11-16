@@ -1,5 +1,5 @@
-// qube_rails: the behaviour of a QuickBooks question (search boxes, a rows field and its steps) and the
-// storyboard's copy buttons. Listeners sit on document and key only on data-qube-* attributes, so
+// qube_rails: the behaviour of a QuickBooks question (search boxes, a chain's branches, a rows field and
+// its steps) and the storyboard's copy buttons. Listeners sit on document and key only on data-qube-* attributes, so
 // any markup carrying them works, after Turbo navigation too. Plain JavaScript, no build. README,
 // "Styling", has the attribute contract.
 (function () {
@@ -179,6 +179,7 @@
             return note(box, p, words(box, "search-changed", "This question has changed. Reload the page to see the latest."), "changed");
           }
           showMatches(box, p, matches);
+          if (matches.length || q.length >= 2) declineFirst(box, !matches.length);
         })
         .catch(function () {
           if (asked.get(box) !== n) return;
@@ -198,28 +199,44 @@
     check(box, p);
     p.value.dispatchEvent(new Event("change", { bubbles: true }));
     box.dispatchEvent(new CustomEvent("qube:picked", { bubbles: true }));
-    promote(box, true);
+    picked(box, true);
+    declineFirst(box, false);
   };
 
-  // A pick in the search behind "or search QuickBooks…" makes that search's submit the primary
-  // action, and the offered record's "Use this one" secondary; changing the text undoes it.
+  // A search choice's own form ([data-qube-choice-role="search"]), for a box not in a rows field.
+  var searchForm = function (box) {
+    var form = box.closest('form[data-qube-choice-role="search"]');
+    return form && !box.closest("[data-qube-rows]") ? form : null;
+  };
+
+  // A search's submit ("Use this one") shows once a match is picked; changing the text hides it.
+  var picked = function (box, on) {
+    var form = searchForm(box);
+    if (!form) return;
+    each(form.querySelectorAll('button[type="submit"]'), function (button) {
+      if (button.form === form) conceal(button, !on);
+    });
+  };
+
   var swap = function (el, from, to, style) {
     (from || "").split(/\s+/).forEach(function (c) { if (c) el.classList.remove(c); });
     ["qube-choice-button"].concat((to || "").split(/\s+/)).forEach(function (c) { if (c) el.classList.add(c); });
     el.setAttribute("data-qube-button", style);
   };
 
-  var promote = function (box, on) {
-    var disclosure = box.closest("[data-qube-search-disclosure]");
-    var question = disclosure && disclosure.closest("[data-qube-question]");
-    if (!question || on === disclosure.hasAttribute("data-qube-promoted")) return;
-    disclosure.toggleAttribute("data-qube-promoted", on);
+  // A search that found nothing makes the decline the primary action, its classes swapped between
+  // the question's data-qube-button-class and -secondary-class; a pick or matches undo it.
+  var declineFirst = function (box, on) {
+    var form = searchForm(box);
+    var question = form && form.closest("[data-qube-question]");
+    if (!question) return;
     var primary = question.getAttribute("data-qube-button-class") || "";
     var secondary = question.getAttribute("data-qube-button-secondary-class") || "";
-    var offered = question.querySelector('[data-qube-choice-kind="pick"] [data-qube-offered="primary"]');
-    var submit = disclosure.querySelector('[data-qube-actions-end] button[type="submit"]');
-    if (offered) swap(offered, on ? primary : secondary, on ? secondary : primary, on ? "secondary" : "primary");
-    if (submit) swap(submit, on ? secondary : primary, on ? primary : secondary, on ? "primary" : "secondary");
+    var from = on ? "secondary" : "primary";
+    each(question.querySelectorAll('button[data-qube-choice-role="decline"], form[data-qube-choice-role="decline"] button[type="submit"]'), function (button) {
+      if (button.getAttribute("data-qube-button") !== from) return;
+      swap(button, on ? secondary : primary, on ? primary : secondary, on ? "primary" : "secondary");
+    });
   };
 
   var keys = function (event, box) {
@@ -434,17 +451,33 @@
       offers(list);
       stepUp(list);
     });
-    each(document.querySelectorAll("[data-qube-search-disclosure]"), function (disclosure) {
-      disclosure.setAttribute("data-qube-closable", "");
-      each(disclosure.querySelectorAll("[data-qube-search-close]"), function (button) { conceal(button, false); });
-      closable(disclosure);
+    // A chain shows the branch the page has on show, with its buttons.
+    each(document.querySelectorAll("[data-qube-question]"), function (question) {
+      if (!question.querySelector("[data-qube-branch]")) return;
+      var offered = question.querySelector('[data-qube-branch-part="offered"]');
+      showBranch(question, offered && offered.hidden ? "search" : "offered", false);
     });
   };
 
-  // An open search hides "or search QuickBooks…" (its Cancel closes it again).
-  var closable = function (disclosure) {
-    var summary = disclosure.querySelector("summary");
-    if (summary) conceal(summary, disclosure.open);
+  // ---- A chain: offered records with a search, a branch at a time. What belongs to each carries
+  // data-qube-branch-part ("offered" or "search"); a [data-qube-branch="<branch>"] button moves to
+  // one. "Not this one" sits with the offered records; the decline shows with the search only.
+  var showBranch = function (question, branch, focus) {
+    each(question.querySelectorAll("[data-qube-branch-part]"), function (part) {
+      conceal(part, part.getAttribute("data-qube-branch-part") !== branch);
+    });
+    each(question.querySelectorAll('[data-qube-branch="search"]:not([data-qube-branch-part])'), function (button) {
+      conceal(button, branch !== "offered");
+    });
+    each(question.querySelectorAll('form[data-qube-choice-role="decline"]'), function (form) {
+      conceal(form, branch === "offered");
+    });
+    if (!focus) return;
+    // The search box browses as it's focused; Back lands on the first offered record.
+    var target = branch === "search"
+      ? question.querySelector('[data-qube-branch-part="search"] [data-qube-search-input]')
+      : question.querySelector('[data-qube-branch-part="offered"] [data-qube-choice-kind="pick"] button');
+    if (target) target.focus();
   };
 
   // ---- Steps: a rows field with more than one row shows one row at a time, in order. The script
@@ -687,19 +720,6 @@
     });
   };
 
-  // "Close search" in an open "or search QuickBooks…": closes it, and the focus goes back to its summary.
-  var closeDisclosure = function (button) {
-    var disclosure = button.closest("[data-qube-search-disclosure]");
-    if (!disclosure) return;
-    disclosure.open = false;
-    var box = disclosure.querySelector("[data-qube-search]");
-    if (box) promote(box, false);
-    var summary = disclosure.querySelector("summary");
-    if (!summary) return;
-    conceal(summary, false); // before "toggle" comes, so it can take the focus
-    summary.focus();
-  };
-
   // ---- Listeners
 
   document.addEventListener("input", function (event) {
@@ -707,7 +727,7 @@
     var box = input && input.closest("[data-qube-search]");
     if (box) {
       search(box);
-      promote(box, false);
+      picked(box, false);
       var list = box.closest("[data-qube-rows]");
       if (list) offers(list);
     }
@@ -758,8 +778,9 @@
     });
     var result = event.target.closest("[data-qube-search-result]");
     if (result) return pick(result);
-    var closeSearch = event.target.closest("[data-qube-search-close]");
-    if (closeSearch) return closeDisclosure(closeSearch);
+    var branch = event.target.closest("[data-qube-branch]");
+    var question = branch && branch.closest("[data-qube-question]");
+    if (question) return showBranch(question, branch.getAttribute("data-qube-branch"), true);
     var setAllButton = event.target.closest("[data-qube-set-all]");
     if (setAllButton) {
       return setAll(setAllButton);
@@ -786,17 +807,6 @@
     offers(list);
     if (stepped(list)) updateStep(list);
   });
-
-  // "or search QuickBooks…" under the possible matches ([data-qube-search-disclosure], a native
-  // <details>): as it opens, the focus goes to its search box. "toggle" doesn't bubble.
-  document.addEventListener("toggle", function (event) {
-    var disclosure = event.target;
-    if (!disclosure.matches || !disclosure.matches("[data-qube-search-disclosure]")) return;
-    if (disclosure.hasAttribute("data-qube-closable")) closable(disclosure);
-    if (!disclosure.open) return;
-    var input = disclosure.querySelector("[data-qube-search-input], input:not([type=hidden])");
-    if (input) input.focus();
-  }, true);
 
   // A refused submit (an invalid field in a row not on show): its "invalid" events come one per
   // field, in order, before the form is refused; the first shows its row.

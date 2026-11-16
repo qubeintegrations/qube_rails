@@ -81,7 +81,7 @@ RSpec.describe "The question partial", type: :request do
   end
 
   it "keeps the exits in their own row when there are picks, or an exit has a description" do
-    asking(make_run(invoice, connection), prompt)
+    asking(make_run(invoice, connection), QubeRails::Storyboard.find("choose").sample["prompt"])
     shown = page
     expect(shown.at_css(".qube-choice-footer-start form[data-qube-choice=cancel] button")).not_to be_nil
     expect(shown.at_css(".qube-choice-footer-end form[data-qube-choice=none] button")).not_to be_nil

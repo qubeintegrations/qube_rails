@@ -75,22 +75,24 @@ RSpec.describe "The storyboard", type: :request do
 
     expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[cancel exit], %w[none exit]])
     near = panel.call("near_match")
-    expect(near.at_css(".qube-picks[role=group] > .qube-picks[role=list]").text).to include("Riverbend Electric")
-    disclosure = near.at_css(".qube-picks[role=group] > .qube-picks[role=list] + details.qube-search-disclosure:not([open])")
-    expect(disclosure.at_css("summary").text).to eq("or search QuickBooks…")
-    expect(disclosure.at_css("form.qube-choice-form[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
-    close = disclosure.at_css("form[data-qube-choice=use] .qube-choice-actions-start > button[type=button][data-qube-search-close][hidden]")
-    expect(close.text).to eq("Close search") # shown by the script, which hides the summary while it's open
+    # A chain: the offered branch on show, the search's hidden until "Not this one"
+    expect(near.at_css(".qube-choices > .qube-picks[role=list][data-qube-branch-part=offered]:not([hidden])").text)
+      .to include("Riverbend Electric")
+    search = near.at_css(".qube-choices > form.qube-choice-form[data-qube-choice-role=search][data-qube-branch-part=search][hidden]")
+    expect(search.at_css("[data-qube-search-input]")).not_to be_nil
+    expect(near.at_css(".qube-choices > button.qube-branch-back[data-qube-branch=offered][hidden]").text).to eq("← Back to the possible match")
+    expect(near.at_css(".qube-choice-footer-end > button[data-qube-branch=search][hidden]").text).to eq("Not this one")
     expect(near.at_css(".qube-choice-divider")).to be_nil
     expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
-    expect(near.at_css("form[data-qube-choice=use] button[data-qube-button=secondary]")).not_to be_nil
+    expect(near.at_css("form[data-qube-choice=use] button[type=submit]:not([form])[data-qube-button=primary][hidden]")).not_to be_nil
     # The footer: cancel at the start, decline at the end
     expect(near.css(".qube-choice-footer-start > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[cancel])
     expect(near.css(".qube-choice-footer-end > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline])
     expect(near.at_css("form[data-qube-choice=cancel] [data-qube-button=ghost]").text).to include("Cancel adding the invoice")
     expect(panel.call("choose").css("[data-qube-button=primary]").map(&:text)).to eq(["Use this one"])
     QubeRails::Storyboard::QUESTIONS.each do |key|
-      expect(panel.call(key).css("[data-qube-button=primary]").size).to be <= 1, key
+      shown_primary = panel.call(key).css("[data-qube-button=primary]").reject { |b| b.ancestors.any? { |a| a["hidden"] } || b["hidden"] }
+      expect(shown_primary.size).to be <= 1, key
     end
     expect(shown.css(".qube-question button[disabled], .qube-question input[type=submit][disabled]")).to be_empty
   end

@@ -37,16 +37,28 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
   `cancel`, `answer`): the offered records as option rows with no heading of their own (the
   question's message says what they are), the first one's "Use this one" the screen's primary button and the
-  rest secondary; the search behind a quiet "or search QuickBooks…" at the end of the matches (a native
-  `<details>`, new partial `question/_search_disclosure` and key `question.search_quickbooks`, open
-  after a refusal, the script focusing the search box; `QuestionView#searches`, left out of `forms`),
-  or a section of its own when nothing is offered; decline in the footer; cancel last, at the far
-  end of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
+  rest secondary; a search after them, a branch at a time (see below), or a section of its own
+  when nothing is offered; decline in the footer; cancel at the start of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
   older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
   `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
   "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
-  `data-qube-choice-role`. New CSS only for cancel's place in the footer row and the disclosure's
-  link; the heading and buttons use classes the stylesheet already styles.
+  `data-qube-choice-role`. New CSS only for cancel's place in the footer row; the heading and
+  buttons use classes the stylesheet already styles.
+- Offered records with a search (a chain, `QuestionView#chain?`) show a branch at a time. The
+  offered records come first, the footer row holding cancel and "Not this one" / "None of these"
+  (new key `question.none_of_these`, `data-qube-branch="search"`); that swaps them for the search,
+  with "← Back to the possible match" / "← Back to the %{count} possible matches" above it (new key
+  `question.back_to_offered`, `.qube-branch-back`, `data-qube-branch="offered"`), its button row
+  holding cancel, the decline and its submit (the footer's forms, through `form=`). Moving to the
+  search focuses its box, Back the first record, and what was typed or picked stays. A refusal of
+  the search's answer starts on the search. Each part carries `data-qube-branch-part` ("offered" or
+  "search"), `hidden` when not on show; `QuestionView#branch`, `#branch_part`, `#shown_part?`,
+  `#offered_count`, `#joined_exits`, `#divided?`. Without the script a chain shows the records and
+  a footer of cancel and the decline, as forms that post. Other questions are unchanged.
+- A search's submit ("Use this one") is hidden until a match is picked (`ChoiceView#waits_for_pick?`),
+  then shows as the primary button; after a search of two characters or more that finds nothing,
+  the decline is the primary button until a pick or a search that finds matches. Until either,
+  nothing in that row is primary.
 - `question.step` reads "%{position} of %{count}" ("1 of 2"): the record's block already names its
   kind. A `%{name}` in your own wording still works.
 - The storyboard's questions carry roles and QuBe Sync's current wording ("It's not in QuickBooks",
@@ -74,11 +86,10 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   submit, instead of a step line above the records and a row of its own; the row reads cancel …
   2 of 3, Back, Next (or the submit on the last record).
 - The question card has sections: a hairline under what it's about, another above the way out
-  (the exits' row, or a lone form's button row), and a third above the open search, which is a
-  section of its own under the offered records.
-  A card that is one form is as wide as the form.
+  (the exits' row, or a lone form's button row). A card that is one form is as wide as the form;
+  a chain's search keeps the width its offered records had.
 - Beside full-width picks (a near match, a name clash) a form takes the full width too, so its
-  submit shares the picks' and exits' right edge; the open search keeps a gap under the picks.
+  submit shares the picks' and exits' right edge.
 - A form's fields and button row share one column (`--qube-form-width`, 36rem; a rows field takes
   the whole width), so the submit lines up with the fields' right edge.
 - On a narrow question (a container under 30rem) the row's end comes first, its buttons filling
@@ -91,10 +102,6 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - No submit or Next is disabled any more: the browser's own validation (required fields, a search's
   "Pick one of the matches.") says what's missing and focuses it, and Next on an incomplete record
   does the same.
-- After a pick in the search behind "or search QuickBooks…", the search's submit is the primary
-  button and the offered record's "Use this one" secondary (the script swaps their `button` and
-  `button_secondary` classes); editing the text or closing the search undoes it. The search's own
-  close button reads "Close search" (`question.close_search`), so only one cancel shows.
 - A field that isn't required says "(optional)" after its label (`question.optional`); a checkbox
   doesn't.
 - After a cancel is posted the status reads "Cancelling…" (`status.cancelling`, run state
@@ -103,7 +110,7 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - A rows field needs the script: it and its submit are hidden until the script runs, and a
   `<noscript>` line says answering needs JavaScript (`question.needs_script`). Cancel still works.
 - A ghost button with no `button_ghost` piece takes no host class (it took `button_secondary`'s), so
-  cancel, "or search QuickBooks…" and "Close search" keep the engine's quiet look.
+  cancel and "← Back to the possible match" keep the engine's quiet look.
 
 **Styling and Tailwind**
 - The stylesheet sits in the `components` cascade layer, after declaring `@layer theme, base,
@@ -152,18 +159,17 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   invoice", with no note.
 - A ghost button's description (Cancel's "Stop here. Nothing is created.") starts where the
   button's text does. The storyboard's missing-records question uses QuBe Sync's new wording.
-- Motion in the question: the search drops in as "or search QuickBooks…" opens (200ms), a pick's
-  check pops in (240ms) and the box's tint eases in; fades only under reduced motion.
-- The open "or search QuickBooks…" hides its summary and shows "Close search"
-  (`question.close_search`) at the start of the search's button row, which closes it again;
-  without the script the summary stays.
+- Motion in the question: a pick's check pops in (240ms) and the box's tint eases in; fades only
+  under reduced motion.
 - A pick's detail wraps between its parts (`similar name ·`, the email, the phone), each a
   `.qube-detail-part`, so a phone number no longer breaks across lines and no line starts with
   the separator.
-- The open "or search QuickBooks…" really hides its summary now, and the no-script Cancel stays
-  hidden: the stylesheet's hiding rule came before the button rule that set `display`, so it lost
-  (both have zero specificity). It now comes after, and the script also hides the summary inline
-  while the search is open, so a `ui_classes` button class can't show it either.
+- An exit's hidden form beside a lone form (`detached`) no longer takes a row of the choices' grid,
+  which left blank space under the buttons: `.qube-choice` set `display` and won over `hidden`. The
+  layer's last rule now hides a `hidden` `.qube-choice`, `.qube-choice-button` and
+  `[data-qube-branch-part]` (zero specificity, so it has to come after the rules that set display).
+- A search's "No matches" or failed-search note is a line under the box, in flow, not a floating
+  list over the buttons below it.
 - On the last record of a rows field, Back and the question's submit share a row: the step nav
   (`data-qube-step-nav`) now sits where the form's submit was and holds it, after Back and Next.
 - After a 409 (or a 400 such as `not_awaiting_input`) for an answer, the run reads as running
