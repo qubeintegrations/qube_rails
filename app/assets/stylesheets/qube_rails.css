@@ -129,7 +129,7 @@
     user-select: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease;
+    transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
   }
 
   :where(.qube-pick-action) {
@@ -935,13 +935,63 @@
     background: none;
     border: 0;
     box-shadow: none;
+    transform: none;
   }
 
   :where(.qube-search-results:not(:has([data-qube-search-result])) > [data-qube-search-note]) {
     padding: 6px 0 0;
   }
 
+  /* Moving between a chain's branches (the script marks the question, so a page load is still):
+     the branch comes in from its side, the search from the right and the records from the left */
+  :where([data-qube-branch-moved] [data-qube-branch-part]:not(.qube-choice-button)) {
+    transition: opacity 200ms var(--qube-ease-out), transform 200ms var(--qube-ease-out);
+  }
+
+  @starting-style {
+    :where([data-qube-branch-moved="search"] [data-qube-branch-part]:not(.qube-choice-button)) {
+      opacity: 0;
+      transform: translateX(8px);
+    }
+
+    :where([data-qube-branch-moved="offered"] [data-qube-branch-part]:not(.qube-choice-button)) {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+  }
+
+  /* "Use this one" arrives as a match is picked */
+  :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
+    transition:
+      transform 160ms var(--qube-ease-out),
+      opacity 160ms var(--qube-ease-out),
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  @starting-style {
+    :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
   /* ---- Narrow screens: choices stack, full width */
+
+  /* A search's row that also holds the decline is long once "Use this one" joins it. Where it
+     wouldn't fit on a line, its end is on top and cancel under it from the start, so a pick
+     moves nothing */
+  @container qube-choices (max-width: 44rem) {
+    :where(.qube-choice[data-qube-choice-role="search"] > .qube-choice-actions:has(.qube-choice-actions-end > [data-qube-exit])) {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+
+    :where(.qube-choice[data-qube-choice-role="search"] > .qube-choice-actions:has(.qube-choice-actions-end > [data-qube-exit]) > .qube-choice-actions-end) {
+      margin-inline-start: 0;
+    }
+  }
 
   @media (max-width: 30rem) {
     /* An offered record: its "Use this one" under its text, so the text has the whole width */
@@ -992,6 +1042,11 @@
 
     @starting-style {
       :where(.qube-search-results, .qube-error) {
+        transform: none;
+      }
+
+      :where([data-qube-branch-moved] [data-qube-branch-part]:not(.qube-choice-button)),
+      :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
         transform: none;
       }
     }

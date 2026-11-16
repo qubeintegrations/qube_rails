@@ -473,6 +473,8 @@
       conceal(form, branch === "offered");
     });
     if (!focus) return;
+    // A move the person made: the stylesheet brings the branch in from its side.
+    question.setAttribute("data-qube-branch-moved", branch);
     // The search box browses as it's focused; Back lands on the first offered record.
     var target = branch === "search"
       ? question.querySelector('[data-qube-branch-part="search"] [data-qube-search-input]')

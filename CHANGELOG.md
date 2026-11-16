@@ -55,6 +55,12 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   "search"), `hidden` when not on show; `QuestionView#branch`, `#branch_part`, `#shown_part?`,
   `#offered_count`, `#joined_exits`, `#divided?`. Without the script a chain shows the records and
   a footer of cancel and the decline, as forms that post. Other questions are unchanged.
+- Motion for a chain: a branch the person moves to comes in from its side over 200 ms (the
+  search from the right, the records from the left; the script sets `data-qube-branch-moved`, so
+  a page load is still), and "Use this one" fades in as a match is picked. With reduced motion
+  both only fade.
+- A search's button row that also holds the decline puts its end on top and cancel under it in a
+  question narrower than 44rem, before and after a pick, so "Use this one" arriving moves nothing.
 - A search's submit ("Use this one") is hidden until a match is picked (`ChoiceView#waits_for_pick?`),
   then shows as the primary button; after a search of two characters or more that finds nothing,
   the decline is the primary button until a pick or a search that finds matches. Until either,
