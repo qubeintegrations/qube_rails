@@ -19,7 +19,7 @@ RSpec.describe "The view-models" do
 
       expect(view.message).to eq(prompt["message"])
       expect(view.token).to eq("Vq3kT9xRb2LmW8sZ")
-      expect(view.details.map { |d| [d.label, d.value] }).to eq([%w[Customer Riverbend]])
+      expect(view.details).to eq([])
       expect(view.choices.map(&:id)).to eq(%w[use:1 use none cancel])
       expect(view.choices.first.detail).to eq("similar name")
       expect(view.choices.first.action_url).to eq("/q/1")
@@ -27,7 +27,8 @@ RSpec.describe "The view-models" do
 
       field = view.choices[1].fields.first
       expect([field.type, field.name, field.input_name, field.dom_id, field.label, field.required])
-        .to eq(["search", "list_id", "data[list_id]", "qube-Vq3kT9xRb2LmW8sZ-1-list_id", "The one to use", true])
+        .to eq(["search", "list_id", "data[list_id]", "qube-Vq3kT9xRb2LmW8sZ-1-list_id", "Not listed? Search QuickBooks",
+               true])
       expect([field.search_url, field.search_field, field.kind, field.partial])
         .to eq(["/q/1/search", "list_id", "customer", "qube_rails/question/fields/search"])
       expect(field).to be_labelled
@@ -61,7 +62,26 @@ RSpec.describe "The view-models" do
   end
 
   describe QubeRails::RowsView do
-    let(:rows) { question(sample("rows")).choices.first.fields.first.rows }
+    # The storyboard's action column starts at create (its default); these read the prompt
+    # without it, where nothing is chosen until the person chooses.
+    let(:rows) { question(without_default(sample("rows"))).choices.first.fields.first.rows }
+    let(:defaulted) { question(sample("rows")).choices.first.fields.first.rows }
+
+    def without_default(prompt)
+      copy = JSON.parse(prompt.to_json)
+      copy["choices"].each do |choice|
+        Array(choice["fields"]).each { |f| Array(f["columns"]).each { |c| c.delete("default") } }
+      end
+      copy
+    end
+
+    it "starts a column at its default: checked, and the cells it brings shown and required" do
+      vinyl = defaulted.rows[1]
+      action = vinyl.cells.first.field
+      expect(action.value).to eq("create")
+      income = vinyl.cells.find { |c| c.column == "income_account" }
+      expect([income.hidden?, income.field.required, income.field.disabled]).to eq([false, true, false])
+    end
 
     it "has the columns, a row per record, and a cell per column it asks or has a value for" do
       expect(rows.columns.map(&:name)).to eq(%w[action list_id item_type entity_type income_account asset_account cogs_account])

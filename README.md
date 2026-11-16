@@ -116,7 +116,7 @@ end
 | `job_attempts` | how many times `QubeRails::WebhookJob` runs a delivery whose work raised, with a growing wait, before it logs an error and raises to your adapter (read when the job class loads) | `10` |
 | `dedupe` | where each run's taken notification delivery ids are kept: `once(run, delivery_id) { }`, or `seen?(key)` / `remember(key)` | `QubeRails::DatabaseDedupe`: the engine's `qube_notifications` table, in the handler's transaction |
 | `parent_controller` | the controller onboarding and the questions inherit | `"ApplicationController"` |
-| `ui_classes` | your CSS classes for the engine's screens, by piece (`{ button: "btn btn-primary" }`), added beside the `qube-` classes ([Styling](#styling)); an unknown piece raises, naming them | `{}` |
+| `ui_classes` | your CSS classes for the engine's screens, by piece (`{ button: "rounded-md bg-indigo-600 px-3 py-2 text-white" }`), added beside the `qube-` classes ([Styling](#styling)); an unknown piece raises, naming them | `{}` |
 | `storyboard` | whether `GET qube/storyboard` shows every screen with sample data | `Rails.env.development?` |
 | `api_key` | | `QUBE_API_KEY` |
 | `base_url` | | `QUBE_URL`, else `https://qubesync.com` |
@@ -319,18 +319,21 @@ module QuickbooksDesktop
       })
     end
 
-    # How the run ended: event.outcome says which, and event.output has that outcome's own keys
-    # (add_transaction's added: record and references). Keep the QuickBooks ids on the connection.
-    def ended(event)
-      # The records the add named, found or made, by the input's path: linked, so the next run
-      # refers to them by id. A cancelled ending can carry some too.
-      link_references(event) do |path, _entry|
-        if path == "customer_ref"
-          record.customer
-        elsif (line = path[/\Ainvoice_line_add\.(\d+)\.item_ref\z/, 1])
-          record.lines[line.to_i]&.item
-        end
+    # Which of your records each QuickBooks record links to, by where the input named it.
+    def linked_record(path, _entry)
+      if path == "customer_ref"
+        record.customer
+      elsif (line = path[/\Ainvoice_line_add\.(\d+)\.item_ref\z/, 1])
+        record.lines[line.to_i]&.item
       end
+    end
+
+    # How the run ended: event.outcome says which, and event.output has that outcome's own keys
+    # (add_transaction's added: record and links). Keep the QuickBooks ids on the connection.
+    def ended(event)
+      # Every record the add named, by the input's path (output.refs), linked so the next run
+      # refers to it by id. A cancelled ending carries the ones settled before it stopped.
+      link_references(event) { |path, entry| linked_record(path, entry) }
       return unless event.outcome == "added"
 
       txn = event.dig("output", "record") || {}
@@ -344,8 +347,10 @@ module QuickbooksDesktop
       record.update!(status: "failed")
     end
 
-    # What a running workflow sends along (a sync's pages): taken once per delivery_id.
+    # What a running workflow sends along, taken once per delivery_id: add_transaction's
+    # "records" (what each pass settled, linked as it comes, before the ending), a sync's pages.
     def notification(event)
+      link_references(event) { |path, entry| linked_record(path, entry) } if event.name == "records"
       log_event(event)
     end
 
@@ -625,9 +630,15 @@ cause is known. A question waiting on your user isn't affected. When the connect
 resumes, the engine tells the pages of the records with a run still going on it to refresh (by the
 runs' connection index, at most 200), so the status changes without a reload.
 
-An answer or a start retry that can't go through (the question changed, QuBe Sync refused the
-answer's data, the start was confirmed meanwhile) goes back to the page with the reason in
-`flash[:qube_rails_error]`, which the partials show once, so it shows under Turbo too.
+An answer or a start retry that can't go through (the question changed, the start was confirmed
+meanwhile) goes back to the page with the reason in `flash[:qube_rails_error]`, which the partials
+show once, so it shows under Turbo too. When QuBe Sync says the question was answered or asked
+again since (409, or a 400 such as `not_awaiting_input`), the question is forgotten and the run reads
+as running ("Syncing with QuickBooks") until its next webhook. An answer QuBe Sync refuses (422)
+goes back in `flash[:qube_rails_refusal]` (`token`, `choice`, `message`, `values`): the question
+partial shows the message inside the question, refills that choice's text, number, select and
+checkbox fields with what was typed (not a search's pick or a rows field; nothing when it's over
+1,000 characters, for a cookie session), and marks them `aria-invalid`, described by the message.
 
 ## Questions
 
@@ -651,7 +662,13 @@ column of up to three options, such as create or use, as a segmented control), t
 its answers so far call for (each column shown while its `when` holds), stacked in a grid, a search
 per record column (sent with the row). "Set all to:" sets that choice on every record, and "Use for
 all N" under a filled search or select copies it to the other records that ask it and are still
-empty. Its answer is `{"records": {row key => {column => value}}}`: each row's `key`, the columns
+empty. A rows field needs the behaviour script: without it the field and its submit stay hidden and
+a `<noscript>` line says answering needs JavaScript (`question.needs_script`); cancel still works.
+With more than one record it asks one at a time, and the form's button row reads, from the right:
+the submit (on the last record) or Next, Back, and the step count ("2 of 3"), with cancel at the
+row's left. Next is never disabled: pressing it with something missing shows what. "Set all to:"
+is hidden. The other records stay in the form, hidden, so it's still one answer. Its answer
+is `{"records": {row key => {column => value}}}`: each row's `key`, the columns
 that row asks (`rows[].columns`), a number column as a number and a boolean one as `true` or `false`.
 
 An answer QuBe Sync can't take (422) shows its reason; one it says has changed (409, or any 400)
@@ -674,9 +691,21 @@ your CSP nonce when you have one) and, with `stylesheet: true`, the opt-in style
 (`qube_rails.css`). Your asset pipeline serves both: Propshaft as it is, Sprockets through the
 engine's precompile list. Without `stylesheet: true` nothing of ours styles your page.
 
-Every rule in `qube_rails.css` is inside `:where()`, so it has no specificity and any rule of
-yours wins. It has no reset and no global styles. Theme it with CSS variables on `:root` or any
-element around the screens:
+Every rule in `qube_rails.css` is inside `:where()`, so it has no specificity, and inside the
+`components` cascade layer. The file starts by declaring `@layer theme, base, components,
+utilities;` (Tailwind's own order), so wherever it loads: any unlayered CSS of yours wins, utility
+classes (`@layer utilities`) win, and a reset in `@layer base` doesn't strip it. It has no reset and
+no global styles.
+
+- **Tailwind v4** (preflight in `@layer base`): works as it is, in any load order; your
+  `ui_classes` utilities override the engine's look.
+- **Tailwind v3** (unlayered preflight) isn't supported with the engine's stylesheet: preflight's `*`, `button`, `input` and `[type=submit]`
+  rules beat a layered stylesheet, so the engine's borders, button backgrounds and paddings are
+  reset. Give every button and input piece classes (the example below does the main ones; add
+  `pick`, `button_ghost`, `search_result` and `segment`), or move to v4.
+- Bootstrap and other unlayered CSS: its element rules and classes win, as before.
+
+Theme it with CSS variables on `:root` or any element around the screens:
 
 ```css
 :root {
@@ -705,7 +734,9 @@ so `prefers-color-scheme` carries through. An app whose dark mode is a class sho
 Motion is short and only where it says something: a button gives way on press (`scale(0.97)`),
 the search box's matches drop in from the input (150ms; they close at once, and moving through them
 with the keyboard is instant), a rows field's field fades in as it starts to apply, what "Set all to"
-or "Use for all" fills flashes a tint, and a one-shot error fades in. All of it is transform and
+or "Use for the other records too" fills flashes a tint (a record in a later step flashes as it comes
+on show), a rows field's next record comes in from the side it's
+stepped from (180ms, a few px), and a one-shot error fades in. All of it is transform and
 opacity, on `cubic-bezier(0.23, 1, 0.32, 1)`; with `prefers-reduced-motion: reduce` the fades stay
 and the movement goes. Hover effects apply only on devices with a fine pointer.
 
@@ -714,31 +745,40 @@ and the movement goes. Hover effects apply only on devices with a fine pointer.
 `config.ui_classes` adds your CSS framework's classes beside the `qube-` ones, by piece:
 
 ```ruby
-# Bootstrap
+# Tailwind
+config.ui_classes = {
+  button: "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500",
+  button_secondary: "rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50",
+  input: "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none",
+  select: "rounded-md border border-gray-300 px-3 py-2 text-sm",
+  label: "text-sm font-medium text-gray-900",
+  error: "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+}
+# Bootstrap (its form-check-input carries a top margin meant for .form-check; mt-0 lines it up)
 config.ui_classes = {
   button: "btn btn-primary", button_secondary: "btn btn-outline-secondary", input: "form-control",
-  select: "form-select", checkbox: "form-check-input", label: "form-label",
-  error: "alert alert-danger", status: "alert alert-light", search_result: "list-group-item list-group-item-action"
+  select: "form-select", checkbox: "form-check-input mt-0", label: "form-label", error: "alert alert-danger"
 }
-# Tailwind
-config.ui_classes = { button: "rounded bg-indigo-600 px-3 py-1.5 text-white", input: "rounded border-gray-300" }
 ```
+
+Set `--qube-accent` to your primary colour too (Tailwind's indigo-600 is `#4f46e5`): the engine
+uses it for what has no piece, such as a pick's "Use this one" link and the focus ring.
 
 | Piece | Where |
 | --- | --- |
 | `question` | the question's `<section>` |
 | `message`, `details` | its sentence, its label/value table |
 | `choice` | each choice's `<form>` |
-| `button`, `button_secondary`, `button_ghost` | the one primary button (a form choice's submit, or a plain question's first choice; the retry button), the secondary ones (other exits, later forms, redeliver, Apply), and cancel (`button_ghost`, else `button_secondary`) |
-| `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option-row button (never `button`), its detail, its "Use this one" |
-| `choice_footer`, `choice_divider` | the exits' row; the "or" between picks and a form |
+| `button`, `button_secondary`, `button_ghost` | the one primary button (the first offered record's "Use this one", a search's once a match is picked, else a form choice's submit, or a plain question's first choice; the retry button; a rows field's Next, made by the script), the secondary ones (the other offered records' "Use this one", "Not this one", other exits, later forms, redeliver, Apply, a rows field's Back), and the ghosts: cancel, "← Back to the possible match" (`button_ghost`; with none, no class of yours, so they keep the engine's quiet look) |
+| `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option-row button (never `button`), its detail, its "Use this one" (an offered record's also takes the `button` or `button_secondary` piece) |
+| `choice_footer`, `choice_actions`, `choice_divider` | the exits' own row (with picks, or an exit with a description); a form choice's button row (cancel at its start, its submit at its end, with the exits when it's the question's one form); the "or" between picks and a form |
 | `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
 | `field`, `label` | a field's wrapper and its label (and the rows field's) |
 | `input`, `select`, `checkbox` | text, number and search inputs; selects; checkboxes |
 | `search`, `search_results`, `search_result` | a search box's wrapper, its matches' container, each match (made by the script) |
 | `rows`, `row`, `row_header`, `row_fields` | a rows field's list of records, each record, its name, its fields' grid |
 | `segmented`, `segment` | a record's choice as a segmented control, each option |
-| `use_for_all` | the "Use for all N" button under a field |
+| `use_for_all` | the "Use for the other N records too" button under a field |
 | `status`, `summary`, `detail` | the run status, its sentence, a failure's detail |
 | `stall` | why it waits on a stalled connection |
 | `error` | a one-shot error |
@@ -757,7 +797,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/_message`, `_details` | `question` | the sentence; the label/value rows |
 | `qube_rails/question/_picks`, `_pick` | `question`; `question`, `choice` | the picks' list; one pick, a form posting `choice` |
 | `qube_rails/question/_choice` | `question`, `choice` | a form or exit choice: a form posting `choice` and `data[...]` with your CSRF token |
-| `qube_rails/question/_footer` | `question` | the exits' row |
+| `qube_rails/question/_footer` | `question` | the exits' row (in a chain, ending in "Not this one" / "None of these") |
 | `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
 | `qube_rails/question/fields/_text`, `_number`, `_boolean`, `_select`, `_search`, `_rows` | `field` | one field, by `field.type` |
 | `qube_rails/question/rows/_row` | `rows`, `row` | one record: its name, its choice, its fields |
@@ -765,22 +805,33 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
-| `qube_rails/_error` | `message` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
+| `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
 versions:
 
-- `QubeRails::QuestionView`: `picks`, `forms`, `exits`, `plain?` (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
+- `QubeRails::QuestionView`: `picks`, `forms`, `exits` (cancel last), `plain?`, `roles?` (the prompt
+  says each choice's role), `matches?` (picks are offered records: "Possible matches"), `joined_form` and
+  `joined_exits` (the one form whose button row holds the exits, and those exits), `chain?` (offered
+  records with a search, shown a branch at a time), `branch` (`:offered` or `:search` as the page
+  loads; nil when it isn't a chain), `branch_part(piece)` (a form's, or `:picks`' or `:footer`'s,
+  `"offered"` or `"search"`), `shown_part?(part)`, `offered_count`, `divided?(choice, n)` (an "or"
+  before form `n`), `ui_text(key, **options)`
+  (the engine's own word `question.<key>`, the one place the question's partials look new words up) (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
   `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
 - `QubeRails::ChoiceView`: `id`, `label`, `detail`, `description`, `fields`, `index`, `action_url`,
-  `secondary?` (cancel), `kind` (`:pick`, `:form` or `:exit`), `style` (its button's: `:primary`,
-  `:secondary`, `:ghost`, or nil for a pick) and `button_piece` (its `ui_classes` piece).
+  `role` (QuBe Sync's: `pick`, `search`, `decline`, `cancel` or `answer`, one it doesn't know read as
+  `answer`; nil when the prompt has none), `cancel?` (and `secondary?`, the same), `kind` (`:pick`,
+  `:form` or `:exit`), `style` (its button's: `:primary`, `:secondary`, `:ghost`; for a pick nil, or
+  an offered record's "Use this one"), `button_piece` (its `ui_classes` piece) and `waits_for_pick?`
+  (a search's: its submit is hidden until a match is picked).
 - `QubeRails::FieldView`: `name`, `input_name` (post your value under it), `dom_id`, `type` (`text`,
   `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
   each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
-  `when`, `rows` (a `RowsView`), `disabled`, `partial`, and `labelled?`, `cell?` (a rows field's) and
+  `when`, `rows` (a `RowsView`), `disabled`, `value` (what it starts at: a column's `default`, else
+  nil), `partial`, and `labelled?`, `cell?` (a rows field's) and
   `segmented?` (a cell's enum of up to three options).
-- `QubeRails::RowsView`: `name`, `label`, `input_name`, `search_url`, `columns` (FieldViews), `rows`,
+- `QubeRails::RowsView`: `name`, `label` (blank: no heading), `input_name`, `search_url`, `columns` (FieldViews), `rows`,
   `set_all` (the column "Set all to:" sets, or nil).
   `QubeRails::RowView`: `key`, `label`, `detail`, `values`, `values_json`, `index`, `cells` (the
   columns it asks or already has a value for), `segmented_cells`, `field_cells`.
@@ -796,14 +847,39 @@ versions:
   `data-qube-stall="<reason>"`). `RunStatusView.from_sync(sync, urls, error:, connection:)` takes the
   connection the page is about (the partial's `connection:` local), else the latest run's.
 
-Choices show by kind. A pick (an item of a `choose` list: an id ending `:<n>`, no fields) is a quiet
-option row; with no picks, a plain choice before the first form is one too (a name clash's "Use the
-existing record"). Each form choice (one with fields) is its own section, "or" between it and what
-comes before (`question.or`), its field's label leading and its submit the one filled button (only
-the first form's; later ones are secondary). The exits (none of these, cancel) sit in a row under a
-hairline, cancel as a ghost. A question with neither picks nor forms keeps its choices in one row,
-the first primary. So a screen never has more than one filled button. The form gets
-`data-qube-choice-kind`, the button `data-qube-button` (its style).
+Choices show by the `role` QuBe Sync gives each (`prompt.choices[].role`). The records it offers
+(`pick`) are option rows, with no heading (the question's message says what they are), each ending in a
+"Use this one" button: the first is the screen's one filled button, the rest secondary.
+
+Offered records with a `search` are a chain, shown a branch at a time (`question.chain?`). The
+offered records come first, with the footer row below them: `cancel` at its start and "Not this
+one" (one record) or "None of these" (several) at its end (`question.none_of_these`). That swaps
+them for the search: "← Back to the possible match" (`question.back_to_offered`) above it, then the
+search's form, its field's label leading ("Not listed? Search QuickBooks"), with cancel at the
+start of its button row and `decline` ("It's not in QuickBooks") and its submit at the end. Moving
+to the search focuses its box (which lists the first records); Back focuses the first record; what
+was typed or picked stays. A page showing QuBe Sync's refusal of the search's answer starts on the
+search. Each part carries `data-qube-branch-part` (`offered` or `search`) and the one not on show
+is `hidden`. Without the script the search can't work, so a chain shows the offered records and a
+footer of cancel and the decline, as forms that post; "Not this one" and the search wait for the
+script (which then hides the footer's decline: it belongs to the search).
+
+With nothing offered, the search is a section of its own, as a form, the exits in its button row.
+Any search's submit ("Use this one") is hidden until a match is picked, then shows as the primary
+button; after a search that finds nothing (two characters or more, no error), the decline is the
+primary button until a pick or a search that finds matches. Elsewhere `decline` ("It's not in
+QuickBooks") sits in the footer row below the choices, and `cancel` ("Don't add the invoice") at
+the start of that row, as a ghost. An `answer` shows by its shape: one with fields is its own section, its submit the one filled
+button when no record is offered (only the first form's; later ones are secondary); with no picks, a
+plain choice before the first form is an option row (a name clash's "Use the existing record"). A
+question with neither picks nor forms keeps its choices in one row, the first primary. A role the
+engine doesn't know is an `answer`.
+
+From a QuBe Sync that sends no roles, choices show by their shape instead: an item of a `choose` list
+(an id ending `:<n>`, no fields) is a quiet option row without a heading, the first form's submit is
+the one filled button, and the rest are exits, cancel a ghost. So a screen never has more than one
+filled button. The form gets `data-qube-choice-kind` and, with roles, `data-qube-choice-role`; the
+button `data-qube-button` (its style).
 
 A field override posts its value as `field.input_name`, so the controller reads it as it reads
 ours: a checkbox `"true"`, a number as typed, a rows cell `data[<field>][<row key>][<column>]`.
@@ -817,26 +893,73 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
 - A search: an element with `data-qube-search="<search URL>"`, `data-qube-field="<field>"` and, in a
   rows table, `data-qube-row="<row key>"`, holding a text input `data-qube-search-input`, a hidden
   input `data-qube-search-value` (the one with the name, which gets the picked `value`) and a
-  container `data-qube-search-results`. Typing two characters or more asks the search URL; each
+  container `data-qube-search-results`. Focusing it empty asks the search URL with `q` empty (the
+  list's first active records by name), and so does clearing it; typing two characters or more asks
+  it with what's typed; each
   match is a button (classes from `data-qube-result-class`, `role="option"`); picking one (a click,
   or the arrow keys and Enter) fills the hidden input and fires `change` on it and `qube:picked` on
   the box. Escape, a click outside or leaving the box closes the matches. The box gets
   `data-qube-open` while they show, and the input `aria-expanded` and `aria-activedescendant`. Until a
   match is picked, the text input is invalid, so the form isn't sent. Its words come from the box's
-  `data-qube-text-no-matches`, `-searching`, `-search-failed` and `-pick-a-match` (English without).
+  `data-qube-text-no-matches`, `-searching`, `-search-failed`, `-search-changed` (the search
+  answered 409: the question changed) and `-pick-a-match` (English without). A match's detail is
+  split into `.qube-detail-part` spans at " · ", so a line breaks between parts. A picked box gets
+  `data-qube-picked` and an inline `padding-inline-start` for its check, so your input class's
+  padding can't put the check over the text.
 - A rows field: `data-qube-rows` around it; each record `data-qube-row` with `data-qube-values` (JSON);
   each field `data-qube-col="<column>"` with `data-qube-when` (JSON) and, for a required column,
   `data-qube-required`; each input `data-qube-rows-input` (a radio counts when checked). A field
   whose `when` doesn't hold is `hidden` (and `data-qube-hidden`), its inputs disabled and not
-  required, so it's neither sent nor asked for; the script toggles all three as answers change. Optional:
+  required, so it's neither sent nor asked for; the script toggles all three as answers change. A
+  column's `default` starts checked (or selected) and counts for `when`. The field and the form's
+  submit carry `data-qube-needs-script` and `hidden` until the script shows them. Optional:
   `data-qube-rows-set-all="<column>"` holding buttons `data-qube-set-all="<value>"` (sets that column on
   every record offering the value), and a button `data-qube-use-for-all` in a field (shown, with the
-  table's `data-qube-text-use-for-all`, "Use for all %{count}", while the field has a value other
-  records' shown fields lack; copies it to them). What either fills gets `data-qube-filled` for the
-  stylesheet's tint.
-- A form choice (`data-qube-choice-kind="form"`) whose required fields are all searches: its submit
-  is disabled until each has a pick, and again if the text is edited after (by the script only, so it
-  still posts without it).
+  field's `data-qube-text-use-for-all-one` / `-other`, "Use for the other record too" / "Use for the
+  other %{count} records too", while the field has a value other records' shown fields lack; copies
+  it to them, then shows `<div class="qube-used-for-all" data-qube-used-for-all role="status">` with
+  `data-qube-text-used-for-all-one` / `-other` in its place until the value changes). What either
+  fills gets `data-qube-filled` for the stylesheet's tint; a record not on show gets it as it's
+  shown.
+- Steps: a rows field with two records or more shows one at a time. The script marks the field
+  `data-qube-stepped` and `data-qube-step="<n>"` (from 0), the record on show
+  `data-qube-step-current`, and hides the others (`hidden` and `display: none`, never removed, so the
+  form still posts every record). It marks the end of the form's button row
+  (`[data-qube-actions-end]`, see below) `data-qube-step-nav` and adds there, before the submit: the
+  step count `<span class="qube-rows-step" data-qube-step-line aria-live="polite">` (the field's
+  `data-qube-text-step`, "%{position} of %{count}"; a `%{name}` in your own wording is the record's
+  detail, else its name, from the header its `aria-labelledby` names), Back (`data-qube-step-back`,
+  `data-qube-button="secondary"`, classes from `data-qube-button-secondary-class`; hidden on the
+  first record) and Next (`data-qube-step-next`, `data-qube-button="primary"`, classes from
+  `data-qube-button-class`; hidden on the last record, never disabled: pressed with the record
+  incomplete it focuses what's missing and the browser says why). A form without that row gets one
+  after the records. The form's submit shows on the last record only, and
+  `data-qube-rows-set-all` is hidden. Next and Back move the focus to the record's
+  first control. A refused submit (a field invalid in a hidden record) and Enter before the last
+  record show the first record with a problem; a page whose one-shot error (`role="alert"`) names a
+  record opens on it. Words from `data-qube-text-back` and `-next` (English without). These classes are all styled
+  by `qube_rails.css` as it was before steps, so an app's copy of it still fits.
+- No submit is ever disabled: a required field left empty, or a search with text but no pick, is
+  the browser's own validation on submit (the search input carries `required` and the "Pick one of
+  the matches." message), which focuses it and says what's missing.
+- A form choice's button row: `.qube-choice-actions[data-qube-actions]`, holding
+  `.qube-choice-actions-start` (cancel) and
+  `.qube-choice-actions-end[data-qube-actions-end]` (other exits, then the submit). When a question
+  has one form and no picks, its exits' buttons sit in that row and submit their own (hidden,
+  empty) forms through the `form` attribute, so it works without the script.
+- A chain (see "Choices"): in a `[data-qube-question]`, a `[data-qube-branch="search"]` or
+  `[data-qube-branch="offered"]` button shows that branch: each `[data-qube-branch-part]` not of it
+  is hidden (`hidden` and `display: none`), "Not this one" (the `data-qube-branch="search"` button
+  without a part of its own) shows on the offered branch, and a `form[data-qube-choice-role=decline]`
+  on the search's only. The focus goes to the search's `[data-qube-search-input]`, or to the first
+  offered record's button. As the page loads, the branch on show is the search when an `offered`
+  part is `hidden`.
+- A search choice's form (`form[data-qube-choice-role=search]`, not in a rows field): its own submit
+  shows once a match is picked and hides again when the text changes. A search of two characters or
+  more that finds nothing makes the question's decline buttons (`button[data-qube-choice-role=decline]`,
+  or a decline form's submit) primary, their classes swapped between the question's
+  `data-qube-button-class` and `data-qube-button-secondary-class`; a pick or a search that finds
+  matches swaps them back.
 - The storyboard: a button `data-qube-copy="<text>"` copies its text.
 
 #### A custom combobox
@@ -913,6 +1036,7 @@ en:
 | `status.starting` | Sending to QuickBooks | the status, just started |
 | `status.unconfirmed` | Still waiting for QuickBooks | the status, a start unconfirmed for a minute |
 | `status.running` | Syncing with QuickBooks | the status, running |
+| `status.cancelling` | Cancelling… | the status after your user's cancel is posted, until the run's next event (state `cancelling`, the engine's own) |
 | `status.quiet` | No update from QuickBooks for a while. | above the redeliver button |
 | `status.check_for_updates` | Check for updates | the redeliver button |
 | `status.try_again` | Try sending again | the retry button |
@@ -928,13 +1052,23 @@ en:
 | `errors.disconnect_unreachable` | Couldn't reach QuickBooks' sync service just now. Try disconnecting again in a minute. | a disconnect QuBe Sync didn't answer |
 | `errors.still_syncing` | Something is still syncing with this company file. Let it finish, or answer its question, then disconnect. | a disconnect while work is going |
 | `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
+| `errors.question_moved_on` | This question was already answered or has changed, so your answer wasn't sent. If QuickBooks needs anything else, it will ask here. | an answer QuBe Sync says came too late (409, or a 400 such as `not_awaiting_input`) |
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
-| `question.use_for_all` | Use for all %{count} | under a filled field other records ask too |
+| `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |
+| `question.used_for_all` | one: Also filled in on the other record.; other: Also filled in on the other %{count} records. | where that button was, once pressed |
+| `question.choose` | Choose… | a select's first, empty option |
+| `question.step` | %{position} of %{count} | a rows field's step count, in the button row before Back (`%{name}`, the record's kind or name, may be added) |
+| `question.back`, `question.next` | Back; Next | a rows field's step buttons |
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
+| `question.none_of_these` | one: Not this one; other: None of these | at the end of a chain's footer row: shows the search in place of the offered records |
+| `question.back_to_offered` | one: ← Back to the possible match; other: ← Back to the %{count} possible matches | above a chain's search: shows the offered records again |
+| `question.optional` | (optional) | after the label of a field that may be left empty |
+| `question.needs_script` | Answering this needs JavaScript. Turn it on for this page, or answer from a browser that has it. | in place of a rows field without the script (`<noscript>`) |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |
 | `question.no_matches`, `question.searching`, `question.search_failed` | No matches; Searching…; Search isn't available right now. Try again in a moment. | the search box's matches |
+| `question.search_changed` | This question has changed. Reload the page to see the latest. | the search box's matches, when the search answers 409 |
 
 `QubeRails.t(key, **options)` looks one up as the engine does. A question's own words (its message,
 details, choices and field labels) are QuBe Sync's prompt, in English. The route constants

@@ -86,8 +86,11 @@ module QubeRails
       end
 
       def question_view(screen, answer_path, search_path)
-        QuestionView.new(screen.sample["prompt"], action_url: answer_path, search_url: search_path,
-                                                  error: screen.sample["error"])
+        prompt = screen.sample["prompt"]
+        refused = screen.sample["refused"]
+        refusal = refused && refused.merge("token" => prompt["token"], "message" => screen.sample["error"])
+        QuestionView.new(prompt, action_url: answer_path, search_url: search_path,
+                                 error: refusal ? nil : screen.sample["error"], refusal: refusal)
       end
 
       # The sample's matches for a search: at most 20 whose label holds q.
@@ -132,7 +135,9 @@ module QubeRails
         view = QuestionView.new(prompt, action_url: "", search_url: "")
         list.concat(%w[question/picks question/pick]) if view.picks.any?
         list << "question/choice" if view.forms.any? || view.exits.any?
-        list << "question/footer" if view.exits.any?
+        list << "question/submit" if view.choices.any?
+        list << "question/exit_button" if view.joined_form && view.exits.any?
+        list << "question/footer" if view.chain? || (!view.joined_form && view.exits.any?)
         list << "error" if sample["error"]
         fields = Array(prompt["choices"]).flat_map { |choice| Array(choice["fields"]) }
         fields.each do |field|

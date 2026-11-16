@@ -6,22 +6,29 @@ module QubeRails
   # The open question of a run, as the question partials render it: the override contract, kept
   # stable across versions (README, "Styling"). Built from the prompt QuBe Sync sent.
   class QuestionView
-    attr_reader :prompt, :message, :details, :choices, :token, :action_url, :search_url, :error
+    attr_reader :prompt, :message, :details, :choices, :token, :action_url, :search_url, :error,
+                :refused_choice, :refused_values
 
     # The question run is asking, or nil when it isn't asking. urls answers question_path(run):
-    # the engine's route proxy (qube_rails) in a view.
-    def self.from_run(run, urls, error: nil)
+    # the engine's route proxy (qube_rails) in a view. refusal is flash[:qube_rails_refusal] (a
+    # 422 for one of its choices: token, choice, message, values), used when it's this question's.
+    def self.from_run(run, urls, error: nil, refusal: nil)
       prompt = run && run.open_question
       return nil unless prompt
 
       action = urls.question_path(run)
-      new(prompt, action_url: action, search_url: "#{action}/search", error: error)
+      new(prompt, action_url: action, search_url: "#{action}/search", error: error, refusal: refusal)
     end
 
-    def initialize(prompt, action_url:, search_url:, error: nil)
+    def initialize(prompt, action_url:, search_url:, error: nil, refusal: nil)
       @prompt = prompt
       @message = prompt["message"].to_s
       @token = prompt["token"].to_s
+      if refusal.is_a?(Hash) && refusal["token"].to_s == @token
+        error ||= refusal["message"]
+        @refused_choice = refusal["choice"].to_s
+        @refused_values = refusal["values"].is_a?(Hash) ? refusal["values"] : {}
+      end
       @details = Array(prompt["details"]).select { |row| row.is_a?(Hash) }
                                          .map { |row| DetailView.new(row["label"], row["value"]) }
       @action_url = action_url
@@ -34,41 +41,181 @@ module QubeRails
     end
 
     # The choices by where they show: picks (option rows), forms (a section each, "or" between),
-    # then exits (a footer row). plain? when there's neither a pick nor a form: one row, the first
-    # choice primary.
+    # then exits (a footer row, cancel last). plain? when there's neither a pick nor a form: one
+    # row, the first choice primary.
     def picks
       choices.select { |c| c.kind == :pick }
     end
 
+    # The forms shown as sections. In a chain (chain?) the search ones are its search branch.
     def forms
       choices.select { |c| c.kind == :form }
     end
 
     def exits
-      choices.select { |c| c.kind == :exit }
+      choices.select { |c| c.kind == :exit }.partition { |c| !c.cancel? }.flatten
     end
 
     def plain?
       picks.empty? && forms.empty?
     end
 
+    # The one form whose button row also holds the exits (cancel left, the rest beside its
+    # submit): a question with no picks, one form, and exits without descriptions; in a chain, its
+    # one search. Else nil, and the exits have a footer row of their own.
+    def joined_form
+      candidates = if chain? then forms.select { |c| c.role == "search" }
+                   elsif picks.empty? then forms
+                   else []
+                   end
+      return nil unless candidates.size == 1 && exits.none?(&:description)
+
+      candidates.first
+    end
+
+    # The exits a joined form's row holds: in a chain, decline and cancel (the search's branch).
+    def joined_exits
+      chain? ? exits.select { |c| %w[decline cancel].include?(c.role) } : exits
+    end
+
+    # Offered records with a search: a chain, shown a branch at a time. The offered records come
+    # first with "Not this one" / "None of these", which swaps them for the search (README, "Choices").
+    def chain?
+      matches? && choices.any? { |c| c.role == "search" }
+    end
+
+    # The branch a chain shows as the page loads: :search when its search's answer was just
+    # refused, else :offered. nil when it isn't a chain.
+    def branch
+      return nil unless chain?
+
+      choices.any? { |c| c.role == "search" && c.id == refused_choice } ? :search : :offered
+    end
+
+    # The branch a piece of a chain belongs to ("offered" or "search", its data-qube-branch-part):
+    # a search form, or the picks (:picks), another form, or the footer (:footer) when the search's
+    # row holds the exits. nil outside a chain, and for what both branches show.
+    def branch_part(piece)
+      return nil unless chain?
+
+      case piece
+      when :picks then "offered"
+      when :footer then joined_form ? "offered" : nil
+      when ChoiceView
+        return nil unless piece.kind == :form
+
+        piece.role == "search" ? "search" : "offered"
+      end
+    end
+
+    # Whether that part is on show as the page loads.
+    def shown_part?(part)
+      part.nil? || part == branch.to_s
+    end
+
+    # The count "None of these" and its way back say ("Not this one" for one).
+    def offered_count
+      picks.count { |c| c.role == "pick" }
+    end
+
+    # Whether an "or" goes before form n: another form before it in its branch, or the picks.
+    def divided?(choice, n)
+      return n.positive? || picks.any? unless chain?
+
+      part = branch_part(choice)
+      forms.first(n).any? { |c| branch_part(c) == part } || (part == "offered" && picks.any?)
+    end
+
+    # Whether QuBe Sync said each choice's role (prompt.choices[].role): then the picks are the
+    # records it offers (option rows, no heading).
+    def roles?
+      choices.any?(&:role)
+    end
+
+    def matches?
+      picks.any? { |c| c.role == "pick" }
+    end
+
+    # One of the engine's own words for this question (question.<key> in the locale files). The one
+    # place they're looked up, so a later QuBe Sync can send them with the prompt.
+    def ui_text(key, **options)
+      QubeRails.t("question.#{key}", **options)
+    end
+
+    # The id of the refusal's message, which the refused choice's fields point at (aria-describedby).
+    def error_id
+      "qube-error-#{token}"
+    end
+
     private
 
-    # Kinds and button styles. With no picks but a form, a plain choice before the first form
-    # (name clash's "Use the existing record") is an option row too. One filled button at most:
-    # the first form's submit, or in a plain question the first choice.
     def arrange
-      if @choices.none? { |c| c.kind == :pick } && (first_form = @choices.index { |c| c.kind == :form })
-        @choices.first(first_form).each { |c| c.arrange(:pick, nil) unless c.secondary? }
+      roles? ? arrange_by_role : arrange_by_shape
+    end
+
+    # By role: the offered records are picks, the first the one primary action; a search is a form,
+    # secondary; decline and cancel are exits. An answer shows by its shape, as without roles.
+    def arrange_by_role
+      @choices.each do |c|
+        kind = case c.role
+               when "pick" then :pick
+               when "search" then :form
+               when "decline", "cancel" then :exit
+               else c.fields.any? ? :form : :exit
+               end
+        c.arrange(kind, nil)
       end
-      primary = plain? ? @choices.find { |c| !c.secondary? } : forms.first
+      promote_rows
+      offered = @choices.select { |c| c.role == "pick" }
+      all_forms = @choices.select { |c| c.kind == :form }
+      plain = picks.empty? && all_forms.empty?
+      primary = offered.first || (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
       @choices.each do |choice|
-        style = if choice.kind == :pick then nil
-                elsif choice.equal?(primary) then :primary
-                elsif choice.secondary? then :ghost
+        style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : promoted_style(choice))
+                elsif choice.equal?(primary) || (choice.role == "search" && chain?) then :primary
+                elsif choice.cancel? then :ghost
                 else :secondary
                 end
         choice.arrange(choice.kind, style)
+      end
+    end
+
+    # A choice promoted to an option row ends in a secondary "Use this one", as an offered
+    # record's does, not a bare link beside the form's filled button.
+    def promoted_style(choice)
+      Array(@promoted).include?(choice) ? :secondary : nil
+    end
+
+    def button_style(choice, primary)
+      choice.equal?(primary) ? :primary : :secondary
+    end
+
+    # Kinds and button styles from each choice's shape (a prompt without roles). One filled button
+    # at most: the first form's submit, or in a plain question the first choice.
+    def arrange_by_shape
+      promote_rows
+      primary = plain? ? @choices.find { |c| !c.cancel? } : forms.first
+      @choices.each do |choice|
+        style = if choice.kind == :pick then promoted_style(choice)
+                elsif choice.equal?(primary) then :primary
+                elsif choice.cancel? then :ghost
+                else :secondary
+                end
+        choice.arrange(choice.kind, style)
+      end
+    end
+
+    # With no picks but a form, a plain choice before the first form (name clash's "Use the
+    # existing record") is an option row too.
+    def promote_rows
+      return if @choices.any? { |c| c.kind == :pick }
+      return unless (first_form = @choices.index { |c| c.kind == :form })
+
+      @choices.first(first_form).each do |c|
+        next if c.cancel? || %w[decline cancel].include?(c.role)
+
+        c.arrange(:pick, nil)
+        (@promoted ||= []) << c
       end
     end
   end
@@ -82,17 +229,30 @@ module QubeRails
   # One thing the user can pick: a form of its own, posting choice=<id> and data[...] for its
   # fields to the question's action_url.
   class ChoiceView
-    attr_reader :id, :label, :detail, :description, :fields, :index, :action_url, :kind, :style
+    ROLES = %w[pick search decline cancel answer].freeze
+
+    attr_reader :id, :label, :detail, :description, :fields, :index, :action_url, :kind, :style, :role
+
+    # The detail's parts (QuBe Sync joins them with " · "), each but the last ending in its " ·",
+    # so a line breaks between parts and never starts with the separator.
+    def detail_parts
+      parts = detail.to_s.split(" · ")
+      parts.each_with_index.map { |part, i| i < parts.size - 1 ? "#{part} ·" : part }
+    end
 
     def initialize(choice, index, question)
       @id = choice["id"].to_s
+      # QuBe Sync's role for it, nil when the prompt has none; one this version doesn't know is answer.
+      @role = (ROLES.include?(choice["role"]) ? choice["role"] : "answer") if choice.key?("role")
       @label = choice["label"].to_s
       @detail = presence(choice["detail"])
       @description = presence(choice["description"])
       @index = index
       @action_url = question.action_url
+      @token = question.token
+      @refused = question.refused_choice == @id
       @fields = Array(choice["fields"]).select { |f| f.is_a?(Hash) }.map do |field|
-        FieldView.from_prompt(field, question, index)
+        FieldView.from_prompt(field, question, index, refused: @refused)
       end
       @kind = if fields.any? then :form
               elsif @id.match?(/:\d+\z/) then :pick
@@ -102,7 +262,8 @@ module QubeRails
 
     # kind is :pick (an option row: an item of a choose list, id "<option>:<n>", no fields), :form
     # (a choice with fields) or :exit (none, cancel and the like). style is its button's: :primary,
-    # :secondary or :ghost (cancel), nil for a pick. Set by the QuestionView.
+    # :secondary or :ghost (cancel); for a pick nil, or with roles its "Use this one" button's.
+    # Set by the QuestionView.
     def arrange(kind, style)
       @kind = kind
       @style = style
@@ -112,14 +273,36 @@ module QubeRails
     def button_piece
       case style
       when :primary then :button
-      when :ghost then QubeRails.config.ui_classes.key?(:button_ghost) ? :button_ghost : :button_secondary
+      when :ghost then :button_ghost # no host class unless ui_classes has one: the engine's ghost look
       else :button_secondary
       end
     end
 
-    # A choice that stops (cancel): the ui_classes button_secondary rather than button.
-    def secondary?
-      id == "cancel"
+    # A choice that ends the request: its role cancel, or without roles its id.
+    def cancel?
+      role ? role == "cancel" : id == "cancel"
+    end
+
+    alias secondary? cancel?
+
+    # Its form's id: an exit's button in another form's row names it (the form attribute).
+    def form_id
+      "qube-#{@token}-choice-#{index}"
+    end
+
+    # Whether one of its fields is a rows field (which needs the behaviour script).
+    def rows?
+      fields.any? { |f| f.type == "rows" }
+    end
+
+    # A search's submit ("Use this one"): hidden until a match is picked, which the script shows.
+    def waits_for_pick?
+      role == "search" && fields.any? { |f| f.type == "search" }
+    end
+
+    # Whether QuBe Sync just refused this choice's answer (a 422): its fields are marked invalid.
+    def refused?
+      @refused
     end
 
     private
@@ -137,20 +320,24 @@ module QubeRails
     TYPES = %w[text number boolean select search rows].freeze
 
     attr_reader :name, :input_name, :dom_id, :type, :label, :required, :options, :kind,
-                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled
+                :search_url, :search_field, :row_key, :when, :rows, :context, :disabled, :value,
+                :error_id
 
-    # A choice's field, as QuBe Sync sends it.
-    def self.from_prompt(field, question, choice_index)
+    # A choice's field, as QuBe Sync sends it; refused: its choice's answer was just refused, so
+    # it's marked invalid and holds what was typed.
+    def self.from_prompt(field, question, choice_index, refused: false)
       name = field["name"].to_s
       input_name = "data[#{name}]"
       type = type_of(field, record_type: "search")
       rows = if type == "rows"
-               RowsView.new(field, input_name: input_name, search_url: question.search_url)
+               RowsView.new(field, input_name: input_name, search_url: question.search_url, question: question)
              end
       new(name: name, input_name: input_name, dom_id: "qube-#{question.token}-#{choice_index}-#{name}",
           type: type, label: field["label"] || name, required: field["required"] == true,
           options: options_of(field), kind: field["kind"], search_url: question.search_url,
-          search_field: name, rows: rows)
+          search_field: name, rows: rows,
+          value: (refused && type != "rows" ? question.refused_values.to_h[name] : nil),
+          error_id: (refused ? question.error_id : nil))
     end
 
     # What a prompt field shows as: a record a search, an enum a select, else by its type.
@@ -173,7 +360,7 @@ module QubeRails
     # their label.
     def initialize(name:, type:, label:, input_name: nil, dom_id: nil, required: false, options: [], kind: nil,
                    search_url: nil, search_field: nil, row_key: nil, when_values: nil, rows: nil,
-                   context: :choice, disabled: false)
+                   context: :choice, disabled: false, value: nil, error_id: nil, optional: nil)
       raise ArgumentError, "QuBe Sync: no field type #{type.inspect}" unless TYPES.include?(type)
 
       @name = name
@@ -191,6 +378,25 @@ module QubeRails
       @rows = rows
       @context = context
       @disabled = disabled
+      @value = value
+      @error_id = error_id
+      @optional = optional.nil? ? !required : optional
+    end
+
+    # Whether it may be left empty: its label says "(optional)". A rows cell's column decides it,
+    # though a hidden cell isn't required in the markup yet.
+    def optional?
+      @optional && !%w[boolean rows].include?(type)
+    end
+
+    # Whether it's in a refused answer: aria-invalid, described by the refusal.
+    def invalid?
+      !error_id.nil?
+    end
+
+    # The aria attributes that say so.
+    def aria_invalid
+      invalid? ? { "aria-invalid": "true", "aria-describedby": error_id } : {}
     end
 
     def partial

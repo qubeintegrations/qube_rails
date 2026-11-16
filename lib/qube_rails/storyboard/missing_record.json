@@ -5,7 +5,7 @@
     "id": "add_transaction / ask_missing",
     "kind": "decision",
     "token": "Mc7pR4tKw2NbY9xQ",
-    "message": "Some records this transaction uses aren't in QuickBooks yet. For each one, create it or pick one QuickBooks already has.",
+    "message": "This invoice names records QuickBooks doesn't have. Create each one, or use one it has.",
     "data": {
       "operation": "invoice",
       "missing": [
@@ -34,10 +34,6 @@
     },
     "details": [
       {
-        "label": "Adding",
-        "value": "Invoice"
-      },
-      {
         "label": "Number",
         "value": "1042"
       },
@@ -49,20 +45,21 @@
     "choices": [
       {
         "id": "proceed",
-        "label": "Add the transaction",
+        "label": "Add the invoice",
         "description": null,
         "detail": null,
         "fields": [
           {
             "name": "records",
             "type": "rows",
-            "label": "Not in QuickBooks yet",
+            "label": "",
             "required": true,
             "columns": [
               {
                 "name": "action",
                 "type": "string",
                 "label": "What to do",
+                "default": "create",
                 "required": true,
                 "kind": null,
                 "enum": [
@@ -80,7 +77,7 @@
               {
                 "name": "list_id",
                 "type": "record",
-                "label": "Existing record",
+                "label": "Which one",
                 "required": true,
                 "kind": null,
                 "enum": null,
@@ -107,14 +104,15 @@
               }
             ]
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
-        "description": "Stop here. Nothing is created.",
+        "label": "Cancel adding the invoice",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

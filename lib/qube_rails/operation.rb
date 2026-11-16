@@ -354,46 +354,69 @@ module QubeRails
       { full_name: name }
     end
 
-    # Links each QuickBooks record an ending carries (event.output["references"], keyed by the
-    # input's path: "customer_ref", "invoice_line_add.0.item_ref") to the record of yours your
-    # block returns for it, on this run's connection, so the next run refers to it by id. The
-    # block gets the path and the entry (kind, outcome and record: the record's own list as
-    # "type", with list_id, edit_sequence and full_name) and returns your record, or nil to skip
-    # it. An entry with no record (not found, or not reached before a cancel) is skipped. Works on
-    # an added ending and on a cancelled one, which can carry some. Returns the rows linked.
+    # Links the QuickBooks records a run settled to the records of yours your block returns for
+    # them, on this run's connection, so the next run refers to them by id (and quickbooks_ref
+    # sends { list_id: }). Takes either event that carries them (docs/workflow-record-events.md in
+    # QuBe Sync):
+    #   - a "records" notification, sent as each pass settles them: event.data["records"], each
+    #     with paths, action (picked, created, ...), kind, sent and record;
+    #   - an ending: event.output["refs"], { path => { list_id, type } } for every reference.
+    # The block gets the input's path ("customer_ref", "invoice_line_add.0.item_ref") and the
+    # entry (list_id, type, and from a notification also kind, action, full_name, edit_sequence,
+    # sent), and returns your record, or nil to skip it. Returns the rows linked.
     #   link_references(event) do |path, entry|
     #     record.customer if path == "customer_ref"
     #   end
     def link_references(event)
-      output = event["output"]
-      references = output.is_a?(Hash) ? output["references"] : nil
-      return [] unless references.is_a?(Hash)
-
-      references.each_with_object([]) do |(path, entry), linked|
-        next unless entry.is_a?(Hash) && entry["record"].is_a?(Hash)
-
-        found = entry["record"]
-        next if found["list_id"].to_s.empty?
-
+      self.class.linkable(event).each_with_object([]) do |(path, entry), linked|
         app_record = yield(path, entry)
         next unless app_record
 
-        kind = found["type"].to_s.empty? ? entry["kind"] : found["type"]
-        linked << connection.link(app_record, kind: kind, qb_id: found["list_id"],
-                                              edit_sequence: found["edit_sequence"], name: found["full_name"])
+        kind = entry["type"].to_s.empty? ? entry["kind"] : entry["type"]
+        linked << connection.link(app_record, kind: kind, qb_id: entry["list_id"],
+                                              edit_sequence: entry["edit_sequence"], name: entry["full_name"])
+      end
+    end
+
+    # The [path, entry] pairs link_references links, from a "records" notification or an ending.
+    def self.linkable(event)
+      records = event["name"] == "records" && event["data"].is_a?(Hash) ? event["data"]["records"] : nil
+      return linkable_records(records) if records.is_a?(Array)
+
+      output = event["output"]
+      refs = output.is_a?(Hash) ? output["refs"] : nil
+      return [] unless refs.is_a?(Hash)
+
+      refs.filter_map do |path, entry|
+        next unless entry.is_a?(Hash) && !entry["list_id"].to_s.empty?
+
+        [path, { "list_id" => entry["list_id"], "type" => entry["type"] }]
+      end
+    end
+
+    def self.linkable_records(records)
+      records.flat_map do |entry|
+        found = entry.is_a?(Hash) ? entry["record"] : nil
+        next [] unless found.is_a?(Hash) && !found["list_id"].to_s.empty?
+
+        shown = found.slice("list_id", "type", "full_name", "edit_sequence")
+                     .merge(entry.slice("kind", "action", "sent"))
+        Array(entry["paths"]).map { |path| [path, shown] }
       end
     end
 
     # After your user's choice is in: the question is forgotten, unless the run has asked another
-    # since (its token is the question's own). taken: QuBe Sync took the answer, so the run is
-    # running again until its next webhook (which waits on the Web Connector's next poll).
-    def answered(token, taken: false)
+    # since (its token is the question's own). taken: the run has moved past the question (QuBe
+    # Sync took this answer, or said it was answered or asked again), so it reads as running until
+    # its next webhook (which waits on the Web Connector's next poll). cancelling: the answer was
+    # its cancel, so it reads "Cancelling…" (state "cancelling", this engine's own) until then.
+    def answered(token, taken: false, cancelling: false)
       run.with_lock do
         question = run.open_question
         if question && question["token"] == token
           run.question = nil
           run.links = nil
-          run.state = "running" if taken
+          run.state = cancelling ? "cancelling" : "running" if taken
           run.save!
         end
       end

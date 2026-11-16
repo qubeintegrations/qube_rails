@@ -40,14 +40,16 @@
               }
             ]
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
         "label": "Cancel",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

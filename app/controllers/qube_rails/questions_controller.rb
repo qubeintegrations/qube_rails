@@ -17,6 +17,11 @@ module QubeRails
   class QuestionsController < QubeRails.config.parent_controller.constantize
     # What the page says when the answer wasn't sent, as an I18n key under qube_rails.
     CHANGED = :"errors.question_changed"
+    # ... and when QuBe Sync says the question was answered or asked again since.
+    MOVED_ON = :"errors.question_moved_on"
+    # A refused answer's fields kept for the page to fill again: these types, this many characters.
+    KEPT_TYPES = %w[text number boolean select].freeze
+    KEPT_CHARACTERS = 1000
 
     include RunAuthorization
 
@@ -26,22 +31,24 @@ module QubeRails
     # links.decisions, and sends them back to the page; when it can't, back with why (the
     # partial shows it). The question is forgotten once it's
     # answered, or once QuBe Sync says it was answered or asked again since (a 409, or a 400 such
-    # as not_awaiting_input); the run's next webhook says what came of it.
+    # as not_awaiting_input): either way the run has moved past it, so it reads as running until
+    # its next webhook says what came of it. A refusal (422) goes back to the question, with what
+    # was typed (flash[:qube_rails_refusal]).
     def create
       choices = Array(@question && @question["choices"])
       choice = choices.find { |c| c["id"] == params[:choice] }
       return back_with_error(CHANGED) unless choice && @links["decisions"]
 
       QubeRails.client.answer(@links["decisions"], choice: choice["id"], data: answer_data(choice))
-      @operation.answered(@question["token"], taken: true)
+      @operation.answered(@question["token"], taken: true, cancelling: cancel?(choice))
       redirect_back fallback_location: "/", status: :see_other
     rescue Backend::APIError => e
       raise unless [400, 409, 422].include?(e.status)
       # A field QuBe Sync couldn't take: its errors.detail says which.
-      return back_with_error(refusal(e)) if e.status == 422
+      return back_with_refusal(choice, refusal(e)) if e.status == 422
 
-      @operation.answered(@question["token"])
-      back_with_error(CHANGED)
+      @operation.answered(@question["token"], taken: true)
+      back_with_error(MOVED_ON)
     end
 
     # The matches for a record field, for what your user typed: [{value, label, detail}], at most
@@ -82,8 +89,9 @@ module QubeRails
     end
 
     # What a search is asked about: q of 2 to 100 characters, a field name of 1 to 100.
+    # Empty browses (the list's first records, as a box is focused); one letter isn't a search.
     def searchable?(q, field)
-      q.length.between?(2, 100) && field.length.between?(1, 100)
+      (q.empty? || q.length.between?(2, 100)) && field.length.between?(1, 100)
     end
 
     def find_question
@@ -120,8 +128,29 @@ module QubeRails
       end
     end
 
+    # A cancel: its role, or without roles its id (as ChoiceView#cancel? reads it).
+    def cancel?(choice)
+      choice.key?("role") ? choice["role"] == "cancel" : choice["id"] == "cancel"
+    end
+
     def number(text)
       text.match?(/\A-?\d+\z/) ? text.to_i : Float(text, exception: false) || text
+    end
+
+    # Back to the question with why it was refused and what was typed in its own simple fields
+    # (not a search's pick or a rows field), when that fits a cookie session.
+    def back_with_refusal(choice, message)
+      form = params.fetch(:data, {})
+      values = choice["fields"].to_a.each_with_object({}) do |field, kept|
+        next unless KEPT_TYPES.include?(FieldView.type_of(field, record_type: "search"))
+
+        text = form[field["name"]]
+        kept[field["name"].to_s] = text if text.is_a?(String) && !text.empty?
+      end
+      values = {} if values.sum { |name, text| name.length + text.length } > KEPT_CHARACTERS
+      flash[:qube_rails_refusal] = { "token" => @question["token"].to_s, "choice" => choice["id"].to_s,
+                                     "message" => message, "values" => values }
+      redirect_back fallback_location: "/", status: :see_other
     end
 
     # What QuBe Sync said was wrong with an answer, in words (its errors.detail).

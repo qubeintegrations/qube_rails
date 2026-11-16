@@ -39,12 +39,13 @@ module QubeRails
       question message details choice choice_detail choice_description field label input select checkbox
       button button_secondary search search_results search_result status summary detail error
       rows row row_header segmented segment row_fields use_for_all stall
-      picks pick pick_detail pick_action reason button_ghost choice_footer choice_divider
+      picks pick pick_detail pick_action reason button_ghost choice_footer choice_divider choice_actions
     ].freeze
 
     # Your CSS framework's classes for the engine's screens, by piece, added beside each element's
     # qube- classes (a String, or an Array of them):
-    #   config.ui_classes = { button: "btn btn-primary", input: "form-control", select: "form-select" }
+    #   config.ui_classes = { button: "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white",
+    #                         input: "rounded-md border border-gray-300 px-3 py-2 text-sm" }
     # A piece not in UI_PIECES raises, naming them.
     def ui_classes=(map)
       raise ArgumentError, "ui_classes is a Hash of piece => CSS classes, in #{FILE}" unless map.respond_to?(:each_pair)

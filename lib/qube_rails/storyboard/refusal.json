@@ -1,12 +1,13 @@
 {
   "title": "An answer QuBe Sync refused (422)",
-  "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail), from flash[:qube_rails_error].",
-  "error": "That answer couldn't be used: a new name is required.",
+  "note": "The question again, with why QuBe Sync couldn't take the answer (its errors.detail) and what was typed, from flash[:qube_rails_refusal].",
+  "error": "That answer couldn't be used: a new name can't be one QuickBooks already has.",
+  "refused": { "choice": "rename", "values": { "name": "Riverbend Electric" } },
   "prompt": {
     "id": "ensure / ask_rename",
     "kind": "decision",
     "token": "Zk8tX1yDv6SmE8gG",
-    "message": "\"Riverbend Electric\" already belongs to a record of another list (Vendor), and QuickBooks keeps names unique across customers, vendors, employees and other names, and across every type of item. Add this one under another name, or cancel.",
+    "message": "QuickBooks already has the vendor “Riverbend Electric”, so the customer can't have that name too.",
     "data": {
       "kind": "customer",
       "name": "Riverbend Electric",
@@ -14,16 +15,7 @@
         "list": "vendor"
       }
     },
-    "details": [
-      {
-        "label": "Customer",
-        "value": "Riverbend Electric"
-      },
-      {
-        "label": "Held by",
-        "value": "Vendor"
-      }
-    ],
+    "details": [],
     "choices": [
       {
         "id": "rename",
@@ -37,14 +29,15 @@
             "label": "New name",
             "required": true
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
-        "description": "Stop here. Nothing is created.",
+        "label": "Cancel adding the invoice",
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

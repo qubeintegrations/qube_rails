@@ -1,42 +1,40 @@
 {
   "title": "A pick from the records there are",
-  "note": "resolve's ask_pick: nothing has that name and nothing may be created for it (an account here), so the person picks one: the first active records as rows, then a search over every record of the kind. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
+  "note": "resolve's ask_pick: nothing has that name and nothing may be created for it (an account here), so the person picks one: the first active records as rows, then, after \"None of these\", a search over every record of the kind. The search box asks your app's search route and fills a hidden input with the pick's ListID.",
   "prompt": {
     "id": "resolve / ask_pick",
     "kind": "decision",
     "token": "Sb4kQ2rTn8LmV1xZ",
-    "message": "QuickBooks has nothing named \"Consulting Income\". Pick the one to use instead, or cancel.",
+    "message": "QuickBooks has no account named “Consulting Income”.",
     "data": {
       "name": "Consulting Income",
       "kind": "account"
     },
-    "details": [
-      {
-        "label": "Account",
-        "value": "Consulting Income"
-      }
-    ],
+    "details": [],
     "choices": [
       {
         "id": "use:1",
         "label": "Sales",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use:2",
         "label": "Sales:Signs",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use:3",
         "label": "Service Income",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "pick"
       },
       {
         "id": "use",
@@ -51,14 +49,16 @@
             "label": "Search for the one to use",
             "required": true
           }
-        ]
+        ],
+        "role": "search"
       },
       {
         "id": "cancel",
-        "label": "Cancel",
+        "label": "Cancel adding the invoice",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

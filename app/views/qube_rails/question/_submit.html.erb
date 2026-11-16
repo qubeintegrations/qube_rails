@@ -1,0 +1,9 @@
+<%# A choice's own submit, in its form. A rows form's submit waits for the behaviour script
+    (hidden until it runs: a rows field can't be answered without it); a search's ("Use this
+    one") until a match is picked (choice.waits_for_pick?), which the script shows. %>
+<button type="submit" class="<%= qube_classes(choice.button_piece, "qube-choice-button") %>" data-qube-button="<%= choice.style %>"<% if choice.rows? %> data-qube-needs-script hidden<% elsif choice.waits_for_pick? %> hidden<% end %>>
+  <%= choice.label %>
+<% if choice.detail %>
+  <span class="<%= qube_classes(:choice_detail, "qube-choice-detail") %>"><%= choice.detail %></span>
+<% end %>
+</button>

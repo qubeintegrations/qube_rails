@@ -6,7 +6,8 @@
   <%= tag.input(type: "search", id: field.dom_id, class: qube_classes(:input, "qube-search-input"), maxlength: 100,
                 autocomplete: "off", required: field.required, disabled: field.disabled,
                 role: "combobox", "aria-autocomplete": "list", "aria-expanded": "false",
-                "aria-label": (field.labelled? ? nil : field.label), data: { "qube-search-input" => "" }) %>
+                "aria-label": (field.labelled? ? nil : field.label), data: { "qube-search-input" => "" },
+                **field.aria_invalid) %>
   <%= tag.input(type: "hidden", name: field.input_name, disabled: field.disabled,
                 class: ["qube-search-value", field.cell? ? "qube-rows-input" : nil].compact.join(" "),
                 data: field.data.merge("qube-search-value" => "")) %>
@@ -19,5 +20,6 @@
                                  "qube-text-no-matches" => QubeRails.t("question.no_matches"),
                                  "qube-text-searching" => QubeRails.t("question.searching"),
                                  "qube-text-search-failed" => QubeRails.t("question.search_failed"),
+                                 "qube-text-search-changed" => QubeRails.t("question.search_changed"),
                                  "qube-text-pick-a-match" => QubeRails.t("question.pick_a_match") }.compact) %>
 <%= render "qube_rails/question/field", field: field, control: control %>

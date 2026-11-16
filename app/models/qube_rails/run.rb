@@ -9,7 +9,8 @@ module QubeRails
   #
   # reference is new for every run and sent with it, and every event is checked against it and
   # the connection's qube_id. revision is the last event applied; state ("starting", then the
-  # run's own: "running", "awaiting_input", "completed", "failed", "cancelled") and outcome are
+  # run's own: "running", "awaiting_input", "completed", "failed", "cancelled"; "cancelling" after
+  # your user's cancel, until the next event) and outcome are
   # the run's as of that event. question and links are the question it's asking, if any, for the
   # question partial. input is what the run was started with. headline is the last event's
   # sentence for a person (shown, never parsed). A start QuBe Sync refused (a 4xx),
@@ -104,7 +105,7 @@ module QubeRails
     # or waiting on a question this app never received. Its webhook may have been lost (the app
     # was down longer than QuBe Sync's retries), so the status offers to send it again.
     def looks_stuck?
-      quiet_since?(Time.now - QUIET_AFTER_SECONDS) && (state == "running" || question_missing?)
+      quiet_since?(Time.now - QUIET_AFTER_SECONDS) && (%w[running cancelling].include?(state) || question_missing?)
     end
 
     # A start QuBe Sync hasn't confirmed for a minute: send it again with retry_start!.
@@ -124,7 +125,8 @@ module QubeRails
 
     # Where it stands, in a few words for a person: "Added to QuickBooks", "Done", "Couldn't
     # sync", "Cancelled", "Needs your answer", "Sending to QuickBooks", "Still waiting for
-    # QuickBooks" (a start unconfirmed for a minute) or "Syncing with QuickBooks". Why it failed
+    # QuickBooks" (a start unconfirmed for a minute), "Cancelling…" (a cancel posted, no event
+    # since) or "Syncing with QuickBooks". Why it failed
     # or was cancelled is reason_text. The words are I18n's, under qube_rails.status.
     def summary_text
       return QubeRails.t("status.cancelled") if cancelled?
@@ -142,6 +144,7 @@ module QubeRails
       when "failed" then QubeRails.t("status.failed")
       when "realtime_required" then error_message.to_s.empty? ? QubeRails.t("status.realtime_required") : error_message
       when "awaiting_input" then QubeRails.t("status.needs_answer")
+      when "cancelling" then QubeRails.t("status.cancelling")
       else QubeRails.t("status.running")
       end
     end

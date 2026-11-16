@@ -32,8 +32,9 @@ RSpec.describe "The run status partial", type: :request do
          headers: { "X-Account" => account.id.to_s, "Referer" => "http://www.example.com/invoices/#{invoice.id}" }
     expect(response).to redirect_to("http://www.example.com/invoices/#{invoice.id}")
 
-    errors = page.css(".qube-error")
-    expect(errors.map(&:text)).to eq(["This was already sent, so there's nothing to try again."])
+    shown = page
+    expect(shown.css(".qube-error").map(&:text)).to eq(["This was already sent, so there's nothing to try again."])
+    expect(shown.at_css(".qube-run-status .qube-run-summary + .qube-error")).not_to be_nil # under the status line
     expect(page.css(".qube-error")).to be_empty # shown once
   end
 

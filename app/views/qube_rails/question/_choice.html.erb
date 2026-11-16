@@ -1,20 +1,45 @@
 <%# One choice (a QubeRails::ChoiceView): a form posting choice=<id> and data[...] for its fields
     to choice.action_url, with your CSRF token. Its button is choice.style's (:primary, :secondary
-    or :ghost), with that ui_classes piece (choice.button_piece). %>
+    or :ghost), with that ui_classes piece (choice.button_piece). data-qube-choice-role is QuBe
+    Sync's role for it, when the prompt has roles.
+    A form choice ends in its button row (.qube-choice-actions): cancel on the left, its submit on
+    the right, with the exits passed as exits: (their buttons name their own forms, form=). With
+    detached: true it renders only the form, for a button elsewhere to submit. A form in a chain
+    carries its branch (data-qube-branch-part), hidden when that isn't the one on show. %>
+<% exits = local_assigns[:exits] || [] %>
+<% detached = local_assigns[:detached] %>
+<% row = choice.kind == :form %>
+<% part = question.branch_part(choice) unless detached %>
 <form class="<%= qube_classes(:choice, "qube-choice", choice.kind == :form ? "qube-choice-form" : nil) %>" method="post"
-      action="<%= choice.action_url %>" data-qube-choice="<%= choice.id %>" data-qube-choice-kind="<%= choice.kind %>">
+      action="<%= choice.action_url %>" id="<%= choice.form_id %>" data-qube-choice="<%= choice.id %>" data-qube-choice-kind="<%= choice.kind %>"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %><% if part %> data-qube-branch-part="<%= part %>"<% end %><%= " hidden" if detached || !question.shown_part?(part) %>>
   <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
   <%= hidden_field_tag :choice, choice.id, id: nil %>
-<% choice.fields.each do |field| %>
+<% unless detached %>
+<%   choice.fields.each do |field| %>
   <%= render field.partial, field: field %>
-<% end %>
-  <button type="submit" class="<%= qube_classes(choice.button_piece, "qube-choice-button") %>" data-qube-button="<%= choice.style %>">
-    <%= choice.label %>
-<% if choice.detail %>
-    <span class="<%= qube_classes(:choice_detail, "qube-choice-detail") %>"><%= choice.detail %></span>
-<% end %>
-  </button>
-<% if choice.description %>
+<%   end %>
+<%   if row %>
+<%     if choice.description %>
   <p class="<%= qube_classes(:choice_description, "qube-choice-description") %>"><%= choice.description %></p>
+<%     end %>
+  <div class="<%= qube_classes(:choice_actions, "qube-choice-actions") %>" data-qube-actions>
+    <div class="qube-choice-actions-start">
+<%     exits.select(&:cancel?).each do |exit_choice| %>
+      <%= render "qube_rails/question/exit_button", choice: exit_choice %>
+<%     end %>
+    </div>
+    <div class="qube-choice-actions-end" data-qube-actions-end>
+<%     exits.reject(&:cancel?).each do |exit_choice| %>
+      <%= render "qube_rails/question/exit_button", choice: exit_choice %>
+<%     end %>
+      <%= render "qube_rails/question/submit", choice: choice %>
+    </div>
+  </div>
+<%   else %>
+  <%= render "qube_rails/question/submit", choice: choice %>
+<%     if choice.description %>
+  <p class="<%= qube_classes(:choice_description, "qube-choice-description") %>"><%= choice.description %></p>
+<%     end %>
+<%   end %>
 <% end %>
 </form>

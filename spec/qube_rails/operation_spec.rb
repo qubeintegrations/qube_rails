@@ -412,6 +412,17 @@ RSpec.describe QubeRails::Operation do
 
       expect(run.reload).to have_attributes(state: "running", question: nil)
     end
+
+    it "reads as cancelling once QuBe Sync took a cancel, and offers redelivery if nothing comes" do
+      run.update!(state: "awaiting_input", question: { "token" => "t-1" }, links: { "decisions" => "x" }, qube_run_id: "run-c")
+      QuickbooksDesktop::CreateInvoice.new(invoice, run).answered("t-1", taken: true, cancelling: true)
+
+      expect(run.reload).to have_attributes(state: "cancelling", question: nil)
+      expect(run.summary_text).to eq("Cancelling…")
+      expect(run).not_to be_ended
+      run.update_column(:updated_at, Time.now - QubeRails::Run::QUIET_AFTER_SECONDS - 1)
+      expect(run).to be_looks_stuck
+    end
   end
 
   describe "#quickbooks_ref" do
@@ -437,16 +448,11 @@ RSpec.describe QubeRails::Operation do
   describe "#link_references" do
     let(:customer) { Customer.create!(account: account, name: "Riverbend Electric") }
     let(:widget) { Customer.create!(account: account, name: "Widget (an item, here)") }
-    let(:references) do
+    let(:refs) do
       {
-        "customer_ref" => { "kind" => "customer", "outcome" => "found", "how" => "exact",
-                            "record" => { "type" => "customer", "list_id" => "80000001-1", "edit_sequence" => "17",
-                                          "full_name" => "Riverbend Electric" } },
-        "invoice_line_add.0.item_ref" => { "kind" => "item", "outcome" => "created", "how" => nil,
-                                           "record" => { "type" => "item_service", "list_id" => "80000002-1",
-                                                         "full_name" => "Widget" } },
-        "invoice_line_add.1.item_ref" => { "kind" => "item", "outcome" => "not_found", "record" => nil },
-        "class_ref" => { "kind" => "class", "outcome" => "found", "how" => "id", "record" => { "list_id" => "80000003-1" } }
+        "customer_ref" => { "list_id" => "80000001-1", "type" => "customer" },
+        "invoice_line_add.0.item_ref" => { "list_id" => "80000002-1", "type" => "item_service" },
+        "class_ref" => { "list_id" => "80000003-1", "type" => "class" }
       }
     end
 
@@ -454,29 +460,63 @@ RSpec.describe QubeRails::Operation do
       QubeRails::Backend.parse(run_body(name, run, "output" => output))
     end
 
-    it "links each reference's record to the app record the block returns, by the record's own type" do
+    def records_event(records)
+      QubeRails::Backend.parse(run_body("workflow_run.notification", run, "name" => "records",
+                                                                          "data" => { "records" => records }))
+    end
+
+    it "links each of an ending's refs to the app record the block returns, by its type" do
       operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
       seen = []
-      linked = operation.link_references(event_with("workflow_run.completed", "references" => references)) do |path, entry|
-        seen << [path, entry["outcome"]]
+      linked = operation.link_references(event_with("workflow_run.completed", "refs" => refs)) do |path, entry|
+        seen << [path, entry["type"]]
         { "customer_ref" => customer, "invoice_line_add.0.item_ref" => widget, "class_ref" => invoice }[path]
       end
 
-      expect(seen).to eq([["customer_ref", "found"], ["invoice_line_add.0.item_ref", "created"], ["class_ref", "found"]])
+      expect(seen).to eq([%w[customer_ref customer], %w[invoice_line_add.0.item_ref item_service], %w[class_ref class]])
       expect(linked.size).to eq(3)
-      expect(connection.quickbooks_record("80000001-1", kind: "customer"))
-        .to have_attributes(record: customer, edit_sequence: "17", name: "Riverbend Electric")
+      expect(connection.quickbooks_record("80000001-1", kind: "customer")).to have_attributes(record: customer)
       expect(connection.quickbooks_record("80000002-1", kind: "item")).to have_attributes(kind: "item_service", record: widget)
       expect(connection.quickbooks_record("80000003-1", kind: "class")).to have_attributes(kind: "class", record: invoice)
     end
 
+    it "links a records notification's records, at each path, with their name and edit sequence" do
+      operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
+      records = [
+        { "action" => "picked", "kind" => "customer", "paths" => ["customer_ref"],
+          "sent" => { "full_name" => "Riverbend Electrc" },
+          "record" => { "list_id" => "80000001-1", "full_name" => "Riverbend Electric", "type" => "customer",
+                        "edit_sequence" => "17", "is_active" => true } },
+        { "action" => "created", "kind" => "item", "paths" => ["invoice_line_add.0.item_ref", "invoice_line_add.2.item_ref"],
+          "sent" => { "full_name" => "Widget" },
+          "record" => { "list_id" => "80000002-1", "full_name" => "Widget", "type" => "item_service" } }
+      ]
+      seen = []
+      linked = operation.link_references(records_event(records)) do |path, entry|
+        seen << [path, entry["action"]]
+        path == "customer_ref" ? customer : widget
+      end
+
+      expect(seen).to eq([%w[customer_ref picked], %w[invoice_line_add.0.item_ref created],
+                          %w[invoice_line_add.2.item_ref created]])
+      expect(linked.size).to eq(3)
+      expect(connection.quickbooks_record("80000001-1", kind: "customer"))
+        .to have_attributes(record: customer, edit_sequence: "17", name: "Riverbend Electric")
+
+      # The ending's refs, after: the name and edit sequence the notification stored stay.
+      operation.link_references(event_with("workflow_run.completed", "refs" => refs.slice("customer_ref"))) { customer }
+      expect(connection.quickbooks_record("80000001-1", kind: "customer"))
+        .to have_attributes(edit_sequence: "17", name: "Riverbend Electric")
+    end
+
     it "skips what the block returns nil for, and works on a cancelled ending" do
       operation = QuickbooksDesktop::CreateInvoice.new(invoice, run)
-      cancelled = event_with("workflow_run.cancelled", "references" => references.slice("customer_ref"), "record" => nil)
+      cancelled = event_with("workflow_run.cancelled", "refs" => refs.slice("customer_ref"))
 
       expect(operation.link_references(cancelled) { |_path, _entry| customer }.size).to eq(1)
       expect(operation.link_references(cancelled) { |_path, _entry| nil }).to eq([])
       expect(operation.link_references(event_with("workflow_run.completed", nil)) { customer }).to eq([])
+      expect(operation.link_references(records_event([])) { customer }).to eq([])
     end
   end
 

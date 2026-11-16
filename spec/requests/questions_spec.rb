@@ -60,6 +60,19 @@ RSpec.describe "The question routes", type: :request do
       expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
     end
 
+    it "reads \"Cancelling…\" after a cancel is posted, until the run's next event" do
+      stub_request(:post, decisions).to_return(json_data("state" => "running"))
+      run.update!(question: question.merge("choices" => question["choices"] + [{ "id" => "cancel", "label" => "Cancel", "fields" => [] }]))
+
+      answer(choice: "cancel")
+
+      expect(run.reload.state).to eq("cancelling")
+      expect(run.summary_text).to eq("Cancelling…")
+      expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
+      follow_redirect!(headers: signed_in)
+      expect(Nokogiri::HTML(response.body).at_css(".qube-run-summary").text).to include("Cancelling…")
+    end
+
     it "sends an unticked checkbox as false, and a number it can't read as typed" do
       answered = stub_request(:post, decisions)
                  .with(body: { choice: "add", data: { count: "three", taxable: false } })
@@ -78,34 +91,95 @@ RSpec.describe "The question routes", type: :request do
       expect(a_request(:post, decisions)).not_to have_been_made
     end
 
-    it "forgets the question and says it changed when QuBe Sync says it was answered or asked again" do
+    it "forgets the question, reads as running, and says what happened when QuBe Sync says it was answered or asked again" do
       stub_request(:post, decisions).to_return(api_error(409, "errors" => { "code" => "prompt_changed" }))
 
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest.")
+      expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::QuestionsController::MOVED_ON))
       expect(run.reload.question).to be_nil
+      # Not "Needs your answer" with no question to answer: its next webhook says what's next.
+      expect(run.state).to eq("running")
+      expect(QubeRails::SyncStatus.latest(invoice, operation: "create_invoice").status).to eq(:sending)
+
+      follow_redirect!(headers: signed_in)
+      shown = Nokogiri::HTML(response.body)
+      expect(shown.at_css(".qube-run-summary").text).to include("Syncing with QuickBooks")
+      expect(shown.at_css(".qube-question")).to be_nil
     end
 
-    it "forgets the question and says it changed for a 400 not_awaiting_input" do
+    it "leaves a newer question alone after a 409 for the old one" do
+      stub_request(:post, decisions).to_return(lambda do |_request|
+        run.update!(question: question.merge("token" => "tok-2"))
+        api_error(409, "errors" => { "code" => "prompt_changed" })
+      end)
+
+      answer(choice: "use:1")
+
+      expect(run.reload.question["token"]).to eq("tok-2")
+      expect(run.state).to eq("awaiting_input")
+    end
+
+    it "forgets the question and reads as running for a 400 not_awaiting_input" do
       stub_request(:post, decisions).to_return(api_error(400, "errors" => { "code" => "not_awaiting_input" }))
 
       answer(choice: "use:1")
 
       expect(response).to have_http_status(:see_other)
       expect(run.reload.question).to be_nil
+      expect(run.state).to eq("running")
     end
 
-    it "keeps the question and says why for a 422" do
+    it "keeps the question and says why for a 422, in the question, with what was typed" do
       stub_request(:post, decisions)
         .to_return(api_error(422, "errors" => { "detail" => "count must be a whole number" }))
 
-      answer(choice: "add", data: { count: "3" })
+      answer(choice: "add", data: { name: "Lone Star", count: "3.5", taxable: "true", note: "" })
 
       expect(response).to have_http_status(:see_other)
-      expect(flash[:qube_rails_error]).to eq("That answer couldn't be used: count must be a whole number")
+      expect(flash[:qube_rails_error]).to be_nil
+      expect(flash[:qube_rails_refusal]).to eq("token" => "tok", "choice" => "add",
+                                               "message" => "That answer couldn't be used: count must be a whole number",
+                                               "values" => { "name" => "Lone Star", "count" => "3.5", "taxable" => "true" })
       expect(run.reload.question).to eq(question)
+
+      follow_redirect!(headers: signed_in)
+      shown = Nokogiri::HTML(response.body)
+      error = shown.at_css("section.qube-question .qube-error[role=alert]")
+      expect(error.text).to eq("That answer couldn't be used: count must be a whole number")
+      expect(shown.css(".qube-error").size).to eq(1) # not above the status as well
+      form = shown.at_css("form[data-qube-choice=add]")
+      expect(form.at_css("input[name='data[name]']")["value"]).to eq("Lone Star")
+      expect(form.at_css("input[name='data[count]']")["value"]).to eq("3.5")
+      expect(form.at_css("input[name='data[taxable]']")["checked"]).not_to be_nil
+      expect(form.at_css("input[name='data[note]']")["value"]).to be_nil
+      fields = form.css("input[name^='data[']")
+      expect(fields.map { |f| f["aria-invalid"] }).to all(eq("true"))
+      expect(fields.map { |f| f["aria-describedby"] }).to all(eq(error["id"]))
+      # Other choices' fields aren't marked
+      expect(shown.css("form:not([data-qube-choice=add]) [aria-invalid]")).to be_empty
+    end
+
+    it "keeps nothing typed that wouldn't fit a cookie session" do
+      stub_request(:post, decisions).to_return(api_error(422, "errors" => { "detail" => "too long" }))
+
+      answer(choice: "add", data: { name: "x" * 2000 })
+
+      expect(flash[:qube_rails_refusal]["values"]).to eq({})
+    end
+
+    it "shows a refusal only on the question it was for" do
+      stub_request(:post, decisions).to_return(lambda do |_request|
+        api_error(422, "errors" => { "detail" => "count must be a whole number" })
+      end)
+      answer(choice: "add", data: { name: "Lone Star" })
+      run.update!(question: question.merge("token" => "tok-2"))
+
+      follow_redirect!(headers: signed_in)
+      shown = Nokogiri::HTML(response.body)
+      expect(shown.at_css(".qube-error")).to be_nil
+      expect(shown.at_css("input[name='data[name]']")["value"]).to be_nil
     end
 
     it "raises for anything else QuBe Sync answers" do
@@ -192,7 +266,7 @@ RSpec.describe "The question routes", type: :request do
       expect(flash[:qube_rails_error]).to eq("This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest.")
     end
 
-    it "forgets the question and says it changed for any other 400" do
+    it "forgets the question and says so for any other 400" do
       stub_request(:post, decisions).to_return(api_error(400, "errors" => { "code" => "bad_request" }))
 
       answer(choice: "use:1")
@@ -237,7 +311,16 @@ RSpec.describe "The question routes", type: :request do
       expect(JSON.parse(response.body)).to eq(matches)
     end
 
-    it "asks nothing for fewer than 2 or more than 100 characters" do
+    it "browses with nothing typed: the list's first records, as a box is focused" do
+      first = [{ "value" => "80000002-1", "label" => "Cost of Goods Sold", "detail" => "Account" }]
+      stub_request(:get, "#{search_url}&field=list_id&q=").to_return(json_data(first))
+
+      search("  ")
+
+      expect(JSON.parse(response.body)).to eq(first)
+    end
+
+    it "asks nothing for one character or more than 100" do
       search("r")
       expect(JSON.parse(response.body)).to eq([])
 

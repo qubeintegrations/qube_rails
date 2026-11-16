@@ -10,8 +10,10 @@ module QubeRails
     # qube_rails.css.
     def qube_rails_assets(stylesheet: false)
       tags = []
-      tags << stylesheet_link_tag("qube_rails", media: "all") if stylesheet
-      tags << javascript_include_tag("qube_rails/question", defer: true, nonce: true)
+      # data-turbo-track: under Turbo Drive a changed asset (a gem update) reloads the page, rather
+      # than keeping the old script, whose once-per-page guard would skip the new one.
+      tags << stylesheet_link_tag("qube_rails", media: "all", "data-turbo-track": "reload") if stylesheet
+      tags << javascript_include_tag("qube_rails/question", defer: true, nonce: true, "data-turbo-track": "reload")
       safe_join(tags, "\n")
     end
 

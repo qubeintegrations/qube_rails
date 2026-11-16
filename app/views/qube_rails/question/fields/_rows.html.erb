@@ -1,12 +1,25 @@
 <%# A rows field (field.rows, a QubeRails::RowsView): a block per record with the fields it asks,
     posted as data[<field>][<row key>][<column>]. A field shows only while its "when" holds. "Set
-    all to:" sets the segmented column on every row, and "Use for all" copies one row's value to
-    the others (the behaviour script). %>
+    all to:" sets the segmented column on every row, and "Use for the other records too" copies one
+    row's value to the others' empty field and says so (the behaviour script). With the script, more than one row shows one at a time:
+    the data-qube-text-step/-back/-next words and the button classes are for its step line and
+    Back / Next. It needs the script: hidden until the script shows it, with a <noscript> line
+    saying so. %>
 <% rows = field.rows %>
 <% set_all = rows.set_all %>
-<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows
-     data-qube-text-use-for-all="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>">
+<noscript><p class="<%= qube_classes(:error, "qube-error") %>"><%= QubeRails.t("question.needs_script") %></p></noscript>
+<div class="<%= qube_classes(:field, "qube-field", "qube-rows-field") %>" data-qube-rows data-qube-needs-script hidden
+     data-qube-text-use-for-all-one="<%= QubeRails.t("question.use_for_all", count: 1) %>"
+     data-qube-text-use-for-all-other="<%= QubeRails.t("question.use_for_all", count: "%{count}") %>"
+     data-qube-text-used-for-all-one="<%= QubeRails.t("question.used_for_all", count: 1) %>"
+     data-qube-text-used-for-all-other="<%= QubeRails.t("question.used_for_all", count: "%{count}") %>"
+     data-qube-text-step="<%= rows.ui_text(:step, name: "%{name}", position: "%{position}", count: "%{count}") %>"
+     data-qube-text-back="<%= QubeRails.t("question.back") %>" data-qube-text-next="<%= QubeRails.t("question.next") %>"
+     data-qube-button-class="<%= qube_classes(:button, "qube-choice-button") %>"
+     data-qube-button-secondary-class="<%= qube_classes(:button_secondary, "qube-choice-button") %>">
+<% unless rows.label.strip.empty? %>
   <p class="<%= qube_classes(:label, "qube-rows-label") %>"><%= rows.label %></p>
+<% end %>
 <% if set_all %>
   <div class="qube-rows-set-all" data-qube-rows-set-all="<%= set_all.name %>">
     <span class="qube-rows-set-all-label"><%= QubeRails.t("question.set_all") %></span>

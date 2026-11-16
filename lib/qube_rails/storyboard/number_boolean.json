@@ -38,14 +38,16 @@
             "label": "Allow a negative quantity on hand",
             "required": false
           }
-        ]
+        ],
+        "role": "answer"
       },
       {
         "id": "cancel",
         "label": "Cancel",
         "description": null,
         "detail": null,
-        "fields": []
+        "fields": [],
+        "role": "cancel"
       }
     ]
   },

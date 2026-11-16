@@ -1,7 +1,7 @@
 <%# A message from one of the engine's routes, shown once. Without a message local it takes
     flash[:qube_rails_error], for a page without the run partials:
       render "qube_rails/error"
-    The question and run status pieces pass theirs (message: nil shows nothing). %>
+    The question and run status pieces pass theirs (message: nil shows nothing); id: is optional. %>
 <% if local_assigns.key?(:message) %>
 <%   message = local_assigns[:message] %>
 <% else %>
@@ -9,5 +9,5 @@
 <%   flash.delete(:qube_rails_error) %>
 <% end %>
 <% if message.present? %>
-<p class="<%= qube_classes(:error, "qube-error") %>" role="alert"><%= message %></p>
+<%= tag.p(message, class: qube_classes(:error, "qube-error"), role: "alert", id: local_assigns[:id]) %>
 <% end %>
