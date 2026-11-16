@@ -47,19 +47,9 @@ module QubeRails
       choices.select { |c| c.kind == :pick }
     end
 
-    # The forms shown as sections. A search under offered records is left out: it's behind
-    # "or search QuickBooks…" at the end of the picks (searches).
+    # The forms shown as sections. In a chain (chain?) the search ones are its search branch.
     def forms
-      choices.select { |c| c.kind == :form && !disclosed?(c) }
-    end
-
-    # The search choices shown behind "or search QuickBooks…" under the possible matches.
-    def searches
-      choices.select { |c| disclosed?(c) }
-    end
-
-    def disclosed?(choice)
-      choice.kind == :form && choice.role == "search" && matches?
+      choices.select { |c| c.kind == :form }
     end
 
     def exits
@@ -71,12 +61,69 @@ module QubeRails
     end
 
     # The one form whose button row also holds the exits (cancel left, the rest beside its
-    # submit): a question with no picks, one form, and exits without descriptions. Else nil, and
-    # the exits have a footer row of their own.
+    # submit): a question with no picks, one form, and exits without descriptions; in a chain, its
+    # one search. Else nil, and the exits have a footer row of their own.
     def joined_form
-      return nil unless picks.empty? && forms.size == 1 && exits.none?(&:description)
+      candidates = if chain? then forms.select { |c| c.role == "search" }
+                   elsif picks.empty? then forms
+                   else []
+                   end
+      return nil unless candidates.size == 1 && exits.none?(&:description)
 
-      forms.first
+      candidates.first
+    end
+
+    # The exits a joined form's row holds: in a chain, decline and cancel (the search's branch).
+    def joined_exits
+      chain? ? exits.select { |c| %w[decline cancel].include?(c.role) } : exits
+    end
+
+    # Offered records with a search: a chain, shown a branch at a time. The offered records come
+    # first with "Not this one" / "None of these", which swaps them for the search (README, "Choices").
+    def chain?
+      matches? && choices.any? { |c| c.role == "search" }
+    end
+
+    # The branch a chain shows as the page loads: :search when its search's answer was just
+    # refused, else :offered. nil when it isn't a chain.
+    def branch
+      return nil unless chain?
+
+      choices.any? { |c| c.role == "search" && c.id == refused_choice } ? :search : :offered
+    end
+
+    # The branch a piece of a chain belongs to ("offered" or "search", its data-qube-branch-part):
+    # a search form, or the picks (:picks), another form, or the footer (:footer) when the search's
+    # row holds the exits. nil outside a chain, and for what both branches show.
+    def branch_part(piece)
+      return nil unless chain?
+
+      case piece
+      when :picks then "offered"
+      when :footer then joined_form ? "offered" : nil
+      when ChoiceView
+        return nil unless piece.kind == :form
+
+        piece.role == "search" ? "search" : "offered"
+      end
+    end
+
+    # Whether that part is on show as the page loads.
+    def shown_part?(part)
+      part.nil? || part == branch.to_s
+    end
+
+    # The count "None of these" and its way back say ("Not this one" for one).
+    def offered_count
+      picks.count { |c| c.role == "pick" }
+    end
+
+    # Whether an "or" goes before form n: another form before it in its branch, or the picks.
+    def divided?(choice, n)
+      return n.positive? || picks.any? unless chain?
+
+      part = branch_part(choice)
+      forms.first(n).any? { |c| branch_part(c) == part } || (part == "offered" && picks.any?)
     end
 
     # Whether QuBe Sync said each choice's role (prompt.choices[].role): then the picks are the
@@ -125,7 +172,7 @@ module QubeRails
       primary = offered.first || (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
       @choices.each do |choice|
         style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : promoted_style(choice))
-                elsif choice.equal?(primary) then :primary
+                elsif choice.equal?(primary) || (choice.role == "search" && chain?) then :primary
                 elsif choice.cancel? then :ghost
                 else :secondary
                 end
@@ -246,6 +293,11 @@ module QubeRails
     # Whether one of its fields is a rows field (which needs the behaviour script).
     def rows?
       fields.any? { |f| f.type == "rows" }
+    end
+
+    # A search's submit ("Use this one"): hidden until a match is picked, which the script shows.
+    def waits_for_pick?
+      role == "search" && fields.any? { |f| f.type == "search" }
     end
 
     # Whether QuBe Sync just refused this choice's answer (a 422): its fields are marked invalid.

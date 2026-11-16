@@ -129,7 +129,7 @@
     user-select: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease;
+    transition: transform 160ms var(--qube-ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
   }
 
   :where(.qube-pick-action) {
@@ -279,37 +279,6 @@
     color: var(--qube-muted-color);
   }
 
-  /* "or search QuickBooks…" under the possible matches: a quiet link that opens the search in place */
-  :where(.qube-search-disclosure) {
-    display: grid;
-    gap: 12px;
-  }
-
-  :where(.qube-search-disclosure[open]) {
-    margin-top: 12px;
-  }
-
-  :where(.qube-search-disclosure > summary) {
-    justify-self: start;
-    list-style: none;
-  }
-
-  :where(.qube-search-disclosure > summary)::-webkit-details-marker {
-    display: none;
-  }
-
-  /* The search drops in where "or search QuickBooks…" was, as it opens; closing is instant */
-  :where(.qube-search-disclosure[open] > .qube-choice) {
-    animation: qube-search-open 200ms var(--qube-ease-out);
-  }
-
-  @keyframes qube-search-open {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-  }
-
   :where(.qube-choice-button, .qube-retry-start, .qube-redeliver, .qube-set-all-button, .qube-storyboard-copy) {
     display: inline-flex;
     align-items: center;
@@ -390,13 +359,6 @@
     color: var(--qube-muted-color);
   }
 
-  /* With the script, the open search hides "or search QuickBooks…"; "Close search" closes it again.
-     After the button rules, which set display with the same (zero) specificity. */
-  :where(.qube-search-disclosure[data-qube-closable][open] > summary),
-  :where([data-qube-search-close][hidden]) {
-    display: none;
-  }
-
   /* Under a ghost button (no box), the description starts where the button's text does; at the
      start of a row the ghost's text is already at the edge */
   :where([data-qube-button="ghost"] ~ .qube-choice-description) {
@@ -461,6 +423,12 @@
 
   :where(.qube-input, .qube-select, .qube-search-input):where(:user-invalid, [aria-invalid="true"]) {
     border-color: var(--qube-error-color);
+  }
+
+  /* A search box being typed in has no pick yet, which isn't a mistake: the error edge waits
+     until the focus leaves it (or QuBe Sync refuses the answer) */
+  :where(.qube-search-input:user-invalid:focus:not([aria-invalid="true"])) {
+    border-color: var(--qube-accent-color);
   }
 
   :where(.qube-input, .qube-select, .qube-search-input):where(:disabled) {
@@ -940,7 +908,7 @@
 
   /* The exits' row, or a lone form's button row, is the card's footer */
   :where(.qube-choice-footer:not([data-qube-plain])),
-  :where(.qube-choices > .qube-choice-form:not(:has(~ .qube-choice-footer)) > .qube-choice-actions) {
+  :where(.qube-choices > .qube-choice-form:not(:has(~ .qube-choice-footer:not([hidden]))) > .qube-choice-actions) {
     margin-top: 4px;
     padding-top: 16px;
     border-top: 1px solid var(--qube-border-color);
@@ -951,14 +919,85 @@
     max-width: calc(var(--qube-form-width, 36rem) + 2 * clamp(16px, 3vw, 24px) + 2px);
   }
 
-  /* The open search is a section of its own under the offered records: a hairline, not a box */
-  :where(.qube-picks + .qube-search-disclosure[open]) {
-    margin-top: 8px;
-    padding-top: 16px;
-    border-top: 1px solid var(--qube-border-color);
+  /* ---- A chain (offered records with a search), a branch at a time */
+
+  /* The way back to the offered records, over a chain's search */
+  :where(.qube-branch-back) {
+    justify-self: start;
+    margin-inline-start: -14px;
+  }
+
+  /* The search keeps the width the offered records had, so the card doesn't move */
+  :where(.qube-question:has(.qube-branch-back)),
+  :where(.qube-question:has(.qube-branch-back) .qube-choice-form) {
+    max-width: none;
+  }
+
+  /* A search's note with no matches under it ("No matches", a failed search) is a line under the
+     box, not a floating list over the buttons */
+  :where(.qube-search-results:has(> [data-qube-search-note]):not(:has([data-qube-search-result]))) {
+    position: static;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    transform: none;
+  }
+
+  :where(.qube-search-results:not(:has([data-qube-search-result])) > [data-qube-search-note]) {
+    padding: 6px 0 0;
+  }
+
+  /* Moving between a chain's branches (the script marks the question, so a page load is still):
+     the branch comes in from its side, the search from the right and the records from the left */
+  :where([data-qube-branch-moved] [data-qube-branch-part]:not(.qube-choice-button)) {
+    transition: opacity 200ms var(--qube-ease-out), transform 200ms var(--qube-ease-out);
+  }
+
+  @starting-style {
+    :where([data-qube-branch-moved="search"] [data-qube-branch-part]:not(.qube-choice-button)) {
+      opacity: 0;
+      transform: translateX(8px);
+    }
+
+    :where([data-qube-branch-moved="offered"] [data-qube-branch-part]:not(.qube-choice-button)) {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+  }
+
+  /* "Use this one" arrives as a match is picked */
+  :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
+    transition:
+      transform 160ms var(--qube-ease-out),
+      opacity 160ms var(--qube-ease-out),
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  @starting-style {
+    :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
+      opacity: 0;
+      transform: scale(0.97);
+    }
   }
 
   /* ---- Narrow screens: choices stack, full width */
+
+  /* A search's row that also holds the decline is long once "Use this one" joins it. Where it
+     wouldn't fit on a line, its end is on top and cancel under it from the start, so a pick
+     moves nothing */
+  @container qube-choices (max-width: 44rem) {
+    :where(.qube-choice[data-qube-choice-role="search"] > .qube-choice-actions:has(.qube-choice-actions-end > [data-qube-exit])) {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+
+    :where(.qube-choice[data-qube-choice-role="search"] > .qube-choice-actions:has(.qube-choice-actions-end > [data-qube-exit]) > .qube-choice-actions-end) {
+      margin-inline-start: 0;
+    }
+  }
 
   @media (max-width: 30rem) {
     /* An offered record: its "Use this one" under its text, so the text has the whole width */
@@ -1011,13 +1050,17 @@
       :where(.qube-search-results, .qube-error) {
         transform: none;
       }
+
+      :where([data-qube-branch-moved] [data-qube-branch-part]:not(.qube-choice-button)),
+      :where(.qube-choice[data-qube-choice-role="search"] .qube-choice-actions-end > button[type="submit"]) {
+        transform: none;
+      }
     }
 
     :where(.qube-segment, .qube-use-for-all):where(:active) {
       transform: none;
     }
 
-    :where(.qube-search-disclosure[open] > .qube-choice),
     :where(.qube-search[data-qube-picked])::before {
       animation-name: qube-fade-in;
     }
@@ -1354,9 +1397,13 @@
     font-size: 0.9231em;
   }
 
-  /* What needs the script (a rows field and its submit) stays hidden without it. Last, so no
-     rule above that sets display wins the zero-specificity tie. */
-  :where([data-qube-needs-script][hidden]) {
+  /* Hidden stays hidden: what needs the script (a rows field and its submit), a chain's branch not
+     on show, a search's submit before a pick, and an exit's form in another form's button row (it
+     takes no row of the grid). Last, so no rule above that sets display wins the zero-specificity tie. */
+  :where([data-qube-needs-script][hidden]),
+  :where([data-qube-branch-part][hidden]),
+  :where(.qube-choice-button[hidden]),
+  :where(.qube-choice[hidden]) {
     display: none;
   }
 }

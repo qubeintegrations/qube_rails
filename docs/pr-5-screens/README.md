@@ -11,6 +11,11 @@ rows field's step count, Back and Next) at its end. 54-56 are Tailwind-themed no
 its browser build, loaded by the screenshot harness only; renamed from `-bootstrap-`); 70 is the
 Bootstrap one.
 
+Since then the stepped ask replaced the search behind "or search QuickBooks…": offered records
+with a search show first, with "Not this one" / "None of these", which swaps them for the search
+(with the decline and a way back). The screens of a near match or a record search still show the
+disclosure; they weren't retaken.
+
 | # | Screen | What it shows | Image |
 | --- | --- | --- | --- |
 | 01 | Near match (resolve ask) | roles pick, search (behind the disclosure), decline, cancel | [01-near-match-pick-search-decline-cancel.png](01-near-match-pick-search-decline-cancel.png) |
