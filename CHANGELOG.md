@@ -174,6 +174,8 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   which left blank space under the buttons: `.qube-choice` set `display` and won over `hidden`. The
   layer's last rule now hides a `hidden` `.qube-choice`, `.qube-choice-button` and
   `[data-qube-branch-part]` (zero specificity, so it has to come after the rules that set display).
+- A search box with text but no pick shows its error edge once the focus leaves it, not while
+  it's being typed in (after a first try it was red through every later search).
 - A search's "No matches" or failed-search note is a line under the box, in flow, not a floating
   list over the buttons below it.
 - On the last record of a rows field, Back and the question's submit share a row: the step nav

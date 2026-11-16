@@ -425,6 +425,12 @@
     border-color: var(--qube-error-color);
   }
 
+  /* A search box being typed in has no pick yet, which isn't a mistake: the error edge waits
+     until the focus leaves it (or QuBe Sync refuses the answer) */
+  :where(.qube-search-input:user-invalid:focus:not([aria-invalid="true"])) {
+    border-color: var(--qube-accent-color);
+  }
+
   :where(.qube-input, .qube-select, .qube-search-input):where(:disabled) {
     opacity: 0.5;
   }
