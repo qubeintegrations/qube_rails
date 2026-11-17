@@ -191,6 +191,7 @@
         .then(function (matches) {
           if (asked.get(box) !== n) return; // a later search, or a close, since
           clearTimeout(slow.get(box));
+          if (document.activeElement !== p.input) return close(box); // only the box in use opens
           if (matches && matches.changed) {
             return note(box, p, words(box, "search-changed", "This question has changed. Reload the page to see the latest."), "changed");
           }
@@ -200,6 +201,7 @@
         .catch(function () {
           if (asked.get(box) !== n) return;
           clearTimeout(slow.get(box));
+          if (document.activeElement !== p.input) return close(box);
           note(box, p, words(box, "search-failed", "Search isn't available right now."), "failed");
         });
     }, q ? 250 : 0));
@@ -790,11 +792,11 @@
     search(box);
   });
 
+  // Closed as the focus leaves, open or not yet: a list still on its way (the focus's browse)
+  // never opens for a box no longer in use.
   document.addEventListener("focusout", function (event) {
     var box = event.target.closest && event.target.closest("[data-qube-search]");
-    if (box && box.hasAttribute("data-qube-open") && !(event.relatedTarget && box.contains(event.relatedTarget))) {
-      close(box);
-    }
+    if (box && !(event.relatedTarget && box.contains(event.relatedTarget))) close(box);
   });
 
   // A form behind "or <its label>…": opening it puts the focus in its first field. (toggle
