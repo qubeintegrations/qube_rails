@@ -20,8 +20,14 @@
   nothing makes the decline the main action, unless a match was picked.
 - A search's list opens only for the box being focused or typed in, and a box under offered
   records never shows the error edge: its pick is a row of its own.
-- The branch pattern (`QuestionView#chain?`, `#branch`, `data-qube-branch*`, "← Back to the
-  possible match") is gone; `question.none_of_these` and `question.back_to_offered` are unused.
+- The branch pattern is gone: `QuestionView#chain?`, `#branch`, `#branch_part`, `#shown_part?` and
+  `#joined_exits`, `data-qube-branch*` and "← Back to the possible match". An override of
+  `_question`, `_footer` or `_choice` copied from 0.2.1 that calls them needs updating, and an
+  override of `_pick` must render `choice.data` and hide `choice.slot?`. `question.none_of_these`
+  and `question.back_to_offered` are unused.
+- An offered record's button is described by the record's name (`aria-describedby`,
+  `ChoiceView#label_id`), so a screen reader says which record "Use this one" picks. The search box
+  under offered records is hidden until the script runs, since it can't search without it.
 
 **A name clash leads with the existing record**
 - A choice about one record can carry `title`, `action`, `lines` (each split on " · ") and

@@ -135,6 +135,20 @@ RSpec.describe "A question's choices by kind" do
     expect(view.joined_form).to be_nil
   end
 
+  it "never puts a search behind the disclosure, only the forms that answer" do
+    prompt = { "token" => "t", "message" => "?", "choices" => [
+      { "id" => "use_existing", "label" => "Use the existing record", "role" => "answer", "title" => "RIVERBEND",
+        "fields" => [] },
+      { "id" => "use", "label" => "Use this one", "role" => "search",
+        "fields" => [{ "name" => "list_id", "type" => "record", "kind" => "customer", "required" => true }] },
+      { "id" => "rename", "label" => "Add it under another name", "role" => "answer",
+        "fields" => [{ "name" => "name", "type" => "string", "required" => true }] },
+      { "id" => "cancel", "label" => "Cancel", "role" => "cancel", "fields" => [] }
+    ] }
+    view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
+    expect(view.disclosed.map(&:id)).to eq(%w[rename])
+  end
+
   it "reads a choice about one record: its title, action, lines and facts" do
     record = question("name_clash").picks.first
 

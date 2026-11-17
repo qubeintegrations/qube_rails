@@ -161,7 +161,7 @@ module QubeRails
       @alongside = level ? @choices.select { |c| c.role == "decline" && c.kind == :exit } : []
       @searches = offered.any? ? @choices.select { |c| c.kind == :form && c.role == "search" } : []
       @searches.each { |c| c.fields.each(&:inline!) }
-      @disclosed = promoted_first ? @choices.select { |c| c.kind == :form } : []
+      @disclosed = promoted_first ? @choices.select { |c| c.kind == :form && c.role != "search" } : []
     end
 
     def kind_by_role(choice)
@@ -271,6 +271,11 @@ module QubeRails
       "qube-#{@token}-choice-#{index}"
     end
 
+    # The id of an offered record's name, which its button is described by.
+    def label_id
+      "qube-#{@token}-pick-#{index}#{"-picked" if slot?}"
+    end
+
     # Whether one of its fields is a rows field (which needs the behaviour script).
     def rows?
       fields.any? { |f| f.type == "rows" }
@@ -301,6 +306,11 @@ module QubeRails
       false
     end
 
+    protected
+
+    # The question's token, for a picked row made from this search.
+    attr_reader :token
+
     private
 
     def presence(value)
@@ -322,6 +332,7 @@ module QubeRails
       @facts = []
       @fields = []
       @index = search.index
+      @token = search.token
       @action_url = search.action_url
       @kind = :pick
       @style = :secondary

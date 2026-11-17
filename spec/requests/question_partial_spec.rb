@@ -35,6 +35,11 @@ RSpec.describe "The question partial", type: :request do
     # An offered record's button is its only target; the row around it isn't one.
     expect(forms.first.css("button").map { |b| b["class"].split.first }).to eq(%w[qube-pick-action])
     expect(forms.first.at_css("div.qube-pick > button[type=submit][data-qube-offered]")).not_to be_nil
+    # Its button is described by the record's name, for a screen reader.
+    button = forms.first.at_css("button[data-qube-offered]")
+    expect(shown.at_css("##{button["aria-describedby"]}").text).to eq("Riverbend Electric")
+    # The search box under the records needs the script: hidden until it runs.
+    expect(shown.at_css("form.qube-search-inline[hidden][data-qube-needs-script]")).not_to be_nil
 
     search = shown.at_css(".qube-search")
     expect(search["data-qube-search"]).to eq("#{action}/search")
