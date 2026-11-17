@@ -1,0 +1,12 @@
+<%# A search beside offered records (question.searches): its box alone under them, "Search
+    QuickBooks…", its label for screen readers. It has no submit: the script puts the match
+    picked in it as a row with the offered records, whose "Use this one" answers. Hidden until the
+    script runs: without it the box can't search. %>
+<form class="<%= qube_classes(:choice, "qube-choice", "qube-search-inline") %>" method="post" action="<%= choice.action_url %>"
+      id="<%= choice.form_id %>" data-qube-choice="<%= choice.id %>" data-qube-choice-kind="form" data-qube-choice-role="<%= choice.role %>" data-qube-needs-script hidden>
+  <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
+  <%= hidden_field_tag :choice, choice.id, id: nil %>
+<% choice.fields.each do |field| %>
+  <%= render field.partial, field: field %>
+<% end %>
+</form>

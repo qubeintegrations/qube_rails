@@ -1,6 +1,6 @@
 {
-  "title": "A pick from a list",
-  "note": "resolve_transaction's ask: an option whose field has choose becomes one choice per item (use:1, use:2, ...), each with its detail; the server fills the field.",
+  "title": "More than one match",
+  "note": "More than one invoice could be the one your app meant. Your user picks one, says none of these is it, or cancels.",
   "prompt": {
     "id": "resolve_transaction / ask",
     "kind": "decision",

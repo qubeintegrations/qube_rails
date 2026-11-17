@@ -28,8 +28,18 @@ RSpec.describe "The question partial", type: :request do
     expect(shown.at_css(".qube-question-details")).to be_nil # nothing beside what the message says
     forms = shown.css("form.qube-choice")
     expect(forms.map { |f| f["action"] }.uniq).to eq([action])
-    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use cancel none])
-    expect(forms.first.at_css("button.qube-pick").text).to include("Riverbend Electric", "similar name")
+    # The offered record, the row its search's pick fills, the search box, the decline beside
+    # them, then cancel.
+    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use use none cancel])
+    expect(forms.first.at_css(".qube-pick").text).to include("Riverbend Electric", "similar name")
+    # An offered record's button is its only target; the row around it isn't one.
+    expect(forms.first.css("button").map { |b| b["class"].split.first }).to eq(%w[qube-pick-action])
+    expect(forms.first.at_css("div.qube-pick > button[type=submit][data-qube-offered]")).not_to be_nil
+    # Its button is described by the record's name, for a screen reader.
+    button = forms.first.at_css("button[data-qube-offered]")
+    expect(shown.at_css("##{button["aria-describedby"]}").text).to eq("Riverbend Electric")
+    # The search box under the records needs the script: hidden until it runs.
+    expect(shown.at_css("form.qube-search-inline[hidden][data-qube-needs-script]")).not_to be_nil
 
     search = shown.at_css(".qube-search")
     expect(search["data-qube-search"]).to eq("#{action}/search")
@@ -84,7 +94,8 @@ RSpec.describe "The question partial", type: :request do
     asking(make_run(invoice, connection), QubeRails::Storyboard.find("choose").sample["prompt"])
     shown = page
     expect(shown.at_css(".qube-choice-footer-start form[data-qube-choice=cancel] button")).not_to be_nil
-    expect(shown.at_css(".qube-choice-footer-end form[data-qube-choice=none] button")).not_to be_nil
+    # A decline beside offered records is just under them, not in the footer
+    expect(shown.at_css(".qube-picks + .qube-choice-alongside > form[data-qube-choice=none] button")).not_to be_nil
     expect(shown.at_css("[data-qube-exit]")).to be_nil
 
     asking(QubeRails::Run.last, QubeRails::Storyboard.find("name_clash").sample["prompt"]

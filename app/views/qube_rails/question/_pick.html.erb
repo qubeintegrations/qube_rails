@@ -1,14 +1,31 @@
 <%# One pick (a QubeRails::ChoiceView of kind :pick): an option row, a form posting choice=<id>
     to choice.action_url with your CSRF token. An offered record (choice.style set) ends in a
-    "Use this one" button: the first primary, the rest secondary. %>
+    "Use this one" button: the first primary, the rest secondary. A choice about one record shows
+    its title, lines and facts, and its action as the button. An offered record's button is its
+    only target, described by the record's name; a row without one is a button whole. A search box's picked match
+    (choice.slot?) is hidden and empty until the script fills it. %>
 <form class="qube-choice qube-pick-form" method="post" action="<%= choice.action_url %>" role="listitem"
-      data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %>>
+      data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %><%= " hidden" if choice.slot? %>>
   <%= hidden_field_tag request_forgery_protection_token, form_authenticity_token, id: nil %>
   <%= hidden_field_tag :choice, choice.id, id: nil %>
+<% choice.data.each do |name, value| %>
+  <%= hidden_field_tag name, value, id: nil %>
+<% end %>
+<% if choice.style %>
+  <div class="<%= qube_classes(:pick, "qube-pick") %>">
+<% else %>
   <button type="submit" class="<%= qube_classes(:pick, "qube-pick") %>">
+<% end %>
     <span class="qube-pick-text">
-      <span class="qube-pick-label"><%= choice.label %></span>
-<% if choice.detail %>
+      <span class="qube-pick-label"<% if choice.style %> id="<%= choice.label_id %>"<% end %>><%= choice.title || choice.label %></span>
+<% if choice.lines.any? || choice.facts.any? %>
+<%   choice.lines.each do |line| %>
+      <span class="<%= qube_classes(:pick_detail, "qube-pick-detail", "qube-pick-line") %>"><%= safe_join(choice.detail_parts(line).map { |part| tag.span(part, class: "qube-detail-part") }, " ") %></span>
+<%   end %>
+<%   if choice.facts.any? %>
+      <span class="qube-pick-facts"><% choice.facts.each do |fact| %><span class="qube-pick-fact"><span class="qube-pick-fact-label"><%= fact.label %></span> <%= fact.value %></span><% end %></span>
+<%   end %>
+<% elsif choice.detail || choice.slot? %>
       <span class="<%= qube_classes(:pick_detail, "qube-pick-detail") %>"><%= safe_join(choice.detail_parts.map { |part| tag.span(part, class: "qube-detail-part") }, " ") %></span>
 <% end %>
 <% if choice.description %>
@@ -16,9 +33,10 @@
 <% end %>
     </span>
 <% if choice.style %>
-    <span class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>"><%= QubeRails.t("question.use_pick") %></span>
+    <button type="submit" class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>" aria-describedby="<%= choice.label_id %>"><%= choice.action || QubeRails.t("question.use_pick") %></button>
+  </div>
 <% else %>
-    <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= QubeRails.t("question.use_pick") %></span>
-<% end %>
+    <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= choice.action || QubeRails.t("question.use_pick") %></span>
   </button>
+<% end %>
 </form>

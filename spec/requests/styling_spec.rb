@@ -29,18 +29,16 @@ RSpec.describe "Styling the screens", type: :request do
     shown = page
 
     expect(shown.at_css("section.qube-question.card")).not_to be_nil
-    # The first offered record's "Use this one"; a pick's row is never a `button` piece. The
-    # search's submit, primary too, is hidden until a match is picked.
-    expect(shown.css(".btn-primary:not([hidden])").size).to eq(1)
+    # The offered record and the decline beside it weigh the same: no primary button. A pick's
+    # row is never a `button` piece; the search box under them has no submit.
+    expect(shown.css(".btn-primary")).to be_empty
     expect(shown.at_css("form[data-qube-choice='use:1'] .qube-pick-action")["class"])
-      .to eq("qube-pick-action qube-choice-button btn btn-primary")
-    expect(shown.at_css("form[data-qube-choice=use] button[type=submit]:not([form])")["class"]).to eq("qube-choice-button btn btn-primary")
-    expect(shown.at_css("form[data-qube-choice='use:1'] button")["class"]).to eq("qube-pick")
+      .to eq("qube-pick-action qube-choice-button btn btn-link")
+    expect(shown.at_css("form.qube-search-inline[data-qube-choice=use] button")).to be_nil
+    expect(shown.at_css("form[data-qube-choice='use:1'] > div")["class"]).to eq("qube-pick")
     expect(shown.at_css("form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn btn-link")
     # Cancel is a ghost: with no button_ghost piece it takes no host class (the engine's look)
     expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button")
-    expect(shown.at_css("[data-qube-branch=offered]")["class"]).to eq("qube-choice-button qube-branch-back")
-    expect(shown.at_css("[data-qube-branch=search]")["class"]).to eq("qube-choice-button btn btn-link")
     expect(shown.at_css("input.qube-search-input.form-control")).not_to be_nil
     expect(shown.at_css("label.qube-label.form-label")).not_to be_nil
     expect(shown.at_css("[data-qube-search]")["data-qube-result-class"]).to eq("qube-search-result list-group-item")
@@ -54,11 +52,10 @@ RSpec.describe "Styling the screens", type: :request do
     asking(prompt)
     shown = page
 
-    expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] button.qube-pick.list-item .qube-pick-detail.muted"))
+    expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] div.qube-pick.list-item .qube-pick-detail.muted"))
       .not_to be_nil
-    expect(shown.at_css(".qube-choice-divider.or")).to be_nil # the search is a branch of its own, after the picks
-    expect(shown.at_css("[data-qube-branch=offered]")["class"]).to eq("qube-choice-button qube-branch-back btn-link")
-    expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn-2")
+    expect(shown.at_css(".qube-choice-divider.or")).to be_nil # the search is a box under the picks
+    expect(shown.at_css(".qube-choice-alongside form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn-2")
     expect(shown.at_css(".qube-choice-footer.actions form[data-qube-choice=cancel] button")["class"])
       .to eq("qube-choice-button btn-link")
   end
@@ -110,9 +107,10 @@ RSpec.describe "Styling the screens", type: :request do
     expect(fill).to be > cap
   end
 
-  # Every rule has zero specificity, so a later rule wins: hidden buttons, choices and a chain's
-  # branch not on show stay hidden only after the rules that give them a display.
-  it "keeps what's hidden hidden, in the layer's last rule, after the rules that show it" do
+  # Every rule has zero specificity, so a later rule wins: hidden buttons and choices stay hidden
+  # only after the rules that give them a display. The block after it (the question screen's
+  # rows, disclosure and inline search, as qube_sync's Phoenix package ships it) gives none.
+  it "keeps what's hidden hidden, after the rules that show it" do
     css = File.read(QubeRails::Engine.root.join("app/assets/stylesheets/qube_rails.css")).gsub(%r{/\*.*?\*/}m, "")
     last = <<~CSS.strip.gsub(/^/, "  ")
       :where([data-qube-needs-script][hidden]),
@@ -123,7 +121,10 @@ RSpec.describe "Styling the screens", type: :request do
       }
     CSS
 
-    expect(css.rstrip.delete_suffix("}").rstrip).to end_with(last)
+    at = css.index(last)
+    expect(at).not_to be_nil
+    later = css[(at + last.size)..].scan(/([^{}]*)\{([^{}]*)\}/).select { |_, body| body.include?("display") }
+    expect(later.map(&:first).grep(/qube-choice-button|qube-choice\b(?!-)|data-qube-needs-script/)).to eq([])
     expect(css.index(/:where\(\.qube-choice-button, [^{]*\{[^}]*display: inline-flex/)).not_to be_nil
     # Its parts' grids and the footer's flex come before it
     expect(css.index(/:where\(\.qube-choice\) \{\s*display: grid/)).not_to be_nil
@@ -150,8 +151,9 @@ RSpec.describe "Styling the screens", type: :request do
 
     expect(css).to start_with("@layer theme, base, components, utilities;\n\n@layer components {\n")
     expect(css).to end_with("}")
-    body = css.delete_prefix("@layer theme, base, components, utilities;").strip.delete_prefix("@layer components {")
-    expect(body.scan(/^\S/)).to eq(["}"]) # nothing outside the layer block
+    body = css.delete_prefix("@layer theme, base, components, utilities;").strip
+    # nothing outside the layer blocks
+    expect(body.split(/^\}\n*/).map(&:strip).reject(&:empty?)).to all(start_with("@layer components {\n"))
   end
 
   it "renders an app's own piece instead of the engine's, from the view-model alone" do

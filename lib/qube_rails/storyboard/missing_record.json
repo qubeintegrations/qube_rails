@@ -1,6 +1,6 @@
 {
   "title": "A missing customer",
-  "note": "add_transaction's ask_missing with one record: the invoice names a customer QuickBooks doesn't have and the app sent no add for it, so the person says whether to create it or use one QuickBooks has. Create it needs nothing more for a customer; Use an existing one shows the search.",
+  "note": "The invoice names a customer QuickBooks doesn't have. Your user creates it, or searches QuickBooks for an existing one to use.",
   "prompt": {
     "id": "add_transaction / ask_missing",
     "kind": "decision",

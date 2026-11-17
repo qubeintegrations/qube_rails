@@ -28,7 +28,7 @@ module QubeRails
     end
 
     def search
-      render json: Storyboard.matches(@screen, params[:field], params[:q])
+      render json: Storyboard.matches(@screen, params[:field], params[:q], params[:row].presence)
     end
 
     def answer

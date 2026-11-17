@@ -1,6 +1,6 @@
 {
   "title": "Records not in QuickBooks yet",
-  "note": "add_transaction's ask_missing: a block per missing record, its fields stacked, each shown while its \"when\" holds. Hardware Kit's add says it's an inventory part, so its type is shown, not asked. It asks one record at a time: the button row reads Cancel at the start, then the step count, Back and Next (the submit on the last record). It needs the behaviour script; without it a line says so. \"Use for the other record too\" copies a picked value to the others.",
+  "note": "The invoice names several records QuickBooks doesn't have. Your user goes through them one at a time, creating each or using an existing one. A new item asks for its type and accounts.",
   "prompt": {
     "id": "add_transaction / ask_missing",
     "kind": "decision",
@@ -263,93 +263,110 @@
       {
         "value": "80000001-1700000000",
         "label": "Riverbend Electric",
-        "detail": "Customer"
+        "detail": "Customer",
+        "kind": "customer"
       },
       {
         "value": "80000002-1700000000",
         "label": "Riverbend Supply Co.",
-        "detail": "Customer"
+        "detail": "Customer",
+        "kind": "customer"
       },
       {
         "value": "80000003-1700000000",
         "label": "Lone Star Supply",
-        "detail": "Customer"
+        "detail": "Customer",
+        "kind": "customer"
       },
       {
         "value": "80000011-1700000000",
         "label": "Vinyl Banner 3x6",
-        "detail": "Inventory part"
+        "detail": "Inventory part",
+        "kind": "item"
       },
       {
         "value": "80000012-1700000000",
         "label": "Hardware Kit",
-        "detail": "Non-inventory part"
+        "detail": "Non-inventory part",
+        "kind": "item"
       }
     ],
     "records.income_account": [
       {
         "value": "8000000A-1700000000",
         "label": "Sales",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "8000000B-1700000000",
         "label": "Sales:Signs",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "80000005-1700000000",
         "label": "Inventory Asset",
-        "detail": "Other current asset"
+        "detail": "Other current asset",
+        "kind": "account"
       },
       {
         "value": "80000006-1700000000",
         "label": "Cost of Goods Sold",
-        "detail": "Cost of goods sold"
+        "detail": "Cost of goods sold",
+        "kind": "account"
       }
     ],
     "records.asset_account": [
       {
         "value": "8000000A-1700000000",
         "label": "Sales",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "8000000B-1700000000",
         "label": "Sales:Signs",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "80000005-1700000000",
         "label": "Inventory Asset",
-        "detail": "Other current asset"
+        "detail": "Other current asset",
+        "kind": "account"
       },
       {
         "value": "80000006-1700000000",
         "label": "Cost of Goods Sold",
-        "detail": "Cost of goods sold"
+        "detail": "Cost of goods sold",
+        "kind": "account"
       }
     ],
     "records.cogs_account": [
       {
         "value": "8000000A-1700000000",
         "label": "Sales",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "8000000B-1700000000",
         "label": "Sales:Signs",
-        "detail": "Income"
+        "detail": "Income",
+        "kind": "account"
       },
       {
         "value": "80000005-1700000000",
         "label": "Inventory Asset",
-        "detail": "Other current asset"
+        "detail": "Other current asset",
+        "kind": "account"
       },
       {
         "value": "80000006-1700000000",
         "label": "Cost of Goods Sold",
-        "detail": "Cost of goods sold"
+        "detail": "Cost of goods sold",
+        "kind": "account"
       }
     ]
   }

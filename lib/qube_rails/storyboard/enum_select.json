@@ -1,6 +1,6 @@
 {
   "title": "A fixed list",
-  "note": "A string field with an enum shows as a select, a blank first; the answer is the picked value. No shipped template asks one; a chart of your own can.",
+  "note": "A question can ask for one value from a fixed list, shown as a dropdown. No shipped workflow asks this yet. A custom workflow can.",
   "prompt": {
     "id": "route_order / ask_route",
     "kind": "decision",

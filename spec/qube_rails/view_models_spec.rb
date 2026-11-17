@@ -25,10 +25,11 @@ RSpec.describe "The view-models" do
       expect(view.choices.first.action_url).to eq("/q/1")
       expect(view.choices.last).to be_secondary
 
+      # The search is a box under the offered record: not required, its pick a row of its own.
       field = view.choices[1].fields.first
-      expect([field.type, field.name, field.input_name, field.dom_id, field.label, field.required])
+      expect([field.type, field.name, field.input_name, field.dom_id, field.label, field.required, field.placeholder])
         .to eq(["search", "list_id", "data[list_id]", "qube-Vq3kT9xRb2LmW8sZ-1-list_id", "Not listed? Search QuickBooks",
-               true])
+               false, "Search QuickBooks…"])
       expect([field.search_url, field.search_field, field.kind, field.partial])
         .to eq(["/q/1/search", "list_id", "customer", "qube_rails/question/fields/search"])
       expect(field).to be_labelled

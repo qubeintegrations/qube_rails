@@ -1,10 +1,7 @@
 <%# The exits (question.exits) in one row: cancel on the left, the rest (decline and the like)
     on the right. In a plain question (no picks, no forms) every choice, the first primary. With
-    descriptions they stack, cancel last. In a chain it ends in "Not this one" / "None of these"
-    (data-qube-branch="search", shown by the script, which hides the decline: that's on the search
-    branch); when the search's row holds the exits, this row is the offered branch's. %>
-<% part = question.branch_part(:footer) %>
-<div class="<%= qube_classes(:choice_footer, "qube-choice-footer") %>"<%= " data-qube-plain" if question.plain? %><% if part %> data-qube-branch-part="<%= part %>"<% end %><%= " hidden" unless question.shown_part?(part) %>>
+    descriptions they stack, cancel last. %>
+<div class="<%= qube_classes(:choice_footer, "qube-choice-footer") %>"<%= " data-qube-plain" if question.plain? %>>
   <div class="qube-choice-footer-start">
 <% question.exits.select(&:cancel?).each do |choice| %>
     <%= render "qube_rails/question/choice", question: question, choice: choice %>
@@ -13,9 +10,6 @@
   <div class="qube-choice-footer-end">
 <% question.exits.reject(&:cancel?).each do |choice| %>
     <%= render "qube_rails/question/choice", question: question, choice: choice %>
-<% end %>
-<% if question.chain? %>
-    <button type="button" class="<%= qube_classes(:button_secondary, "qube-choice-button") %>" data-qube-button="secondary" data-qube-branch="search" hidden><%= question.ui_text(:none_of_these, count: question.offered_count) %></button>
 <% end %>
   </div>
 </div>

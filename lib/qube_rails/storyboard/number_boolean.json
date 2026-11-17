@@ -1,6 +1,6 @@
 {
   "title": "Number and yes/no fields",
-  "note": "A number field posts what was typed and is sent as a number; a boolean is a checkbox, sent as true or false. No shipped template asks these; a chart of your own can.",
+  "note": "A question can ask for a number or a yes/no, shown as a number box and a checkbox. No shipped workflow asks these yet. A custom workflow can.",
   "prompt": {
     "id": "adjust / ask_quantity",
     "kind": "decision",

@@ -1,7 +1,6 @@
 <%# The question's picks (question.picks): option rows, one form each. The question's message says
-    what they are, so they have no heading. In a chain they're its offered branch. %>
-<% part = question.branch_part(:picks) %>
-<div class="<%= qube_classes(:picks, "qube-picks") %>" role="list"<% if part %> data-qube-branch-part="<%= part %>"<% end %><%= " hidden" unless question.shown_part?(part) %>>
+    what they are, so they have no heading. %>
+<div class="<%= qube_classes(:picks, "qube-picks") %>" role="list">
 <% question.picks.each do |choice| %>
   <%= render "qube_rails/question/pick", question: question, choice: choice %>
 <% end %>

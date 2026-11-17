@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+**Offered records, a decline and a search at once** (in place of 0.2.1's branch at a time)
+- Offered records, a decline and a search show at once. Beside a decline, every record's button
+  and the decline are secondary. A decline that says what it is as a row (title, action, lines:
+  resolve's "Riverbend · new customer in QuickBooks · Add as new") is a row among the records;
+  any other ("None of these") is a button just under them (`QuestionView#alongside`,
+  `.qube-choice-alongside`), not in the footer. Without a decline the first record is still the
+  main action. Cancel is alone in the footer.
+- A search beside offered records is its box alone under them (`QuestionView#searches`, new
+  partial `question/_inline_search`, `.qube-search-inline`, new key `question.search_quickbooks`,
+  `FieldView#placeholder`, `FieldView#inline?`). Picking a match answers nothing: the match shows
+  as a row like the offered ones, focused, and the box empties for another search; a second pick
+  replaces it. That row is a slot the page renders hidden and empty (`PickedView`,
+  `ChoiceView#slot?` and `#data`), posting the search's choice with the match. A search that finds
+  nothing makes the decline the main action, unless a match was picked.
+- A search's list opens only for the box being focused or typed in, and a box under offered
+  records never shows the error edge: its pick is a row of its own.
+- The branch pattern is gone: `QuestionView#chain?`, `#branch`, `#branch_part`, `#shown_part?` and
+  `#joined_exits`, `data-qube-branch*` and "← Back to the possible match". An override of
+  `_question`, `_footer` or `_choice` copied from 0.2.1 that calls them needs updating, and an
+  override of `_pick` must render `choice.data` and hide `choice.slot?`. `question.none_of_these`
+  and `question.back_to_offered` are unused.
+- An offered record's button is described by the record's name (`aria-describedby`,
+  `ChoiceView#label_id`), so a screen reader says which record "Use this one" picks. The search box
+  under offered records is hidden until the script runs, since it can't search without it.
+
+**A name clash leads with the existing record**
+- A choice about one record can carry `title`, `action`, `lines` (each split on " · ") and
+  `facts` (`{label, value}`), in place of `detail`: `ChoiceView#title`, `#action`, `#lines`,
+  `#facts` (`FactView`), `#row?`; `.qube-pick-line`, `.qube-pick-facts`, `.qube-pick-fact`,
+  `.qube-pick-fact-label`.
+- `ensure`'s ask_use shows the existing record's row (QuickBooks' stored name, its lines, and
+  Company, Balance, Added) with "Use existing" as the main action. Adding it under another name
+  waits behind "or add it under another name…" (new key `question.disclose_choice`,
+  `QuestionView#disclosed` and `#mid_sentence`, new partial `question/_disclosure`, a `<details>`
+  with `.qube-choice-disclosure` and `data-qube-disclosure`); opened, its submit is the main
+  action and the focus goes to its first field. A refusal of its answer opens it.
+
+**An offered record's button is its only target**
+- An offered record's row (`.qube-pick`) is now a `div`, and its "Use this one"
+  (`.qube-pick-action`) is the submit button: a click on the record's name or details does
+  nothing. A row without its own button (a plain option) is still a button whole. Styles keyed
+  on `button.qube-pick` for an offered record need `.qube-pick`.
+
+**Smaller**
+- Option rows sit on a quiet fill rather than a border, so they aren't boxes inside the card.
+- The storyboard's search in a rows field returns only records of the row's kind, as QuBe Sync's
+  search scopes by `row`. Its notes say in plain words what brings each screen up and what your
+  user can do.
+
 ## 0.2.1 (2026-11-17)
 
 Connections keep their type, so workflows aren't started on standard ones, and run webhooks are

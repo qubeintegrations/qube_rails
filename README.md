@@ -769,8 +769,8 @@ uses it for what has no piece, such as a pick's "Use this one" link and the focu
 | `question` | the question's `<section>` |
 | `message`, `details` | its sentence, its label/value table |
 | `choice` | each choice's `<form>` |
-| `button`, `button_secondary`, `button_ghost` | the one primary button (the first offered record's "Use this one", a search's once a match is picked, else a form choice's submit, or a plain question's first choice; the retry button; a rows field's Next, made by the script), the secondary ones (the other offered records' "Use this one", "Not this one", other exits, later forms, redeliver, Apply, a rows field's Back), and the ghosts: cancel, "← Back to the possible match" (`button_ghost`; with none, no class of yours, so they keep the engine's quiet look) |
-| `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option-row button (never `button`), its detail, its "Use this one" (an offered record's also takes the `button` or `button_secondary` piece) |
+| `button`, `button_secondary`, `button_ghost` | the one primary button (the first offered record's "Use this one", a search's once a match is picked, else a form choice's submit, or a plain question's first choice; the retry button; a rows field's Next, made by the script), the secondary ones (the other offered records' "Use this one", a decline beside them, other exits, later forms, redeliver, Apply, a rows field's Back), and the ghosts: cancel (`button_ghost`; with none, no class of yours, so it keeps the engine's quiet look) |
+| `picks`, `pick`, `pick_detail`, `pick_action` | the picks' list, each pick's option row (a button, never `button`; an offered record's row is a `div` whose only target is its "Use this one"), its detail, its "Use this one" (an offered record's is the submit button and also takes the `button` or `button_secondary` piece) |
 | `choice_footer`, `choice_actions`, `choice_divider` | the exits' own row (with picks, or an exit with a description); a form choice's button row (cancel at its start, its submit at its end, with the exits when it's the question's one form); the "or" between picks and a form |
 | `choice_detail`, `choice_description` | a choice's detail (in its button) and description |
 | `field`, `label` | a field's wrapper and its label (and the rows field's) |
@@ -795,9 +795,11 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | --- | --- | --- |
 | `qube_rails/question/_question` | `question` | the section: error, message, details, choices |
 | `qube_rails/question/_message`, `_details` | `question` | the sentence; the label/value rows |
-| `qube_rails/question/_picks`, `_pick` | `question`; `question`, `choice` | the picks' list; one pick, a form posting `choice` |
+| `qube_rails/question/_picks`, `_pick` | `question`; `question`, `choice` | the picks' list; one pick, a form posting `choice` (a record's title, lines and facts, or a search's picked match) |
 | `qube_rails/question/_choice` | `question`, `choice` | a form or exit choice: a form posting `choice` and `data[...]` with your CSRF token |
-| `qube_rails/question/_footer` | `question` | the exits' row (in a chain, ending in "Not this one" / "None of these") |
+| `qube_rails/question/_inline_search` | `question`, `choice` | a search's box under the offered records, with no submit |
+| `qube_rails/question/_disclosure` | `question`, `choice` | a form behind "or <its label>…" (a name clash's rename) |
+| `qube_rails/question/_footer` | `question` | the exits' row |
 | `qube_rails/question/_field` | `field`, `control` | a field's wrapper and label around its control (HTML) |
 | `qube_rails/question/fields/_text`, `_number`, `_boolean`, `_select`, `_search`, `_rows` | `field` | one field, by `field.type` |
 | `qube_rails/question/rows/_row` | `rows`, `row` | one record: its name, its choice, its fields |
@@ -810,16 +812,19 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
 versions:
 
-- `QubeRails::QuestionView`: `picks`, `forms`, `exits` (cancel last), `plain?`, `roles?` (the prompt
-  says each choice's role), `matches?` (picks are offered records: "Possible matches"), `joined_form` and
-  `joined_exits` (the one form whose button row holds the exits, and those exits), `chain?` (offered
-  records with a search, shown a branch at a time), `branch` (`:offered` or `:search` as the page
-  loads; nil when it isn't a chain), `branch_part(piece)` (a form's, or `:picks`' or `:footer`'s,
-  `"offered"` or `"search"`), `shown_part?(part)`, `offered_count`, `divided?(choice, n)` (an "or"
-  before form `n`), `ui_text(key, **options)`
+- `QubeRails::QuestionView`: `picks` (the offered records, a `PickedView` slot per search box, then
+  the other rows), `searches` (search boxes under offered records), `alongside` (a decline with no
+  row of its own, just under them), `forms`, `disclosed` (forms behind "or <its label>…"), `exits`
+  (cancel last), `plain?`, `roles?` (the prompt says each choice's role), `matches?` (picks are
+  offered records), `joined_form` (the one form whose button row holds the exits), `offered_count`,
+  `divided?(choice, n)` (an "or" before form `n`), `mid_sentence(label)` (a label after "or"),
+  `ui_text(key, **options)`
   (the engine's own word `question.<key>`, the one place the question's partials look new words up) (see "Choices" below), `message`, `details` (each `label`, `value`), `choices`, `token`,
   `action_url`, `search_url`, `error` (QuBe Sync's refusal, or nil), `prompt` (as QuBe Sync sent it).
-- `QubeRails::ChoiceView`: `id`, `label`, `detail`, `description`, `fields`, `index`, `action_url`,
+- `QubeRails::ChoiceView`: `id`, `label`, `title`, `action`, `detail`, `lines`, `facts` (each a
+  `FactView`: `label`, `value`), `row?` (it has any of those four), `detail_parts(text = detail)`,
+  `description`, `fields`, `index`, `action_url`, `data` (hidden `data[...]` inputs its pick posts),
+  `slot?` (a `PickedView`: the row a search box's picked match fills, hidden until then),
   `role` (QuBe Sync's: `pick`, `search`, `decline`, `cancel` or `answer`, one it doesn't know read as
   `answer`; nil when the prompt has none), `cancel?` (and `secondary?`, the same), `kind` (`:pick`,
   `:form` or `:exit`), `style` (its button's: `:primary`, `:secondary`, `:ghost`; for a pick nil, or
@@ -829,7 +834,8 @@ versions:
   `number`, `boolean`, `select`, `search` or `rows`), `label`, `required`, `options` (a select's,
   each `value` and `label`), `kind` (a search's record kind), `search_url`, `search_field`, `row_key`,
   `when`, `rows` (a `RowsView`), `disabled`, `value` (what it starts at: a column's `default`, else
-  nil), `partial`, and `labelled?`, `cell?` (a rows field's) and
+  nil), `partial`, `placeholder`, and `labelled?`, `inline?` (a search box under offered records:
+  not required, "Search QuickBooks…"), `cell?` (a rows field's) and
   `segmented?` (a cell's enum of up to three options).
 - `QubeRails::RowsView`: `name`, `label` (blank: no heading), `input_name`, `search_url`, `columns` (FieldViews), `rows`,
   `set_all` (the column "Set all to:" sets, or nil).
@@ -849,31 +855,35 @@ versions:
 
 Choices show by the `role` QuBe Sync gives each (`prompt.choices[].role`). The records it offers
 (`pick`) are option rows, with no heading (the question's message says what they are), each ending in a
-"Use this one" button: the first is the screen's one filled button, the rest secondary.
+"Use this one" button: the first is the screen's one filled button, the rest secondary. A choice
+about one record can say what it is as a row: `title` in place of its label, `action` as its
+button, and `lines` and `facts` (label and value side by side) in place of `detail`.
 
-Offered records with a `search` are a chain, shown a branch at a time (`question.chain?`). The
-offered records come first, with the footer row below them: `cancel` at its start and "Not this
-one" (one record) or "None of these" (several) at its end (`question.none_of_these`). That swaps
-them for the search: "← Back to the possible match" (`question.back_to_offered`) above it, then the
-search's form, its field's label leading ("Not listed? Search QuickBooks"), with cancel at the
-start of its button row and `decline` ("It's not in QuickBooks") and its submit at the end. Moving
-to the search focuses its box (which lists the first records); Back focuses the first record; what
-was typed or picked stays. A page showing QuBe Sync's refusal of the search's answer starts on the
-search. Each part carries `data-qube-branch-part` (`offered` or `search`) and the one not on show
-is `hidden`. Without the script the search can't work, so a chain shows the offered records and a
-footer of cancel and the decline, as forms that post; "Not this one" and the search wait for the
-script (which then hides the footer's decline: it belongs to the search).
+Offered records, a decline and a search show at once. Beside a `decline` the records weigh the same
+as it: every record's button and the decline are secondary. A decline that says what it is as a row
+(a near match's "Riverbend · new customer in QuickBooks · Add as new") is a row among the records;
+any other ("None of these") is a button just under them (`question.alongside`). A `search` is its
+box alone under them (`question.searches`), "Search QuickBooks…" (its label is for screen readers),
+not required. Picking a match there answers nothing: the match shows as a row like the offered
+ones, after them and before a decline's row, its "Use this one" focused, and the box empties for
+another search; a second pick replaces the row. The page renders that row hidden and empty (a
+`PickedView` in `question.picks`, posting the search's choice and the match as its field), and the
+script fills it. `cancel` sits alone in the footer row below, as a ghost. Without the script the
+search can't work, so the page shows the offered records, the decline and cancel, as forms that
+post.
 
 With nothing offered, the search is a section of its own, as a form, the exits in its button row.
-Any search's submit ("Use this one") is hidden until a match is picked, then shows as the primary
-button; after a search that finds nothing (two characters or more, no error), the decline is the
-primary button until a pick or a search that finds matches. Elsewhere `decline` ("It's not in
-QuickBooks") sits in the footer row below the choices, and `cancel` ("Don't add the invoice") at
-the start of that row, as a ghost. An `answer` shows by its shape: one with fields is its own section, its submit the one filled
-button when no record is offered (only the first form's; later ones are secondary); with no picks, a
-plain choice before the first form is an option row (a name clash's "Use the existing record"). A
-question with neither picks nor forms keeps its choices in one row, the first primary. A role the
-engine doesn't know is an `answer`.
+Its submit ("Use this one") is hidden until a match is picked, then shows as the primary button.
+After a search that finds nothing (two characters or more, no error, no match picked), the decline
+is the primary button until a pick or a search that finds matches. Elsewhere `decline` ("It's not
+in QuickBooks") sits in the footer row below the choices. An `answer` shows by its shape: one with
+fields is its own section, its submit the one filled button when no record is offered (only the
+first form's; later ones are secondary). With no picks, a plain choice before the first form is an
+option row (a name clash's "Use the existing record") and the main action, and the forms after it
+wait behind "or <its label>…" (`question.disclosed`, a `<details>`): opened, its submit is the main
+action, the row's button steps back, and the focus goes to its first field; a refusal of its answer
+opens it. A question with neither picks nor forms keeps its choices in one row, the first primary.
+A role the engine doesn't know is an `answer`.
 
 From a QuBe Sync that sends no roles, choices show by their shape instead: an item of a `choose` list
 (an id ending `:<n>`, no fields) is a quiet option row without a heading, the first form's submit is
@@ -947,17 +957,20 @@ no CSP nonce (it's a file, not an inline script), and loads once however often i
   `.qube-choice-actions-end[data-qube-actions-end]` (other exits, then the submit). When a question
   has one form and no picks, its exits' buttons sit in that row and submit their own (hidden,
   empty) forms through the `form` attribute, so it works without the script.
-- A chain (see "Choices"): in a `[data-qube-question]`, a `[data-qube-branch="search"]` or
-  `[data-qube-branch="offered"]` button shows that branch: each `[data-qube-branch-part]` not of it
-  is hidden (`hidden` and `display: none`), "Not this one" (the `data-qube-branch="search"` button
-  without a part of its own) shows on the offered branch, and a `form[data-qube-choice-role=decline]`
-  on the search's only. The focus goes to the search's `[data-qube-search-input]`, or to the first
-  offered record's button. As the page loads, the branch on show is the search when an `offered`
-  part is `hidden`.
+- A search box under offered records: its search's choice has a hidden pick form among the
+  question's rows (`form[data-qube-choice-kind=pick][data-qube-choice-role=search]` with the same
+  `data-qube-choice`). A picked match fills that form's `data[...]` input, its first text span (the
+  name) and second (the detail), shows it and focuses its button; the box empties. The box's own
+  form never submits, and its input never says "Pick one of the matches.".
+- A form behind "or <its label>…" (`details[data-qube-disclosure]`): opening it focuses its first
+  field.
+- A search's list opens only for the box being focused or typed in: a box closes as the focus
+  leaves it, open or not yet, and an answer that arrives for a box no longer focused is dropped.
 - A search choice's form (`form[data-qube-choice-role=search]`, not in a rows field): its own submit
   shows once a match is picked and hides again when the text changes. A search of two characters or
-  more that finds nothing makes the question's decline buttons (`button[data-qube-choice-role=decline]`,
-  or a decline form's submit) primary, their classes swapped between the question's
+  more that finds nothing (with no match picked under offered records) makes the question's
+  decline buttons (`button[data-qube-choice-role=decline]`, a decline form's submit, or a decline
+  row's `[data-qube-offered]` action) primary, their classes swapped between the question's
   `data-qube-button-class` and `data-qube-button-secondary-class`; a pick or a search that finds
   matches swaps them back.
 - The storyboard: a button `data-qube-copy="<text>"` copies its text.
@@ -993,7 +1006,7 @@ layout, so your CSS and `ui_classes` apply: the run status (not sent, starting, 
 with its retry button, running, waiting on a stalled connection (QuickBooks not checking in, or
 closed), waiting for an answer, looking stuck with its redeliver button, in
 QuickBooks, done, failed with its detail, cancelled), the one-shot error, and a question of each
-kind (a near match, a record search, a pick from a list, a fixed list, number and yes/no fields, a
+kind (a near match, a missing account, more than one match, a fixed list, number and yes/no fields, a
 name clash, a lost answer, a missing customer, records not in QuickBooks yet, and a refused answer). Each screen is a section with
 the screen on a flat canvas, with a note and its "Override files" (the partials to override for it, each with a
 Copy button); the canvas can be shown as your page is, light or dark. The list of screens links to
@@ -1001,8 +1014,8 @@ each one. `GET /qube/storyboard/<screen>` shows one.
 
 It's on while `config.storyboard` is true (by default, in development), behind your sign-in. It
 calls nothing: its searches answer from the samples (`lib/qube_rails/storyboard/*.json`, prompts
-shaped as QuBe Sync sends them), its forms post to a no-op that comes back with "Storyboard:
-nothing was sent.", and no row is written.
+shaped as QuBe Sync sends them; in a rows field only the row's kind), its forms post to a no-op that
+comes back with "Storyboard: nothing was sent." under the question, and no row is written.
 
 ## Wording and translations
 
@@ -1062,8 +1075,8 @@ en:
 | `question.back`, `question.next` | Back; Next | a rows field's step buttons |
 | `question.or` | or | between picks and a form choice |
 | `question.use_pick` | Use this one | at the end of each pick's row: what clicking it does |
-| `question.none_of_these` | one: Not this one; other: None of these | at the end of a chain's footer row: shows the search in place of the offered records |
-| `question.back_to_offered` | one: ← Back to the possible match; other: ← Back to the %{count} possible matches | above a chain's search: shows the offered records again |
+| `question.disclose_choice` | or %{label}… | a form after a promoted row, closed (`%{label}`: its label, first letter lowercased) |
+| `question.search_quickbooks` | Search QuickBooks… | a search box under offered records |
 | `question.optional` | (optional) | after the label of a field that may be left empty |
 | `question.needs_script` | Answering this needs JavaScript. Turn it on for this page, or answer from a browser that has it. | in place of a rows field without the script (`<noscript>`) |
 | `question.pick_a_match` | Pick one of the matches. | a search box with text but no pick, on submit |

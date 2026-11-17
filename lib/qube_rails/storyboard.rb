@@ -93,11 +93,14 @@ module QubeRails
                                  error: refusal ? nil : screen.sample["error"], refusal: refusal)
       end
 
-      # The sample's matches for a search: at most 20 whose label holds q.
-      def matches(screen, field, q)
+      # The sample's matches for a search: at most 20 whose label holds q. In a rows field, only
+      # the records of the row's kind, as QuBe Sync's search scopes by row.
+      def matches(screen, field, q, row = nil)
         list = screen && screen.kind == :question ? Array(screen.sample["search"][field.to_s]) : []
+        kind = row && row_kind(screen.sample, field.to_s, row.to_s)
         q = q.to_s.strip.downcase
-        list.select { |m| m["label"].to_s.downcase.include?(q) }.first(20)
+        list.select { |m| kind.nil? || m["kind"].nil? || m["kind"] == kind }
+            .select { |m| m["label"].to_s.downcase.include?(q) }.first(20)
       end
 
       # The file an app puts at that path to override a piece.
@@ -107,6 +110,17 @@ module QubeRails
       end
 
       private
+
+      # The kind of record a rows field's column takes in that row (its "kinds"), or nil.
+      def row_kind(sample, field, row)
+        name, column = field.split(".", 2)
+        return nil unless column
+
+        rows_field = Array(sample["prompt"]["choices"]).flat_map { |c| Array(c["fields"]) }
+                                                       .find { |f| f["name"] == name && f["type"] == "rows" }
+        found = rows_field && Array(rows_field["rows"]).find { |r| r["key"] == row }
+        found && (found["kinds"] || {})[column]
+      end
 
       def run_status_screens
         RUN_STATUSES.map do |key, title, status, run, pieces, note|
@@ -134,10 +148,12 @@ module QubeRails
         list << "question/details" if Array(prompt["details"]).any?
         view = QuestionView.new(prompt, action_url: "", search_url: "")
         list.concat(%w[question/picks question/pick]) if view.picks.any?
-        list << "question/choice" if view.forms.any? || view.exits.any?
+        list << "question/inline_search" if view.searches.any?
+        list << "question/disclosure" if view.disclosed.any?
+        list << "question/choice" if (view.forms + view.exits + view.alongside + view.disclosed).any?
         list << "question/submit" if view.choices.any?
         list << "question/exit_button" if view.joined_form && view.exits.any?
-        list << "question/footer" if view.chain? || (!view.joined_form && view.exits.any?)
+        list << "question/footer" if !view.joined_form && view.exits.any?
         list << "error" if sample["error"]
         fields = Array(prompt["choices"]).flat_map { |choice| Array(choice["fields"]) }
         fields.each do |field|

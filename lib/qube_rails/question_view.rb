@@ -40,20 +40,39 @@ module QubeRails
       arrange
     end
 
-    # The choices by where they show: picks (option rows), forms (a section each, "or" between),
-    # then exits (a footer row, cancel last). plain? when there's neither a pick nor a form: one
-    # row, the first choice primary.
+    # The choices by where they show: picks (option rows), the search boxes under offered records
+    # (searches), declines beside them (alongside), forms (a section each, "or" between), forms
+    # behind "or <its label>…" (disclosed), then exits (a footer row, cancel last). plain? when
+    # there's neither a pick nor a form: one row, the first choice primary.
+    # The picks are the offered records, a slot per search box for its picked match (hidden until
+    # the script fills it), then the rest.
     def picks
-      choices.select { |c| c.kind == :pick }
+      offered = choices.select { |c| c.kind == :pick && c.role == "pick" }
+      offered + searches.map { |c| PickedView.new(c) } + choices.select { |c| c.kind == :pick && c.role != "pick" }
     end
 
-    # The forms shown as sections. In a chain (chain?) the search ones are its search branch.
     def forms
-      choices.select { |c| c.kind == :form }
+      choices.select { |c| c.kind == :form && !searches.include?(c) && !disclosed.include?(c) }
+    end
+
+    # With records offered, a search is a box under them; its picked match becomes a row.
+    def searches
+      @searches || []
+    end
+
+    # A decline beside offered records with no row of its own ("None of them: add it again"): a
+    # button just under them, weighing the same.
+    def alongside
+      @alongside || []
+    end
+
+    # The forms after a promoted row (a name clash's rename), each behind "or <its label>…".
+    def disclosed
+      @disclosed || []
     end
 
     def exits
-      choices.select { |c| c.kind == :exit }.partition { |c| !c.cancel? }.flatten
+      choices.select { |c| c.kind == :exit && !alongside.include?(c) }.partition { |c| !c.cancel? }.flatten
     end
 
     def plain?
@@ -61,69 +80,28 @@ module QubeRails
     end
 
     # The one form whose button row also holds the exits (cancel left, the rest beside its
-    # submit): a question with no picks, one form, and exits without descriptions; in a chain, its
-    # one search. Else nil, and the exits have a footer row of their own.
+    # submit): a question with no picks, one form, and exits without descriptions. Else nil, and
+    # the exits have a footer row of their own.
     def joined_form
-      candidates = if chain? then forms.select { |c| c.role == "search" }
-                   elsif picks.empty? then forms
-                   else []
-                   end
-      return nil unless candidates.size == 1 && exits.none?(&:description)
+      return nil unless picks.empty? && forms.size == 1 && exits.none?(&:description)
 
-      candidates.first
+      forms.first
     end
 
-    # The exits a joined form's row holds: in a chain, decline and cancel (the search's branch).
-    def joined_exits
-      chain? ? exits.select { |c| %w[decline cancel].include?(c.role) } : exits
-    end
-
-    # Offered records with a search: a chain, shown a branch at a time. The offered records come
-    # first with "Not this one" / "None of these", which swaps them for the search (README, "Choices").
-    def chain?
-      matches? && choices.any? { |c| c.role == "search" }
-    end
-
-    # The branch a chain shows as the page loads: :search when its search's answer was just
-    # refused, else :offered. nil when it isn't a chain.
-    def branch
-      return nil unless chain?
-
-      choices.any? { |c| c.role == "search" && c.id == refused_choice } ? :search : :offered
-    end
-
-    # The branch a piece of a chain belongs to ("offered" or "search", its data-qube-branch-part):
-    # a search form, or the picks (:picks), another form, or the footer (:footer) when the search's
-    # row holds the exits. nil outside a chain, and for what both branches show.
-    def branch_part(piece)
-      return nil unless chain?
-
-      case piece
-      when :picks then "offered"
-      when :footer then joined_form ? "offered" : nil
-      when ChoiceView
-        return nil unless piece.kind == :form
-
-        piece.role == "search" ? "search" : "offered"
-      end
-    end
-
-    # Whether that part is on show as the page loads.
-    def shown_part?(part)
-      part.nil? || part == branch.to_s
-    end
-
-    # The count "None of these" and its way back say ("Not this one" for one).
+    # How many records QuBe Sync offers.
     def offered_count
-      picks.count { |c| c.role == "pick" }
+      choices.count { |c| c.kind == :pick && c.role == "pick" }
     end
 
-    # Whether an "or" goes before form n: another form before it in its branch, or the picks.
-    def divided?(choice, n)
-      return n.positive? || picks.any? unless chain?
+    # Whether an "or" goes before form n: another form before it, or the picks.
+    def divided?(_choice, n)
+      n.positive? || picks.any?
+    end
 
-      part = branch_part(choice)
-      forms.first(n).any? { |c| branch_part(c) == part } || (part == "offered" && picks.any?)
+    # A label as it reads after "or": its first letter lowercased.
+    def mid_sentence(label)
+      text = label.to_s
+      text.empty? ? "" : text[0].downcase + text[1..-1]
     end
 
     # Whether QuBe Sync said each choice's role (prompt.choices[].role): then the picks are the
@@ -133,7 +111,7 @@ module QubeRails
     end
 
     def matches?
-      picks.any? { |c| c.role == "pick" }
+      offered_count.positive?
     end
 
     # One of the engine's own words for this question (question.<key> in the locale files). The one
@@ -149,73 +127,64 @@ module QubeRails
 
     private
 
+    # Kinds and button styles. With roles: the offered records are picks, the first the one
+    # primary action; a search is a form; decline and cancel are exits; an answer shows by its
+    # shape. Without roles, every choice by its shape. Offered records beside a decline weigh the
+    # same as it; a promoted row (a name clash's "Use the existing record") leads, the forms after
+    # it behind "or <its label>…".
     def arrange
-      roles? ? arrange_by_role : arrange_by_shape
-    end
-
-    # By role: the offered records are picks, the first the one primary action; a search is a form,
-    # secondary; decline and cancel are exits. An answer shows by its shape, as without roles.
-    def arrange_by_role
-      @choices.each do |c|
-        kind = case c.role
-               when "pick" then :pick
-               when "search" then :form
-               when "decline", "cancel" then :exit
-               else c.fields.any? ? :form : :exit
-               end
-        c.arrange(kind, nil)
-      end
-      promote_rows
-      offered = @choices.select { |c| c.role == "pick" }
+      roles = roles?
+      @choices.each { |c| c.arrange(roles ? kind_by_role(c) : c.kind, nil) }
+      promoted = promote_rows
+      offered = @choices.select { |c| c.kind == :pick && c.role == "pick" }
       all_forms = @choices.select { |c| c.kind == :form }
-      plain = picks.empty? && all_forms.empty?
-      primary = offered.first || (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
+      plain = @choices.none? { |c| c.kind == :pick } && all_forms.empty?
+      promoted_first = promoted.first
+      primary = offered.first || promoted_first ||
+                (plain ? @choices.find { |c| !c.cancel? } : all_forms.find { |c| c.role != "search" } || all_forms.first)
+      level = offered.any? && @choices.any? { |c| c.role == "decline" }
       @choices.each do |choice|
-        style = if choice.kind == :pick then (offered.include?(choice) ? button_style(choice, primary) : promoted_style(choice))
-                elsif choice.equal?(primary) || (choice.role == "search" && chain?) then :primary
+        kind = choice.kind
+        style = if kind == :pick then (offered.include?(choice) || promoted.include?(choice) ? button_style(choice, primary) : nil)
+                elsif choice.equal?(primary) || (kind == :form && promoted_first) then :primary
                 elsif choice.cancel? then :ghost
                 else :secondary
                 end
-        choice.arrange(choice.kind, style)
+        if level && choice.role == "decline"
+          kind = :pick if choice.row?
+          style = :secondary
+        elsif level && offered.include?(choice)
+          style = :secondary
+        end
+        choice.arrange(kind, style)
       end
+      @alongside = level ? @choices.select { |c| c.role == "decline" && c.kind == :exit } : []
+      @searches = offered.any? ? @choices.select { |c| c.kind == :form && c.role == "search" } : []
+      @searches.each { |c| c.fields.each(&:inline!) }
+      @disclosed = promoted_first ? @choices.select { |c| c.kind == :form && c.role != "search" } : []
     end
 
-    # A choice promoted to an option row ends in a secondary "Use this one", as an offered
-    # record's does, not a bare link beside the form's filled button.
-    def promoted_style(choice)
-      Array(@promoted).include?(choice) ? :secondary : nil
+    def kind_by_role(choice)
+      case choice.role
+      when "pick" then :pick
+      when "search" then :form
+      when "decline", "cancel" then :exit
+      else choice.fields.any? ? :form : :exit
+      end
     end
 
     def button_style(choice, primary)
       choice.equal?(primary) ? :primary : :secondary
     end
 
-    # Kinds and button styles from each choice's shape (a prompt without roles). One filled button
-    # at most: the first form's submit, or in a plain question the first choice.
-    def arrange_by_shape
-      promote_rows
-      primary = plain? ? @choices.find { |c| !c.cancel? } : forms.first
-      @choices.each do |choice|
-        style = if choice.kind == :pick then promoted_style(choice)
-                elsif choice.equal?(primary) then :primary
-                elsif choice.cancel? then :ghost
-                else :secondary
-                end
-        choice.arrange(choice.kind, style)
-      end
-    end
-
-    # With no picks but a form, a plain choice before the first form (name clash's "Use the
-    # existing record") is an option row too.
+    # With no picks but a form, a plain choice before the first form (a name clash's "Use the
+    # existing record") is an option row too. Returns those.
     def promote_rows
-      return if @choices.any? { |c| c.kind == :pick }
-      return unless (first_form = @choices.index { |c| c.kind == :form })
+      return [] if @choices.any? { |c| c.kind == :pick }
+      return [] unless (first_form = @choices.index { |c| c.kind == :form })
 
-      @choices.first(first_form).each do |c|
-        next if c.cancel? || %w[decline cancel].include?(c.role)
-
+      @choices.first(first_form).reject { |c| c.cancel? || %w[decline cancel].include?(c.role) }.each do |c|
         c.arrange(:pick, nil)
-        (@promoted ||= []) << c
       end
     end
   end
@@ -226,17 +195,21 @@ module QubeRails
   # One of a select's options.
   OptionView = Struct.new(:value, :label)
 
+  # One fact of a record a choice is about ("Balance", "1,250.00"): label and value side by side.
+  FactView = Struct.new(:label, :value)
+
   # One thing the user can pick: a form of its own, posting choice=<id> and data[...] for its
   # fields to the question's action_url.
   class ChoiceView
     ROLES = %w[pick search decline cancel answer].freeze
 
-    attr_reader :id, :label, :detail, :description, :fields, :index, :action_url, :kind, :style, :role
+    attr_reader :id, :label, :title, :action, :detail, :lines, :facts, :description, :fields, :index, :action_url,
+                :kind, :style, :role
 
-    # The detail's parts (QuBe Sync joins them with " · "), each but the last ending in its " ·",
-    # so a line breaks between parts and never starts with the separator.
-    def detail_parts
-      parts = detail.to_s.split(" · ")
+    # A text's parts (QuBe Sync joins them with " · "), each but the last ending in its " ·", so a
+    # line breaks between parts and never starts with the separator. The detail's by default.
+    def detail_parts(text = detail)
+      parts = text.to_s.split(" · ")
       parts.each_with_index.map { |part, i| i < parts.size - 1 ? "#{part} ·" : part }
     end
 
@@ -245,7 +218,15 @@ module QubeRails
       # QuBe Sync's role for it, nil when the prompt has none; one this version doesn't know is answer.
       @role = (ROLES.include?(choice["role"]) ? choice["role"] : "answer") if choice.key?("role")
       @label = choice["label"].to_s
+      # A choice about one record can say what it is as a row: title in place of its label, action
+      # as its button, lines and facts in place of detail.
+      @title = presence(choice["title"])
+      @action = presence(choice["action"])
       @detail = presence(choice["detail"])
+      @lines = Array(choice["lines"]).map { |line| presence(line) }.compact
+      @facts = Array(choice["facts"]).select { |f| f.is_a?(Hash) }.map do |f|
+        FactView.new(presence(f["label"]), presence(f["value"]))
+      end.select { |f| f.label && f.value }
       @description = presence(choice["description"])
       @index = index
       @action_url = question.action_url
@@ -290,6 +271,11 @@ module QubeRails
       "qube-#{@token}-choice-#{index}"
     end
 
+    # The id of an offered record's name, which its button is described by.
+    def label_id
+      "qube-#{@token}-pick-#{index}#{"-picked" if slot?}"
+    end
+
     # Whether one of its fields is a rows field (which needs the behaviour script).
     def rows?
       fields.any? { |f| f.type == "rows" }
@@ -305,11 +291,59 @@ module QubeRails
       @refused
     end
 
+    # Whether it says what it is as a row of its own (title, action, lines or facts).
+    def row?
+      !title.nil? || !action.nil? || lines.any? || facts.any?
+    end
+
+    # The hidden data[...] inputs its pick's form posts (a picked match's value).
+    def data
+      {}
+    end
+
+    # Whether it's a slot the script fills (a search box's picked match), hidden until then.
+    def slot?
+      false
+    end
+
+    protected
+
+    # The question's token, for a picked row made from this search.
+    attr_reader :token
+
     private
 
     def presence(value)
       text = value.to_s
       text.strip.empty? ? nil : text
+    end
+  end
+
+  # The row a search box under offered records shows its picked match in: an option row whose
+  # "Use this one" answers the search's choice with the match. Rendered empty and hidden; the
+  # script fills it (a second pick replaces the first).
+  class PickedView < ChoiceView
+    def initialize(search)
+      @search = search
+      @id = search.id
+      @role = search.role
+      @label = ""
+      @lines = []
+      @facts = []
+      @fields = []
+      @index = search.index
+      @token = search.token
+      @action_url = search.action_url
+      @kind = :pick
+      @style = :secondary
+    end
+
+    def data
+      @search.fields.select { |f| f.type == "search" }.map { |f| [f.input_name, ""] }.to_h
+    end
+
+    def slot?
+      true
     end
   end
 
@@ -381,6 +415,24 @@ module QubeRails
       @value = value
       @error_id = error_id
       @optional = optional.nil? ? !required : optional
+    end
+
+    # A search box under offered records: never required (its pick is a row of its own), and it
+    # says "Search QuickBooks…".
+    def inline!
+      @inline = true
+    end
+
+    def inline?
+      @inline == true
+    end
+
+    def required
+      @required && !inline?
+    end
+
+    def placeholder
+      inline? ? QubeRails.t("question.search_quickbooks") : nil
     end
 
     # Whether it may be left empty: its label says "(optional)". A rows cell's column decides it,

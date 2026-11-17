@@ -1,0 +1,7 @@
+<%# A form after a promoted row (question.disclosed: a name clash's rename), behind "or <its
+    label>…". Opened, its submit is the main action and the row's button steps back (stylesheet);
+    a refused answer for it opens it, and the script puts the focus in its first field. %>
+<details class="qube-choice-disclosure" data-qube-disclosure<%= " open" if choice.refused? %>>
+  <summary class="<%= qube_classes(:button_ghost, "qube-choice-button") %>" data-qube-button="ghost"><%= QubeRails.t("question.disclose_choice", label: question.mid_sentence(choice.label)) %></summary>
+  <%= render "qube_rails/question/choice", question: question, choice: choice %>
+</details>
