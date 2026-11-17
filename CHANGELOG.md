@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 (unreleased)
+## 0.2.1 (2026-11-17)
 
 Connections keep their type, so workflows aren't started on standard ones, and run webhooks are
 read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` and
