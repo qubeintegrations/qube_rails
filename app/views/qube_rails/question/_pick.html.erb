@@ -11,7 +11,11 @@
 <% choice.data.each do |name, value| %>
   <%= hidden_field_tag name, value, id: nil %>
 <% end %>
-  <%= content_tag(choice.style ? :div : :button, class: qube_classes(:pick, "qube-pick"), type: (choice.style ? nil : "submit")) do %>
+<% if choice.style %>
+  <div class="<%= qube_classes(:pick, "qube-pick") %>">
+<% else %>
+  <button type="submit" class="<%= qube_classes(:pick, "qube-pick") %>">
+<% end %>
     <span class="qube-pick-text">
       <span class="qube-pick-label"<% if choice.style %> id="<%= choice.label_id %>"<% end %>><%= choice.title || choice.label %></span>
 <% if choice.lines.any? || choice.facts.any? %>
@@ -30,8 +34,9 @@
     </span>
 <% if choice.style %>
     <button type="submit" class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>" aria-describedby="<%= choice.label_id %>"><%= choice.action || QubeRails.t("question.use_pick") %></button>
+  </div>
 <% else %>
     <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= choice.action || QubeRails.t("question.use_pick") %></span>
+  </button>
 <% end %>
-  <% end %>
 </form>
