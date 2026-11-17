@@ -148,10 +148,12 @@ module QubeRails
         list << "question/details" if Array(prompt["details"]).any?
         view = QuestionView.new(prompt, action_url: "", search_url: "")
         list.concat(%w[question/picks question/pick]) if view.picks.any?
-        list << "question/choice" if view.forms.any? || view.exits.any?
+        list << "question/inline_search" if view.searches.any?
+        list << "question/disclosure" if view.disclosed.any?
+        list << "question/choice" if (view.forms + view.exits + view.alongside + view.disclosed).any?
         list << "question/submit" if view.choices.any?
         list << "question/exit_button" if view.joined_form && view.exits.any?
-        list << "question/footer" if view.chain? || (!view.joined_form && view.exits.any?)
+        list << "question/footer" if !view.joined_form && view.exits.any?
         list << "error" if sample["error"]
         fields = Array(prompt["choices"]).flat_map { |choice| Array(choice["fields"]) }
         fields.each do |field|

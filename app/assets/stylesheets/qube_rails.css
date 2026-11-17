@@ -1407,3 +1407,130 @@
     display: none;
   }
 }
+
+/* Ahead of the engine (priv/ahead/qube_sync.css, CHANGELOG): a form behind "or <its label>…"
+   under a record that is the main action (a name clash's "Add it under another name"), a row
+   about one record (title, lines, facts), option rows on a fill rather than a border, a
+   decline beside offered records with their weight, and a search box inline under them */
+@layer components {
+  :where(.qube-choice-disclosure) {
+    display: grid;
+    gap: 12px;
+  }
+
+  :where(.qube-choice-disclosure > summary) {
+    justify-self: start;
+    list-style: none;
+  }
+
+  :where(.qube-choice-disclosure > summary)::-webkit-details-marker {
+    display: none;
+  }
+
+  /* The form drops in under "or <its label>…" as it opens; closing is instant */
+  :where(.qube-choice-disclosure[open] > .qube-choice) {
+    animation: qube-disclosure-open 200ms var(--qube-ease-out);
+  }
+
+  @keyframes qube-disclosure-open {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  /* Open, its submit is the main action: the record's "Use this one" steps back to secondary */
+  :where(.qube-choices:has(> .qube-choice-disclosure[open]) .qube-pick-action[data-qube-button="primary"]) {
+    color: inherit;
+    background: var(--qube-solid-color);
+    border-color: var(--qube-control-border-color);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(.qube-choices:has(> .qube-choice-disclosure[open]) .qube-pick:hover .qube-pick-action[data-qube-button="primary"]) {
+      background: color-mix(in srgb, currentColor 6%, var(--qube-solid-color));
+    }
+  }
+
+  /* An option row sits on a quiet fill, not in a box of its own inside the card */
+  :where(.qube-pick) {
+    background: color-mix(in srgb, currentColor 5%, var(--qube-solid-color));
+    border-color: transparent;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(.qube-pick:hover) {
+      background: color-mix(in srgb, currentColor 9%, var(--qube-solid-color));
+      border-color: transparent;
+    }
+  }
+
+  /* A row about one record: its name, then its lines, then its facts, each on a line of its own */
+  :where(.qube-pick-line, .qube-pick-facts) {
+    flex-basis: 100%;
+  }
+
+  :where(.qube-pick-facts) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(.qube-pick-fact) {
+    white-space: nowrap;
+  }
+
+  :where(.qube-pick-fact-label) {
+    color: var(--qube-muted-color);
+  }
+
+  /* A decline beside offered records weighs the same as their buttons: just under them, at the
+     same right edge, not in the footer by cancel */
+  :where(.qube-choice-alongside) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  :where(.qube-choice-alongside > .qube-choice) {
+    justify-items: end;
+  }
+
+  :where(.qube-choice-alongside) + :where(.qube-choice-footer) {
+    padding-top: 16px;
+  }
+
+  @container qube-choices (max-width: 30rem) {
+    :where(.qube-choice-alongside > .qube-choice) {
+      flex-grow: 1;
+      justify-items: stretch;
+    }
+
+    :where(.qube-choice-alongside .qube-choice-button) {
+      justify-content: center;
+    }
+  }
+
+  /* A search beside offered records is its box alone, under them; its label is for screen
+     readers (the box says "Search QuickBooks…") */
+  :where(.qube-search-inline) :where(.qube-search, .qube-search-input) {
+    max-width: none;
+  }
+
+  :where(.qube-search-inline .qube-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(.qube-choice-disclosure[open] > .qube-choice) {
+      animation-name: qube-fade-in;
+    }
+  }
+}

@@ -42,6 +42,8 @@ en:
     question:
       set_all: "Set all to:"
       use_pick: "Use this one"
+      # none_of_these and back_to_offered are unused since offered records and their search show
+      # at once; they go when qube_sync's Phoenix package drops its copies.
       none_of_these:
         one: "Not this one"
         other: "None of these"
@@ -66,3 +68,5 @@ en:
       no_matches: "No matches"
       searching: "Searching…"
       search_failed: "Search isn't available right now. Try again in a moment."
+      disclose_choice: "or %{label}…"
+      search_quickbooks: "Search QuickBooks…"

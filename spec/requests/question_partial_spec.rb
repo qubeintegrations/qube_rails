@@ -28,7 +28,9 @@ RSpec.describe "The question partial", type: :request do
     expect(shown.at_css(".qube-question-details")).to be_nil # nothing beside what the message says
     forms = shown.css("form.qube-choice")
     expect(forms.map { |f| f["action"] }.uniq).to eq([action])
-    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use cancel none])
+    # The offered record, the row its search's pick fills, the search box, the decline beside
+    # them, then cancel.
+    expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use use none cancel])
     expect(forms.first.at_css("button.qube-pick").text).to include("Riverbend Electric", "similar name")
 
     search = shown.at_css(".qube-search")
@@ -84,7 +86,8 @@ RSpec.describe "The question partial", type: :request do
     asking(make_run(invoice, connection), QubeRails::Storyboard.find("choose").sample["prompt"])
     shown = page
     expect(shown.at_css(".qube-choice-footer-start form[data-qube-choice=cancel] button")).not_to be_nil
-    expect(shown.at_css(".qube-choice-footer-end form[data-qube-choice=none] button")).not_to be_nil
+    # A decline beside offered records is just under them, not in the footer
+    expect(shown.at_css(".qube-picks + .qube-choice-alongside > form[data-qube-choice=none] button")).not_to be_nil
     expect(shown.at_css("[data-qube-exit]")).to be_nil
 
     asking(QubeRails::Run.last, QubeRails::Storyboard.find("name_clash").sample["prompt"]

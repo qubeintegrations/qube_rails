@@ -52,7 +52,7 @@ RSpec.describe "The storyboard", type: :request do
     expect(missing.at_css("input.qube-segment-input[value=use][checked]")).to be_nil
     expect(missing.at_css(".qube-rows-label")).to be_nil
     expect(missing.at_css("form[data-qube-choice=cancel] .qube-choice-description")).to be_nil
-    expect(panel.call("near_match").text).to include('It\'s not in QuickBooks: add "Riverbend" as new')
+    expect(panel.call("near_match").text).to include("Riverbend", "new customer in QuickBooks", "Add as new")
     expect(panel.call("near_match").at_css("[data-qube-search]")["data-qube-search"]).to eq("/qube/storyboard/near_match/search")
     expect(panel.call("failed").at_css(".qube-storyboard-files").text)
       .to include("app/views/qube_rails/run_status/_status.html.erb", "app/views/qube_rails/run_status/_detail.html.erb")
@@ -73,25 +73,30 @@ RSpec.describe "The storyboard", type: :request do
     panel = ->(key) { shown.at_css("[data-qube-storyboard='#{key}']") }
     kinds = ->(key) { panel.call(key).css("form[data-qube-choice]").map { |f| [f["data-qube-choice"], f["data-qube-choice-kind"]] } }
 
-    expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use form], %w[cancel exit], %w[none exit]])
+    # Offered records, the row a search's pick fills, the decline as a row, the search box under
+    # them, cancel in the footer; none of them the main action.
+    expect(kinds.call("near_match")).to eq([%w[use:1 pick], %w[use pick], %w[none pick], %w[use form], %w[cancel exit]])
     near = panel.call("near_match")
-    # A chain: the offered branch on show, the search's hidden until "Not this one"
-    expect(near.at_css(".qube-choices > .qube-picks[role=list][data-qube-branch-part=offered]:not([hidden])").text)
-      .to include("Riverbend Electric")
-    search = near.at_css(".qube-choices > form.qube-choice-form[data-qube-choice-role=search][data-qube-branch-part=search][hidden]")
-    expect(search.at_css("[data-qube-search-input]")).not_to be_nil
-    expect(near.at_css(".qube-choices > button.qube-branch-back[data-qube-branch=offered][hidden]").text).to eq("← Back to the possible match")
-    expect(near.at_css(".qube-choice-footer-end > button[data-qube-branch=search][hidden]").text).to eq("Not this one")
-    expect(near.at_css(".qube-choice-divider")).to be_nil
-    expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=primary]")).not_to be_nil
-    expect(near.at_css("form[data-qube-choice=use] button[type=submit]:not([form])[data-qube-button=primary][hidden]")).not_to be_nil
-    # The footer: cancel at the start, decline at the end
-    expect(near.css(".qube-choice-footer-start > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[cancel])
-    expect(near.css(".qube-choice-footer-end > form").map { |f| f["data-qube-choice-role"] }).to eq(%w[decline])
+    expect(near.at_css(".qube-choices > .qube-picks[role=list]").text).to include("Riverbend Electric")
+    expect(near.at_css(".qube-picks + form.qube-search-inline[data-qube-choice-role=search] [data-qube-search-input]")).not_to be_nil
+    expect(near.css("[data-qube-branch], [data-qube-branch-part], .qube-choice-divider")).to be_empty
+    expect(near.at_css("form[data-qube-choice='use:1'] .qube-pick-action[data-qube-button=secondary]")).not_to be_nil
+    expect(near.at_css("form[data-qube-choice=none] .qube-pick-action[data-qube-button=secondary]").text).to eq("Add as new")
+    expect(near.css(".qube-choice-footer form").map { |f| f["data-qube-choice-role"] }).to eq(%w[cancel])
     expect(near.at_css("form[data-qube-choice=cancel] [data-qube-button=ghost]").text).to include("Cancel adding the invoice")
-    expect(panel.call("choose").css("[data-qube-button=primary]").map(&:text)).to eq(["Use this one"])
+    clash = panel.call("name_clash")
+    expect(clash.at_css("form[data-qube-choice=use_existing] .qube-pick-action[data-qube-button=primary]").text).to eq("Use existing")
+    expect(clash.at_css("details.qube-choice-disclosure form[data-qube-choice=rename]")).not_to be_nil
+    expect(clash.at_css(".qube-storyboard-files").text)
+      .to include("app/views/qube_rails/question/_disclosure.html.erb")
+    expect(near.at_css(".qube-storyboard-files").text).to include("app/views/qube_rails/question/_inline_search.html.erb")
+    expect(panel.call("choose").css("[data-qube-button=primary]")).to be_empty # the records and the decline weigh the same
+    expect(panel.call("record_search").css("[data-qube-button=primary]").map(&:text)).to eq(["Use this one"])
     QubeRails::Storyboard::QUESTIONS.each do |key|
-      shown_primary = panel.call(key).css("[data-qube-button=primary]").reject { |b| b.ancestors.any? { |a| a["hidden"] } || b["hidden"] }
+      # A closed disclosure's submit isn't shown until it opens (then the row's steps back).
+      shown_primary = panel.call(key).css("[data-qube-button=primary]").reject do |b|
+        b["hidden"] || b.ancestors.any? { |a| a["hidden"] || (a.name == "details" && !a.key?("open")) }
+      end
       expect(shown_primary.size).to be <= 1, key
     end
     expect(shown.css(".qube-question button[disabled], .qube-question input[type=submit][disabled]")).to be_empty

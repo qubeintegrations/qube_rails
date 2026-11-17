@@ -18,69 +18,64 @@ RSpec.describe "A question's choices by kind" do
     QubeRails::QuestionView.new(prompt, action_url: "/q/1", search_url: "/q/1/search")
   end
 
-  it "weighs choices by role: the offered records first, the first primary, cancel last" do
+  it "weighs offered records and a decline beside them the same, the search a box under them, cancel last" do
     view = question("near_match")
 
     expect(view).to be_roles
     expect(view).to be_matches
-    # The search is the next branch's: its submit primary, shown once a match is picked.
-    expect(arranged(view)).to eq([["use:1", :pick, :primary], ["use", :form, :primary], ["none", :exit, :secondary],
+    # The decline says what it is as a row ("Riverbend", "Add as new"), so it's a row among the
+    # records; neither is the main action.
+    expect(arranged(view)).to eq([["use:1", :pick, :secondary], ["use", :form, :secondary], ["none", :pick, :secondary],
                                   ["cancel", :exit, :ghost]])
-    expect([view.picks, view.forms, view.exits].map { |l| l.map(&:id) }).to eq([%w[use:1], %w[use], %w[none cancel]])
+    expect(view.picks.map { |c| [c.id, c.role, c.slot?] }).to eq([["use:1", "pick", false], ["use", "search", true],
+                                                                  ["none", "decline", false]])
+    expect([view.searches, view.forms, view.alongside, view.disclosed, view.exits].map { |l| l.map(&:id) })
+      .to eq([%w[use], [], [], [], %w[cancel]])
+    expect(view.offered_count).to eq(1)
+    expect(view.joined_form).to be_nil
     expect(view).not_to be_plain
   end
 
-  it "makes offered records with a search a chain: the offered branch first, the search's after" do
-    view = question("near_match")
+  it "gives the search box under offered records a slot for its pick, posting the search's choice" do
+    slot = question("near_match").picks[1]
 
-    expect(view).to be_chain
-    expect(view.branch).to eq(:offered)
-    expect(view.offered_count).to eq(1)
-    expect(view.joined_form.id).to eq("use")
-    expect(view.joined_exits.map(&:id)).to eq(%w[none cancel])
-    expect([:picks, :footer, *view.choices].map { |piece| view.branch_part(piece) })
-      .to eq(["offered", "offered", nil, "search", nil, nil])
-    expect(view.choices.find { |c| c.id == "use" }).to be_waits_for_pick
-    expect(question("record_search").offered_count).to eq(3)
+    expect([slot.id, slot.kind, slot.style, slot.label, slot.data]).to eq(["use", :pick, :secondary, "", { "data[list_id]" => "" }])
+    expect(slot.action_url).to eq("/q/1")
+    field = question("near_match").searches.first.fields.first
+    expect([field.inline?, field.required, field.placeholder]).to eq([true, false, "Search QuickBooks…"])
   end
 
-  it "starts a chain on its search when the search's answer was refused" do
-    prompt = QubeRails::Storyboard.find("near_match").sample["prompt"]
-    refusal = ->(choice) { { "token" => prompt["token"], "choice" => choice, "message" => "No", "values" => {} } }
-    view = ->(choice) { QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search", refusal: refusal.call(choice)) }
-
-    expect(view.call("use").branch).to eq(:search)
-    expect(view.call("use:1").branch).to eq(:offered)
-    expect(view.call("none").branch).to eq(:offered)
+  it "puts a decline with no row of its own just under the offered records, with their weight" do
+    expect(arranged(question("choose"))).to eq([["use:1", :pick, :secondary], ["use:2", :pick, :secondary],
+                                                ["none", :exit, :secondary], ["cancel", :exit, :ghost]])
+    expect(question("choose").alongside.map(&:id)).to eq(%w[none])
+    expect(question("choose").exits.map(&:id)).to eq(%w[cancel])
+    expect(question("ask_about_add").alongside.map(&:id)).to eq(%w[add_again])
+    expect(arranged(question("ask_about_add"))).to eq([["use_existing:1", :pick, :secondary], ["add_again", :exit, :secondary],
+                                                       ["cancel", :exit, :ghost]])
   end
 
-  it "isn't a chain without a search, or without offered records" do
-    %w[choose ask_about_add name_clash rows].each do |key|
-      expect(question(key)).not_to be_chain, key
-      expect(question(key).branch).to be_nil
-    end
-    expect(without_roles("near_match")).not_to be_chain
+  it "keeps the first offered record the main action without a decline, the search a box under them" do
+    view = question("record_search")
+
+    expect(arranged(view)).to eq([["use:1", :pick, :primary], ["use:2", :pick, :secondary], ["use:3", :pick, :secondary],
+                                  ["use", :form, :secondary], ["cancel", :exit, :ghost]])
+    expect(view.picks.map(&:id)).to eq(%w[use:1 use:2 use:3 use])
+    expect(view.searches.map(&:id)).to eq(%w[use])
+    expect(view.offered_count).to eq(3)
   end
 
   it "shows the search as a section when nothing is offered, its submit waiting for a pick" do
     prompt = QubeRails::Storyboard.find("near_match").sample["prompt"]
     prompt = prompt.merge("choices" => prompt["choices"].reject { |c| c["role"] == "pick" })
     view = QubeRails::QuestionView.new(prompt, action_url: "/q", search_url: "/q/search")
-    expect(view).not_to be_chain
+    expect(view.searches).to be_empty
     expect(view.forms.map(&:id)).to eq(%w[use])
     expect(view.forms.first.style).to eq(:primary)
     expect(view.forms.first).to be_waits_for_pick
+    expect(view.forms.first.fields.first.required).to be(true)
     expect(view.joined_form.id).to eq("use")
-  end
-
-  it "makes the first of a list of picks primary and the rest secondary, decline secondary, cancel a ghost" do
-    expect(arranged(question("choose"))).to eq([["use:1", :pick, :primary], ["use:2", :pick, :secondary],
-                                                ["none", :exit, :secondary], ["cancel", :exit, :ghost]])
-    expect(arranged(question("record_search"))).to eq([["use:1", :pick, :primary], ["use:2", :pick, :secondary],
-                                                       ["use:3", :pick, :secondary], ["use", :form, :primary],
-                                                       ["cancel", :exit, :ghost]])
-    expect(arranged(question("ask_about_add"))).to eq([["use_existing:1", :pick, :primary], ["add_again", :exit, :secondary],
-                                                       ["cancel", :exit, :ghost]])
+    expect(view.exits.map(&:id)).to eq(%w[none cancel])
   end
 
   it "puts cancel last among the exits, whatever its place in the prompt" do
@@ -94,10 +89,8 @@ RSpec.describe "A question's choices by kind" do
 
   it "looks its own words up in one place, the rows field's step line too" do
     view = question("rows")
-    expect(view.ui_text(:none_of_these, count: 1)).to eq("Not this one")
-    expect(view.ui_text(:none_of_these, count: 3)).to eq("None of these")
-    expect(view.ui_text(:back_to_offered, count: 1)).to eq("← Back to the possible match")
-    expect(view.ui_text(:back_to_offered, count: 3)).to eq("← Back to the 3 possible matches")
+    expect(view.ui_text(:disclose_choice, label: "add it under another name")).to eq("or add it under another name…")
+    expect(view.ui_text(:search_quickbooks)).to eq("Search QuickBooks…")
     expect(view.choices.first.fields.first.rows.ui_text(:step, position: 1, count: 3)).to eq("1 of 3")
   end
 
@@ -131,10 +124,27 @@ RSpec.describe "A question's choices by kind" do
                                                                     ["cancel", :exit, :ghost]])
   end
 
-  it "shows a plain choice before the first form as a pick when there are none (a name clash)" do
-    # Its "Use this one" is a secondary button, as an offered record's, not a bare link
-    expect(arranged(question("name_clash"))).to eq([["use_existing", :pick, :secondary], ["rename", :form, :primary],
-                                                    ["cancel", :exit, :ghost]])
+  it "leads a name clash with the existing record, the rename behind \"or add it under another name…\"" do
+    view = question("name_clash")
+
+    # The record is the main action; the rename's submit is primary once its disclosure opens.
+    expect(arranged(view)).to eq([["use_existing", :pick, :primary], ["rename", :form, :primary], ["cancel", :exit, :ghost]])
+    expect([view.picks, view.forms, view.disclosed, view.exits].map { |l| l.map(&:id) })
+      .to eq([%w[use_existing], [], %w[rename], %w[cancel]])
+    expect(view.mid_sentence(view.disclosed.first.label)).to eq("add it under another name")
+    expect(view.joined_form).to be_nil
+  end
+
+  it "reads a choice about one record: its title, action, lines and facts" do
+    record = question("name_clash").picks.first
+
+    expect([record.title, record.action, record.lines]).to eq(["RIVERBEND ELECTRIC", "Use existing",
+                                                               ["ap@riverbend.example · 512-555-0142 · Austin"]])
+    expect(record.facts.map(&:to_a)).to eq([["Company", "Riverbend Electric LLC"], ["Balance", "1,250.00"],
+                                            ["Added", "Mar 2, 2024"]])
+    expect(record).to be_row
+    expect(record.detail_parts(record.lines.first)).to eq(["ap@riverbend.example ·", "512-555-0142 ·", "Austin"])
+    expect(question("choose").picks.first).not_to be_row
   end
 
   it "keeps a question of plain choices in one row, the first primary" do
@@ -149,12 +159,10 @@ RSpec.describe "A question's choices by kind" do
     expect(arranged(view)).to eq([["approve", :exit, :primary], ["skip", :exit, :secondary], ["cancel", :exit, :ghost]])
   end
 
-  it "has at most one primary button on every storyboard question, or on each branch of a chain" do
+  it "has at most one primary button on every storyboard question, a disclosed form's aside" do
     QubeRails::Storyboard::QUESTIONS.each do |key|
       view = question(key)
-      view.choices.group_by { |c| view.branch_part(c) || view.branch_part(c.kind == :pick ? :picks : nil) }.each_value do |choices|
-        expect(choices.count { |c| c.style == :primary }).to be <= 1, key
-      end
+      expect((view.choices - view.disclosed).count { |c| c.style == :primary }).to be <= 1, key
     end
   end
 end
