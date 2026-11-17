@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+**Offered records, a decline and a search at once** (in place of 0.2.1's branch at a time)
+- Offered records, a decline and a search show at once. Beside a decline, every record's button
+  and the decline are secondary. A decline that says what it is as a row (title, action, lines:
+  resolve's "Riverbend · new customer in QuickBooks · Add as new") is a row among the records;
+  any other ("None of these") is a button just under them (`QuestionView#alongside`,
+  `.qube-choice-alongside`), not in the footer. Without a decline the first record is still the
+  main action. Cancel is alone in the footer.
+- A search beside offered records is its box alone under them (`QuestionView#searches`, new
+  partial `question/_inline_search`, `.qube-search-inline`, new key `question.search_quickbooks`,
+  `FieldView#placeholder`, `FieldView#inline?`). Picking a match answers nothing: the match shows
+  as a row like the offered ones, focused, and the box empties for another search; a second pick
+  replaces it. That row is a slot the page renders hidden and empty (`PickedView`,
+  `ChoiceView#slot?` and `#data`), posting the search's choice with the match. A search that finds
+  nothing makes the decline the main action, unless a match was picked.
+- A search's list opens only for the box being focused or typed in, and a box under offered
+  records never shows the error edge: its pick is a row of its own.
+- The branch pattern (`QuestionView#chain?`, `#branch`, `data-qube-branch*`, "← Back to the
+  possible match") is gone; `question.none_of_these` and `question.back_to_offered` are unused.
+
+**A name clash leads with the existing record**
+- A choice about one record can carry `title`, `action`, `lines` (each split on " · ") and
+  `facts` (`{label, value}`), in place of `detail`: `ChoiceView#title`, `#action`, `#lines`,
+  `#facts` (`FactView`), `#row?`; `.qube-pick-line`, `.qube-pick-facts`, `.qube-pick-fact`,
+  `.qube-pick-fact-label`.
+- `ensure`'s ask_use shows the existing record's row (QuickBooks' stored name, its lines, and
+  Company, Balance, Added) with "Use existing" as the main action. Adding it under another name
+  waits behind "or add it under another name…" (new key `question.disclose_choice`,
+  `QuestionView#disclosed` and `#mid_sentence`, new partial `question/_disclosure`, a `<details>`
+  with `.qube-choice-disclosure` and `data-qube-disclosure`); opened, its submit is the main
+  action and the focus goes to its first field. A refusal of its answer opens it.
+
+**An offered record's button is its only target**
+- An offered record's row (`.qube-pick`) is now a `div`, and its "Use this one"
+  (`.qube-pick-action`) is the submit button: a click on the record's name or details does
+  nothing. A row without its own button (a plain option) is still a button whole. Styles keyed
+  on `button.qube-pick` for an offered record need `.qube-pick`.
+
+**Smaller**
+- Option rows sit on a quiet fill rather than a border, so they aren't boxes inside the card.
+- The storyboard's search in a rows field returns only records of the row's kind, as QuBe Sync's
+  search scopes by `row`. Its notes say in plain words what brings each screen up and what your
+  user can do.
+
 ## 0.2.1 (2026-11-17)
 
 Connections keep their type, so workflows aren't started on standard ones, and run webhooks are
@@ -37,42 +84,30 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 - Choices are weighed by the `role` QuBe Sync now sends with each (`pick`, `search`, `decline`,
   `cancel`, `answer`): the offered records as option rows with no heading of their own (the
   question's message says what they are), the first one's "Use this one" the screen's primary button and the
-  rest secondary; a search as a box under them (see below), or a section of its own
+  rest secondary; a search after them, a branch at a time (see below), or a section of its own
   when nothing is offered; decline in the footer; cancel at the start of the footer row, as a ghost. An answer shows by its shape, as before. Without roles (an
   older QuBe Sync), choices show by their shape as before. `ChoiceView#role` and `#cancel?`,
   `QuestionView#roles?`, `#matches?` and `#ui_text` (the one lookup for the engine's new words,
   "Possible matches" and the step line; `RowsView#ui_text` defers to it); forms carry
   `data-qube-choice-role`. New CSS only for cancel's place in the footer row; the heading and
   buttons use classes the stylesheet already styles.
-- Offered records, a decline and a search show at once. Offered records beside a decline weigh
-  the same: every record's button and the decline are secondary. A decline that says what it is
-  as a row (title, action, lines: resolve's "Riverbend · new customer in QuickBooks · Add as new")
-  is a row among the records; any other ("None of these", "None of them: add it again") a button
-  just under them at their buttons' edge (`QuestionView#alongside`, `.qube-choice-alongside`), not
-  in the footer. Without a decline the first record is still the main action. Cancel is alone in
-  the footer.
-- A search beside offered records is its box alone under them (`QuestionView#searches`, new
-  partial `question/_inline_search`, `.qube-search-inline`): "Search QuickBooks…" (new key
-  `question.search_quickbooks`, `FieldView#placeholder`), its label for screen readers, not
-  required (`FieldView#inline?`). Picking a match answers nothing: the match shows as a row like
-  the offered ones (its name, its detail, "Use this one", secondary, focused), after them and
-  before a decline's row, and the box empties for another search; a second pick replaces it.
-  That row is a slot the page renders hidden and empty (`QuestionView#picks` holds a
-  `PickedView`, `ChoiceView#slot?` and `#data`), posting the search's choice with the match. A
-  search that finds nothing makes the decline the main action, unless a match was picked.
-- A choice about one record can carry `title` (shown in place of its label), `action` (its row's
-  button), `lines` (each split on " · ") and `facts` (`{label, value}`, side by side), in place of
-  `detail`: `ChoiceView#title`, `#action`, `#lines`, `#facts` (`FactView`), `#row?`;
-  `.qube-pick-line`, `.qube-pick-facts`, `.qube-pick-fact`, `.qube-pick-fact-label`.
-- A name clash (`ensure`'s ask_use) leads with the existing record: its row (QuickBooks' stored
-  name, its lines and its facts: Company, Balance, Added, and "Use existing") is the main action.
-  Adding it under another name waits behind "or add it under another name…" (new key
-  `question.disclose_choice`, `QuestionView#disclosed` and `#mid_sentence`, new partial
-  `question/_disclosure`, a `<details>` with `.qube-choice-disclosure` and
-  `data-qube-disclosure`); opened, its submit is the main action, the record's button steps back,
-  and the focus goes to its first field. A refusal of its answer opens it. Any form after a
-  promoted row does the same.
-- Option rows sit on a quiet fill rather than a border, so they aren't boxes inside the card.
+- Offered records with a search (a chain, `QuestionView#chain?`) show a branch at a time. The
+  offered records come first, the footer row holding cancel and "Not this one" / "None of these"
+  (new key `question.none_of_these`, `data-qube-branch="search"`); that swaps them for the search,
+  with "← Back to the possible match" / "← Back to the %{count} possible matches" above it (new key
+  `question.back_to_offered`, `.qube-branch-back`, `data-qube-branch="offered"`), its button row
+  holding cancel, the decline and its submit (the footer's forms, through `form=`). Moving to the
+  search focuses its box, Back the first record, and what was typed or picked stays. A refusal of
+  the search's answer starts on the search. Each part carries `data-qube-branch-part` ("offered" or
+  "search"), `hidden` when not on show; `QuestionView#branch`, `#branch_part`, `#shown_part?`,
+  `#offered_count`, `#joined_exits`, `#divided?`. Without the script a chain shows the records and
+  a footer of cancel and the decline, as forms that post. Other questions are unchanged.
+- Motion for a chain: a branch the person moves to comes in from its side over 200 ms (the
+  search from the right, the records from the left; the script sets `data-qube-branch-moved`, so
+  a page load is still), and "Use this one" fades in as a match is picked. With reduced motion
+  both only fade.
+- A search's button row that also holds the decline puts its end on top and cancel under it in a
+  question narrower than 44rem, before and after a pick, so "Use this one" arriving moves nothing.
 - A search's submit ("Use this one") is hidden until a match is picked (`ChoiceView#waits_for_pick?`),
   then shows as the primary button; after a search of two characters or more that finds nothing,
   the decline is the primary button until a pick or a search that finds matches. Until either,
@@ -90,12 +125,6 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 
 ### Changed
 
-**An offered record's button is its only target**
-- An offered record's row (`.qube-pick`) is now a `div`, and its "Use this one"
-  (`.qube-pick-action`) is the submit button: a click on the record's name or details does
-  nothing. A row without its own button (a plain option) is still a button whole. Styles keyed
-  on `button.qube-pick` for an offered record need `.qube-pick`.
-
 **The question's layout: one button row**
 - A form choice ends in one button row (`.qube-choice-actions`, new `ui_classes` piece
   `choice_actions`): cancel at the start, as a ghost; at the end, the right edge of the fields
@@ -111,15 +140,15 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   2 of 3, Back, Next (or the submit on the last record).
 - The question card has sections: a hairline under what it's about, another above the way out
   (the exits' row, or a lone form's button row). A card that is one form is as wide as the form;
-  a search box under offered records takes the card's width.
+  a chain's search keeps the width its offered records had.
 - Beside full-width picks (a near match, a name clash) a form takes the full width too, so its
   submit shares the picks' and exits' right edge.
 - A form's fields and button row share one column (`--qube-form-width`, 36rem; a rows field takes
   the whole width), so the submit lines up with the fields' right edge.
 - On a narrow question (a container under 30rem) the row's end comes first, its buttons filling
   the line, and cancel goes under it.
-- A choice promoted to an option row (name clash's "Use the existing record") ends in a button,
-  as an offered record's does, not a link: the first such row's is primary (see Added).
+- A choice promoted to an option row (name clash's "Use the existing record") ends in a secondary
+  "Use this one" button, as an offered record's does, not a link.
 - The question card keeps a gap under the record's status when it follows it.
 
 **Decisions from the review**
@@ -193,15 +222,7 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
   layer's last rule now hides a `hidden` `.qube-choice`, `.qube-choice-button` and
   `[data-qube-branch-part]` (zero specificity, so it has to come after the rules that set display).
 - A search box with text but no pick shows its error edge once the focus leaves it, not while
-  it's being typed in (after a first try it was red through every later search). A box under
-  offered records never shows it: its pick is a row of its own.
-- A search's list opens only for the box being focused or typed in. A box closes as the focus
-  leaves it whether its list was open yet or not, so a browse still on its way when the focus
-  passed through never opens, and an answer that arrives for a box no longer focused is dropped.
-- The storyboard's search in a rows field returns only records of the row's kind (each sample
-  record carries its `kind`), as QuBe Sync's search scopes by `row`. Its notes say in plain words
-  what brings each screen up and what your user can do; "Storyboard: nothing was sent." shows
-  under the question that was answered.
+  it's being typed in (after a first try it was red through every later search).
 - A search's "No matches" or failed-search note is a line under the box, in flow, not a floating
   list over the buttons below it.
 - On the last record of a rows field, Back and the question's submit share a row: the step nav
