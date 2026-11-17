@@ -93,11 +93,14 @@ module QubeRails
                                  error: refusal ? nil : screen.sample["error"], refusal: refusal)
       end
 
-      # The sample's matches for a search: at most 20 whose label holds q.
-      def matches(screen, field, q)
+      # The sample's matches for a search: at most 20 whose label holds q. In a rows field, only
+      # the records of the row's kind, as QuBe Sync's search scopes by row.
+      def matches(screen, field, q, row = nil)
         list = screen && screen.kind == :question ? Array(screen.sample["search"][field.to_s]) : []
+        kind = row && row_kind(screen.sample, field.to_s, row.to_s)
         q = q.to_s.strip.downcase
-        list.select { |m| m["label"].to_s.downcase.include?(q) }.first(20)
+        list.select { |m| kind.nil? || m["kind"].nil? || m["kind"] == kind }
+            .select { |m| m["label"].to_s.downcase.include?(q) }.first(20)
       end
 
       # The file an app puts at that path to override a piece.
@@ -107,6 +110,17 @@ module QubeRails
       end
 
       private
+
+      # The kind of record a rows field's column takes in that row (its "kinds"), or nil.
+      def row_kind(sample, field, row)
+        name, column = field.split(".", 2)
+        return nil unless column
+
+        rows_field = Array(sample["prompt"]["choices"]).flat_map { |c| Array(c["fields"]) }
+                                                       .find { |f| f["name"] == name && f["type"] == "rows" }
+        found = rows_field && Array(rows_field["rows"]).find { |r| r["key"] == row }
+        found && (found["kinds"] || {})[column]
+      end
 
       def run_status_screens
         RUN_STATUSES.map do |key, title, status, run, pieces, note|

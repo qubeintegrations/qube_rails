@@ -1,6 +1,6 @@
 {
   "title": "A near match",
-  "note": "resolve's ask, asked for an invoice: QuickBooks has no customer with exactly that name, and the message names it, so no detail row repeats it. The similar ones are the possible matches (detail says why), the first the main action; the exits' row under them reads \"Cancel adding the invoice\" at its start and \"Not this one\" at its end, which swaps the possible match for a search over every customer, with \"← Back to the possible match\" above it and \"It's not in QuickBooks\" beside its \"Use this one\" (shown once a match is picked; the decline becomes the main action after a search that finds nothing). Without the script the search can't work, so the row holds Cancel and \"It's not in QuickBooks\". With an add from the caller, \"It's not in QuickBooks\" says the record is added as new (adds: true). Each choice's role (pick, search, decline, cancel) says how to weigh it.",
+  "note": "QuickBooks has no customer with exactly this name, but it has similar ones. Your user uses one of them, adds the customer as new, or searches QuickBooks for another.",
   "prompt": {
     "choices": [
       {
@@ -29,11 +29,16 @@
       },
       {
         "description": null,
-        "detail": null,
+        "detail": "new customer in QuickBooks",
         "fields": [],
         "id": "none",
         "label": "It's not in QuickBooks: add \"Riverbend\" as new",
-        "role": "decline"
+        "role": "decline",
+        "title": "Riverbend",
+        "action": "Add as new",
+        "lines": [
+          "new customer in QuickBooks"
+        ]
       },
       {
         "description": null,

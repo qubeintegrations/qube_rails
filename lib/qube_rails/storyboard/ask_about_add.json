@@ -1,6 +1,6 @@
 {
   "title": "A lost answer",
-  "note": "add_transaction's ask_about_add: QuickBooks never answered the add, and the run couldn't settle whether it went in. Use a candidate, add it again, or cancel.",
+  "note": "QuickBooks never answered the add, so it isn't known whether the invoice went in. Your user picks the invoice that matches, adds it again, or cancels.",
   "prompt": {
     "id": "add_transaction / ask_about_add",
     "kind": "decision",

@@ -23,9 +23,6 @@
 <% end %>
     </fieldset>
   </header>
-<% if flash[:qube_rails_storyboard] %>
-  <p class="qube-storyboard-notice" role="status"><%= flash[:qube_rails_storyboard] %></p>
-<% end %>
   <div class="qube-storyboard-body">
     <nav class="qube-storyboard-nav" aria-label="Screens">
 <% QubeRails::Storyboard.screens.group_by(&:group).each do |group, screens| %>
@@ -68,6 +65,10 @@
                      question: QubeRails::Storyboard.question_view(screen, answer, qube_rails.storyboard_search_path(screen.key)) %>
 <%   end %>
         </div>
+<%   if single && flash[:qube_rails_storyboard] %>
+<%#    Under the question, where the answer was given, so it's seen. %>
+        <p class="qube-storyboard-notice" role="status"><%= flash[:qube_rails_storyboard] %></p>
+<%   end %>
 <%   if screen.partials.any? %>
         <details class="qube-storyboard-files">
           <summary>Override files (<%= screen.partials.size %>)</summary>

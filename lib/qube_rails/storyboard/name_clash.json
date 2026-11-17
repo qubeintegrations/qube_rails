@@ -1,6 +1,6 @@
 {
   "title": "A name clash",
-  "note": "ensure's ask_use: the name is already in QuickBooks. Use that record, add this one under another name, or cancel.",
+  "note": "QuickBooks already has this name, and it treats names that differ only in case as the same. Your user uses the existing record or adds theirs under another name.",
   "prompt": {
     "id": "ensure / ask_use",
     "kind": "decision",
@@ -10,6 +10,25 @@
       "kind": "customer",
       "name": "Riverbend Electric",
       "existing": {
+        "list_id": "80000012-1709391240",
+        "time_created": "2024-03-02T09:14:00-06:00",
+        "time_modified": "2026-10-28T16:02:11-05:00",
+        "edit_sequence": "1761685331",
+        "name": "RIVERBEND ELECTRIC",
+        "full_name": "RIVERBEND ELECTRIC",
+        "is_active": true,
+        "company_name": "Riverbend Electric LLC",
+        "bill_address": {
+          "addr1": "Riverbend Electric LLC",
+          "addr2": "2201 E Cesar Chavez St",
+          "city": "Austin",
+          "state": "TX",
+          "postal_code": "78702"
+        },
+        "phone": "512-555-0142",
+        "email": "ap@riverbend.example",
+        "balance": 1250.0,
+        "total_balance": 1250.0,
         "list": "customer"
       }
     },
@@ -18,8 +37,27 @@
       {
         "id": "use_existing",
         "label": "Use the existing record",
-        "description": "Carry on with the record QuickBooks already has. Nothing new is created.",
-        "detail": null,
+        "title": "RIVERBEND ELECTRIC",
+        "action": "Use existing",
+        "description": null,
+        "detail": "ap@riverbend.example · 512-555-0142 · Austin · Company Riverbend Electric LLC · Balance 1,250.00 · Added Mar 2, 2024",
+        "lines": [
+          "ap@riverbend.example · 512-555-0142 · Austin"
+        ],
+        "facts": [
+          {
+            "label": "Company",
+            "value": "Riverbend Electric LLC"
+          },
+          {
+            "label": "Balance",
+            "value": "1,250.00"
+          },
+          {
+            "label": "Added",
+            "value": "Mar 2, 2024"
+          }
+        ],
         "fields": [],
         "role": "answer"
       },

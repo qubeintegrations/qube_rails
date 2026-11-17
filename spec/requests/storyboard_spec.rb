@@ -112,12 +112,24 @@ RSpec.describe "The storyboard", type: :request do
     expect(JSON.parse(response.body).map { |m| m["label"] }).to eq(["Sales", "Sales:Signs"])
   end
 
-  it "sends nothing for an answer, and says so" do
+  it "answers a rows field's search with records of the row's kind only" do
+    search = lambda do |row|
+      get "/qube/storyboard/rows/search", params: { field: "records.list_id", q: "", row: row }, headers: signed_in
+      JSON.parse(response.body).map { |m| m["kind"] }.uniq
+    end
+
+    expect(search.call("invoice_line_add.0.item_ref")).to eq(["item"])
+    expect(search.call("customer_ref")).to eq(["customer"])
+    expect(search.call(nil)).to eq(%w[customer item])
+  end
+
+  it "sends nothing for an answer, and says so under the question" do
     post "/qube/storyboard/name_clash/answer", params: { choice: "rename", data: { name: "x" } }, headers: signed_in
 
     expect(response).to have_http_status(:see_other)
     expect(response).to redirect_to("/qube/storyboard/name_clash")
-    expect(page("/qube/storyboard/name_clash").at_css(".qube-storyboard-notice").text).to eq("Storyboard: nothing was sent.")
+    notice = page("/qube/storyboard/name_clash").at_css("[data-qube-storyboard=name_clash] .qube-storyboard-canvas + .qube-storyboard-notice")
+    expect(notice.text).to eq("Storyboard: nothing was sent.")
   end
 
   it "is behind the app's sign-in" do
