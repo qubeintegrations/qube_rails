@@ -226,7 +226,7 @@
     if (value) value.value = button.getAttribute("data-value");
     // The row's text: its name, then its detail (the slot renders both, empty).
     var submit = row.querySelector('button[type="submit"]');
-    var text = submit && submit.firstElementChild;
+    var text = submit && submit.parentElement.firstElementChild; // the row's text, beside its button
     if (!text || !text.children[0]) return;
     text.children[0].textContent = button.getAttribute("data-label");
     var detail = text.children[1];

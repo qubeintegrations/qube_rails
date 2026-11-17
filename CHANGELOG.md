@@ -90,6 +90,12 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 
 ### Changed
 
+**An offered record's button is its only target**
+- An offered record's row (`.qube-pick`) is now a `div`, and its "Use this one"
+  (`.qube-pick-action`) is the submit button: a click on the record's name or details does
+  nothing. A row without its own button (a plain option) is still a button whole. Styles keyed
+  on `button.qube-pick` for an offered record need `.qube-pick`.
+
 **The question's layout: one button row**
 - A form choice ends in one button row (`.qube-choice-actions`, new `ui_classes` piece
   `choice_actions`): cancel at the start, as a ghost; at the end, the right edge of the fields

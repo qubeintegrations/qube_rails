@@ -1447,7 +1447,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    :where(.qube-choices:has(> .qube-choice-disclosure[open]) .qube-pick:hover .qube-pick-action[data-qube-button="primary"]) {
+    :where(.qube-choices:has(> .qube-choice-disclosure[open]) .qube-pick-action[data-qube-button="primary"]:hover) {
       background: color-mix(in srgb, currentColor 6%, var(--qube-solid-color));
     }
   }
@@ -1462,6 +1462,22 @@
     :where(.qube-pick:hover) {
       background: color-mix(in srgb, currentColor 9%, var(--qube-solid-color));
       border-color: transparent;
+    }
+  }
+
+  /* An offered record: only its button is a target, so the row stays still under the pointer */
+  :where(div.qube-pick) {
+    cursor: auto;
+    user-select: auto;
+  }
+
+  :where(div.qube-pick:active) {
+    transform: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(div.qube-pick:hover) {
+      background: color-mix(in srgb, currentColor 5%, var(--qube-solid-color));
     }
   }
 

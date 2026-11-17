@@ -35,7 +35,7 @@ RSpec.describe "Styling the screens", type: :request do
     expect(shown.at_css("form[data-qube-choice='use:1'] .qube-pick-action")["class"])
       .to eq("qube-pick-action qube-choice-button btn btn-link")
     expect(shown.at_css("form.qube-search-inline[data-qube-choice=use] button")).to be_nil
-    expect(shown.at_css("form[data-qube-choice='use:1'] button")["class"]).to eq("qube-pick")
+    expect(shown.at_css("form[data-qube-choice='use:1'] > div")["class"]).to eq("qube-pick")
     expect(shown.at_css("form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn btn-link")
     # Cancel is a ghost: with no button_ghost piece it takes no host class (the engine's look)
     expect(shown.at_css("form[data-qube-choice=cancel] button")["class"]).to eq("qube-choice-button")
@@ -52,7 +52,7 @@ RSpec.describe "Styling the screens", type: :request do
     asking(prompt)
     shown = page
 
-    expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] button.qube-pick.list-item .qube-pick-detail.muted"))
+    expect(shown.at_css(".qube-picks.list form[data-qube-choice='use:1'] div.qube-pick.list-item .qube-pick-detail.muted"))
       .not_to be_nil
     expect(shown.at_css(".qube-choice-divider.or")).to be_nil # the search is a box under the picks
     expect(shown.at_css(".qube-choice-alongside form[data-qube-choice=none] button")["class"]).to eq("qube-choice-button btn-2")

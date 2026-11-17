@@ -1,7 +1,8 @@
 <%# One pick (a QubeRails::ChoiceView of kind :pick): an option row, a form posting choice=<id>
     to choice.action_url with your CSRF token. An offered record (choice.style set) ends in a
     "Use this one" button: the first primary, the rest secondary. A choice about one record shows
-    its title, lines and facts, and its action as the button. A search box's picked match
+    its title, lines and facts, and its action as the button. An offered record's button is its
+    only target; a row without one is a button whole. A search box's picked match
     (choice.slot?) is hidden and empty until the script fills it. %>
 <form class="qube-choice qube-pick-form" method="post" action="<%= choice.action_url %>" role="listitem"
       data-qube-choice="<%= choice.id %>" data-qube-choice-kind="pick"<% if choice.role %> data-qube-choice-role="<%= choice.role %>"<% end %><%= " hidden" if choice.slot? %>>
@@ -10,7 +11,7 @@
 <% choice.data.each do |name, value| %>
   <%= hidden_field_tag name, value, id: nil %>
 <% end %>
-  <button type="submit" class="<%= qube_classes(:pick, "qube-pick") %>">
+  <%= content_tag(choice.style ? :div : :button, class: qube_classes(:pick, "qube-pick"), type: (choice.style ? nil : "submit")) do %>
     <span class="qube-pick-text">
       <span class="qube-pick-label"><%= choice.title || choice.label %></span>
 <% if choice.lines.any? || choice.facts.any? %>
@@ -28,9 +29,9 @@
 <% end %>
     </span>
 <% if choice.style %>
-    <span class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>"><%= choice.action || QubeRails.t("question.use_pick") %></span>
+    <button type="submit" class="<%= qube_classes(choice.button_piece, "qube-pick-action", "qube-choice-button") %>" data-qube-button="<%= choice.style %>" data-qube-offered="<%= choice.style %>"><%= choice.action || QubeRails.t("question.use_pick") %></button>
 <% else %>
     <span class="<%= qube_classes(:pick_action, "qube-pick-action") %>"><%= choice.action || QubeRails.t("question.use_pick") %></span>
 <% end %>
-  </button>
+  <% end %>
 </form>

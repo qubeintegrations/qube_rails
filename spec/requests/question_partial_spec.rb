@@ -31,7 +31,10 @@ RSpec.describe "The question partial", type: :request do
     # The offered record, the row its search's pick fills, the search box, the decline beside
     # them, then cancel.
     expect(forms.map { |f| f.at_css("input[name=choice]")["value"] }).to eq(%w[use:1 use use none cancel])
-    expect(forms.first.at_css("button.qube-pick").text).to include("Riverbend Electric", "similar name")
+    expect(forms.first.at_css(".qube-pick").text).to include("Riverbend Electric", "similar name")
+    # An offered record's button is its only target; the row around it isn't one.
+    expect(forms.first.css("button").map { |b| b["class"].split.first }).to eq(%w[qube-pick-action])
+    expect(forms.first.at_css("div.qube-pick > button[type=submit][data-qube-offered]")).not_to be_nil
 
     search = shown.at_css(".qube-search")
     expect(search["data-qube-search"]).to eq("#{action}/search")

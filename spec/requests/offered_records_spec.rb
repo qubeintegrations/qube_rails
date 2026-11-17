@@ -72,7 +72,7 @@ RSpec.describe "A question's offered records, decline and search, at once", type
     expect(slot["action"]).to eq("/qube/questions/runs/#{QubeRails::Run.last.id}")
     expect(slot.css("input[type=hidden]").map { |i| [i["name"], i["value"]] }.drop(1))
       .to eq([%w[choice use], ["data[list_id]", ""]])
-    expect(slot.at_css("button[type=submit] > .qube-pick-text > .qube-pick-label + .qube-pick-detail")).not_to be_nil
+    expect(slot.at_css("div.qube-pick > .qube-pick-text > .qube-pick-label + .qube-pick-detail")).not_to be_nil
     action = slot.at_css(".qube-pick-action[data-qube-button=secondary]")
     expect(text(action)).to eq("Use this one")
   end
