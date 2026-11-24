@@ -11,6 +11,9 @@ module QubeRails
   # own, while the same counter value turns up in several families. So a row is unique by
   # connection, family and qb_id, and by connection, kind and your record (one contact can be
   # both a customer and a vendor, as two QuickBooks names).
+  #
+  # A row with stale_since is the old company file's, after connection.company_file_changed:
+  # never used (every reader takes current) until QubeRails::LinkCheck finds it on the new file.
   class QuickbooksRecord < ApplicationRecord
     self.table_name = "qube_quickbooks_records"
 
@@ -20,6 +23,13 @@ module QubeRails
     belongs_to :record, polymorphic: true, optional: true
 
     before_validation { self.list = self.class.family_for(kind) }
+
+    scope :current, -> { where(stale_since: nil) }
+    scope :stale, -> { where.not(stale_since: nil) }
+
+    def stale?
+      !stale_since.nil?
+    end
 
     # The list family a kind's ids are unique within: "name" for customers, vendors, employees
     # and other names; "item" for "item" and every item_* kind; for anything else (an account, a

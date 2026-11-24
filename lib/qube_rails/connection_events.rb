@@ -62,6 +62,8 @@ module QubeRails
 
       applied = connection.with_lock { apply(event) }
       refresh_pages if applied && (event.stalled? || event.resumed? || event.event == COMPANY_FILE_CHANGED)
+      # Connected with links from an earlier company file: check them (again, after a retry).
+      LinkCheck.start(connection) if connection.connected? && connection.stale_links.exists?
     end
 
     # What your app does with each: until you fill them in, each logs.
@@ -93,10 +95,17 @@ module QubeRails
       log_event(event)
     end
 
-    # The engine has dropped this connection's QuickBooks links. Drop any ids you keep yourself,
-    # match records again by name once it's connected, and ask the customer to finish the setup.
+    # Its QuickBooks links are stale (unused) until they're checked on connected. Set aside ids you
+    # keep yourself, and ask the customer to finish the setup.
     def company_file_changed(event)
       log_event(event)
+    end
+
+    # A check of its stale links of kind settled: relinked found on the new file, dropped not (they
+    # are matched by name again). stale_left: 0 once every check is done.
+    def links_checked(kind:, relinked:, dropped:, stale_left:)
+      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{kind} links checked on its company file: " \
+                            "#{relinked} relinked, #{dropped} dropped, #{stale_left} still to check")
     end
 
     # The account disconnected it (DELETE quickbooks/connections/:id): delete your rows that
@@ -146,12 +155,13 @@ module QubeRails
       true
     end
 
-    # Every id and EditSequence kept for the connection is the old file's, and so is each sync's
-    # since: they go, and runs from before now stop counting (SyncStatus).
+    # Every id kept for the connection is the old file's until checked on the new one (LinkCheck),
+    # each sync's since goes, and runs from before now stop counting (SyncStatus).
     def forget_company_file
-      QuickbooksRecord.where(connection_id: connection.id).delete_all
+      now = Time.now
+      QuickbooksRecord.where(connection_id: connection.id).update_all(stale_since: now, check_alone: false)
       SyncMark.where(connection_id: connection.id).delete_all
-      connection.company_file_changed_at = Time.now
+      connection.company_file_changed_at = now
     end
 
     # At most this many records' pages are told to refresh when the connection stalls, resumes or

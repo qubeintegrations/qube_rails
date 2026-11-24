@@ -36,11 +36,17 @@ module QuickbooksDesktop
       log_event(event)
     end
 
-    # They chose "Use a different company file": the gem has dropped this connection's QuickBooks
-    # links. Drop any ids you keep yourself, match records again by name once it's connected, and
-    # ask them to finish the setup.
+    # They chose "Use a different company file": the gem keeps this connection's QuickBooks links
+    # stale (unused) and checks them once it's connected. Set aside ids you keep yourself, and ask
+    # them to finish the setup.
     def company_file_changed(event)
       log_event(event)
+    end
+
+    # A batch of stale links of kind was checked on the new file: relinked found, dropped not
+    # (matched by name again). stale_left is 0 once every check is done.
+    def links_checked(kind:, relinked:, dropped:, stale_left:)
+      super
     end
   end
 end

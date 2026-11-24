@@ -13,12 +13,13 @@ module QubeRails
   # "pending" until the setup ends, then "connected", "setup_cancelled" or "stalled" (with
   # stall_reason), kept up to date by its own webhooks (QubeRails::ConnectionEvents). revision
   # is the last of those applied. A switch to another company file (connection.company_file_changed)
-  # sets it back to "pending", drops its QuickBooks links and sets company_file_changed_at.
+  # sets it back to "pending", marks its QuickBooks links stale and sets company_file_changed_at.
   # connection_type is "realtime", "standard" or "simulated": as
   # onboarding made it, then as its events (or refresh_type!) say. Workflows don't run on standard.
   #
   # The QuickBooks ids your app learns are kept against it, by list family (link, qb_id_for,
-  # find_linked), since a ListID is unique only within one list family of one company file.
+  # find_linked), since a ListID is unique only within one list family of one company file. After a
+  # company file change they're stale (unused) until QubeRails::LinkCheck checks them.
   class Connection < ApplicationRecord
     self.table_name = "qube_connections"
 
@@ -177,6 +178,9 @@ module QubeRails
           row.assign_attributes(kind: kind, qb_id: qb_id, record_type: type, record_id: id)
           row.edit_sequence = edit_sequence unless edit_sequence.nil?
           row.name = name unless name.nil?
+          # Learned on the file it opens now: no longer the old file's.
+          row.stale_since = nil
+          row.check_alone = false
           row.save!
           row
         end
@@ -197,13 +201,24 @@ module QubeRails
     # kind.
     def qb_id_for(record, kind:)
       type, id = self.class.key_for(record)
-      mine = quickbooks_records.where(record_type: type, record_id: id)
+      mine = quickbooks_records.current.where(record_type: type, record_id: id)
       exact = mine.where(kind: kind.to_s).limit(1).pluck(:qb_id).first
       family = QuickbooksRecord.family_for(kind)
       return exact if exact || family == "name"
 
       row = only_one(mine.where(list: family), "#{type} #{id}'s #{kind}")
       row && row.qb_id
+    end
+
+    # Its links still to be checked against the company file it opens now.
+    def stale_links
+      quickbooks_records.stale
+    end
+
+    # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.
+    # The engine does this on its events; call it to start them again after a check failed.
+    def check_stale_links
+      LinkCheck.start(self)
     end
 
     # Where record stands with QuickBooks on this connection for operation (its SLUG): a
@@ -240,12 +255,12 @@ module QubeRails
       row && row.record
     end
 
-    # The row for that QuickBooks id (with its kind, edit_sequence and name), or nil. With a kind,
+    # The current (not stale) row for that QuickBooks id (with its kind, edit_sequence and name), or nil. With a kind,
     # it's looked up in that kind's family; without one, in every family, and an id found in more
     # than one (the same counter value is a customer and an account) raises ArgumentError, so the
     # caller says which kind it means.
     def quickbooks_record(qb_id, kind: nil)
-      rows = quickbooks_records.where(qb_id: qb_id.to_s)
+      rows = quickbooks_records.current.where(qb_id: qb_id.to_s)
       return rows.find_by(list: QuickbooksRecord.family_for(kind)) if kind
 
       only_one(rows, "QuickBooks id #{qb_id}")
@@ -294,7 +309,7 @@ module QubeRails
     # EXISTS a link on this connection for each row of scope's table.
     def linked_here(scope)
       model = scope.all.klass
-      QuickbooksRecord.where(connection_id: id, record_type: model.base_class.name)
+      QuickbooksRecord.current.where(connection_id: id, record_type: model.base_class.name)
                       .where("qube_quickbooks_records.record_id = #{id_as_text(model, QuickbooksRecord)}")
                       .arel.exists
     end

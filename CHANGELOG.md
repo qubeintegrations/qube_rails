@@ -3,19 +3,31 @@
 ## Unreleased
 
 Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
-`qube_connections.company_file_changed_at`.
+`qube_connections.company_file_changed_at` and `qube_quickbooks_records.stale_since` and
+`check_alone`.
 
 ### New
 
 **A connection switched to another company file**
 - `connection.company_file_changed` (the customer chose "Use a different company file" on the
-  connection's setup page) sets the connection back to `pending`, clears `stall_reason`, deletes
-  its `qube_quickbooks_records` rows and sync marks, and sets `company_file_changed_at`, under the
-  row's lock with the revision check, so nothing keeps the old file's ids. Then the new
+  connection's setup page) sets the connection back to `pending`, clears `stall_reason`, marks
+  its `qube_quickbooks_records` rows stale (`stale_since`, ids kept), deletes its sync marks, and
+  sets `company_file_changed_at`, under the row's lock with the revision check. Then the new
   `ConnectionEvents#company_file_changed(event)` hook runs (it logs by default; the install
   generator's template has it). Pages with a run going on the connection refresh, as for a stall.
+- A stale link is never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks`,
+  `not_in_quickbooks` and `SyncStatus` read current links only (`QuickbooksRecord.current`,
+  `.stale`, `#stale?`; `Connection#stale_links`). `link` makes the row it writes current.
+- `QubeRails::LinkCheck`: on the next `connection.connected` it queues a plain request per kind
+  with stale links (`<kind>.query` by up to 50 ListIDs, or TxnIDs for a transaction kind; slug
+  `qube_rails.check_links:<kind>`, no `config.operations` entry needed). A link found with the
+  name it was kept with (FullName, or RefNumber) is current again with the answer's
+  EditSequence; one not found or with another name is deleted, to be matched by name. An id a
+  batch's 500 warning left out is asked about alone (`check_alone`) before it's dropped. After
+  each batch, the new `ConnectionEvents#links_checked(kind:, relinked:, dropped:, stale_left:)`
+  runs (it logs by default). `Connection#check_stale_links` starts the checks again by hand.
 - `SyncStatus` ignores a run made before `company_file_changed_at`: a record sent to the old file
-  reads `:not_sent`.
+  reads `:not_sent` until its link is checked.
 - `POST quickbooks/connections/:id/company_file` (`connection_company_file_path`): renews the
   connection's links and redirects to its `links.company_file`. 404 for a simulated connection.
 - `render "qube_rails/manage_connection", connection:`: "Set up QuickBooks again" and, unless

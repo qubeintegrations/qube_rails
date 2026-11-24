@@ -26,5 +26,9 @@ module QuickbooksDesktop
     def company_file_changed(event)
       self.class.calls << [:company_file_changed, connection.id, owner.id, connection.status]
     end
+
+    def links_checked(kind:, relinked:, dropped:, stale_left:)
+      self.class.calls << [:links_checked, kind, relinked, dropped, stale_left]
+    end
   end
 end
