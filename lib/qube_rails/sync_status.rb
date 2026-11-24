@@ -26,6 +26,8 @@ module QubeRails
   # 4. the latest run completed and linked nothing (an operation that doesn't link its record):
   #    :done, which a start may follow, since nothing in QuickBooks stands for the record;
   # 5. neither: :not_sent.
+  # A run made before the connection last changed company file (company_file_changed_at) counts
+  # as none: it was the old file's.
   class SyncStatus
     STATUSES = %i[not_sent sending needs_answer in_quickbooks done failed cancelled].freeze
 
@@ -34,6 +36,7 @@ module QubeRails
     # record's status on connection for operation (its SLUG).
     def self.for(connection, record, operation:)
       run = QubeRails::Run.where(connection: connection).latest_for(record, operation)
+      run = nil if run && before_file_change?(run, connection)
       type, id = QubeRails::ApplicationRecord.key_for(record)
       link = connection.quickbooks_records.where(record_type: type, record_id: id)
                        .order(updated_at: :desc, id: :desc).first
@@ -48,6 +51,14 @@ module QubeRails
 
       self.for(run.connection, record, operation: operation)
     end
+
+    # A run from before the customer switched the connection to another company file: it was the
+    # old file's, so the record reads as not sent on the new one.
+    def self.before_file_change?(run, connection)
+      changed_at = connection.company_file_changed_at
+      !changed_at.nil? && run.created_at < changed_at
+    end
+    private_class_method :before_file_change?
 
     def self.status_of(run, link)
       return :failed if run&.realtime_required?

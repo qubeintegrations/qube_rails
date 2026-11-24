@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
+`qube_connections.company_file_changed_at`.
+
+### New
+
+**A connection switched to another company file**
+- `connection.company_file_changed` (the customer chose "Use a different company file" on the
+  connection's setup page) sets the connection back to `pending`, clears `stall_reason`, deletes
+  its `qube_quickbooks_records` rows and sync marks, and sets `company_file_changed_at`, under the
+  row's lock with the revision check, so nothing keeps the old file's ids. Then the new
+  `ConnectionEvents#company_file_changed(event)` hook runs (it logs by default; the install
+  generator's template has it). Pages with a run going on the connection refresh, as for a stall.
+- `SyncStatus` ignores a run made before `company_file_changed_at`: a record sent to the old file
+  reads `:not_sent`.
+- `POST quickbooks/connections/:id/company_file` (`connection_company_file_path`): renews the
+  connection's links and redirects to its `links.company_file`. 404 for a simulated connection.
+- `render "qube_rails/manage_connection", connection:`: "Set up QuickBooks again" and, unless
+  it's simulated, "Use a different company file", while the connection is connected or stalled.
+  New keys `connection.set_up_again` and `connection.use_different_company_file`;
+  `Connection#set_up?`, `#simulated?` and `#company_file_switchable?`.
+- The vendored webhook test vectors have `connection.company_file_changed`.
+
 ### Changed
 
 **Offered records, a decline and a search at once** (in place of 0.2.1's branch at a time)

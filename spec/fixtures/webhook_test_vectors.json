@@ -490,6 +490,18 @@
       }
     },
     {
+      "name": "connection.company_file_changed",
+      "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection\":{\"id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"last_connected_at\":\"2025-10-20T22:00:21Z\",\"name\":\"Riverbend Electric\",\"type\":\"standard\"},\"delivery_id\":\"0196a1c0-0000-7000-8000-00000000b005\",\"event\":\"connection.company_file_changed\",\"links\":{\"self\":\"https://qubesync.com/api/v2/connections/0196a1c0-0000-7000-8000-00000000c001\"},\"revision\":5,\"sandbox\":true,\"timestamp\":1761000000}",
+      "header": "t=1761000000,v1=50bb6db7252c13f6b2fd702f42b0df3acbc3c95d45fc5ccd8d70843a4ea3ed77",
+      "expect": {
+        "type": "connection",
+        "event": "connection.company_file_changed",
+        "dedupe_key": "0196a1c0-0000-7000-8000-00000000b005",
+        "revision": 5,
+        "reference": null
+      }
+    },
+    {
       "name": "name_index.ready",
       "body": "{\"app_id\":\"0196a1c0-0000-7000-8000-00000000a001\",\"connection_id\":\"0196a1c0-0000-7000-8000-00000000c001\",\"event\":\"name_index.ready\",\"name_index\":{\"as_of\":\"2025-10-20T22:30:00Z\",\"records\":1240,\"state\":\"ready\"},\"sandbox\":true,\"timestamp\":1761000000}",
       "header": "t=1761000000,v1=a17bd2ef558daf18b65c20cbfea979c726a7bc9e9316bde94450b2420a6998d1",

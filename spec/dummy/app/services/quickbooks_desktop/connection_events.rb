@@ -22,5 +22,9 @@ module QuickbooksDesktop
     def resumed(event)
       self.class.calls << [:resumed, connection.id, owner.id, connection.stall_reason]
     end
+
+    def company_file_changed(event)
+      self.class.calls << [:company_file_changed, connection.id, owner.id, connection.status]
+    end
   end
 end

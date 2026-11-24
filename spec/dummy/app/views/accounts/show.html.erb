@@ -1,1 +1,4 @@
 <%= render "qube_rails/error" %>
+<% QubeRails::Connection.owned_by(controller.current_account).order(:id).each do |connection| %>
+<%= render "qube_rails/manage_connection", connection: connection %>
+<% end %>

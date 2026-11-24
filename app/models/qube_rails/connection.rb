@@ -12,7 +12,9 @@ module QubeRails
   # qube_id is QuBe Sync's id for it, nil until QuBe Sync answers the create. status is
   # "pending" until the setup ends, then "connected", "setup_cancelled" or "stalled" (with
   # stall_reason), kept up to date by its own webhooks (QubeRails::ConnectionEvents). revision
-  # is the last of those applied. connection_type is "realtime", "standard" or "simulated": as
+  # is the last of those applied. A switch to another company file (connection.company_file_changed)
+  # sets it back to "pending", drops its QuickBooks links and sets company_file_changed_at.
+  # connection_type is "realtime", "standard" or "simulated": as
   # onboarding made it, then as its events (or refresh_type!) say. Workflows don't run on standard.
   #
   # The QuickBooks ids your app learns are kept against it, by list family (link, qb_id_for,
@@ -20,8 +22,8 @@ module QubeRails
   class Connection < ApplicationRecord
     self.table_name = "qube_connections"
 
-    # The ones that have never connected, newest first: what Connect sends back through setup
-    # rather than making another.
+    # The ones not connected yet (never set up, set up again after a company file change, or setup
+    # cancelled), newest first: what Connect sends back through setup rather than making another.
     scope :never_connected, -> { where(status: %w[pending setup_cancelled]).order(created_at: :desc, id: :desc) }
 
     STATUSES = %w[pending connected setup_cancelled stalled].freeze
@@ -66,6 +68,21 @@ module QubeRails
 
     def connected?
       status == "connected"
+    end
+
+    # Set up, and not being set up again: connected, or stalled since.
+    def set_up?
+      %w[connected stalled].include?(status)
+    end
+
+    def simulated?
+      connection_type == "simulated"
+    end
+
+    # Whether to offer "Use a different company file": set up, and not simulated (a simulated
+    # connection has no file to switch).
+    def company_file_switchable?
+      set_up? && !qube_id.to_s.empty? && !simulated?
     end
 
     # Workflows don't run on it: Operation.start raises RealtimeRequired.

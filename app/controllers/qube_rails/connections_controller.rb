@@ -56,6 +56,20 @@ module QubeRails
       send_to_setup(connection)
     end
 
+    # POST /quickbooks/connections/:id/company_file: sends the customer to switch one of the
+    # signed-in account's connections to another company file (its links.company_file, renewed
+    # as onboarding's is). QuBe Sync then sends connection.company_file_changed. A simulated
+    # connection, or one QuBe Sync never answered, answers 404, as another account's does.
+    def company_file
+      account = signed_in_account
+      return head(:unauthorized) unless account
+
+      connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
+      return head(:not_found) if connection.nil? || connection.qube_id.to_s.empty? || connection.simulated?
+
+      send_to_setup(connection, link: "company_file")
+    end
+
     # What the page says when it can't, as I18n keys under qube_rails (config/locales/en.yml).
     RUNS_GOING = :"errors.still_syncing"
     NO_ANSWER = :"errors.disconnect_unreachable"
@@ -138,8 +152,9 @@ module QubeRails
       name.empty? ? nil : name[0, 255]
     end
 
-    # fresh: a row this request wrote, which no earlier create can have been made for.
-    def send_to_setup(connection, fresh: false)
+    # fresh: a row this request wrote, which no earlier create can have been made for. link: the
+    # connection's link to send them to, else its onboarding (a page QuBe Sync has no link for).
+    def send_to_setup(connection, fresh: false, link: "onboarding")
       # An earlier create that landed before its id was saved: that connection, not a second one.
       connection.adopt_qube_connection if !fresh && connection.qube_id.to_s.empty?
       if connection.qube_id
@@ -152,7 +167,8 @@ module QubeRails
       end
 
       # 303, so the browser follows the POST with a GET.
-      redirect_to made.dig("links", "onboarding"), allow_other_host: true, status: :see_other
+      target = made.dig("links", link) || made.dig("links", "onboarding")
+      redirect_to target, allow_other_host: true, status: :see_other
     end
   end
 end

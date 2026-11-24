@@ -232,6 +232,97 @@ RSpec.describe "Onboarding", type: :request do
     end
   end
 
+  describe "POST /quickbooks/connections/:id/company_file" do
+    let!(:connection) { make_connection(account) }
+    let(:company_file) { "https://qube.example/onboarding/abc/company-file" }
+
+    it "brings the webhook URL up to date, renews the links and sends them to switch the company file" do
+      updated = stub_request(:put, api_url("/connections/#{connection.qube_id}"))
+                .with(body: { webhook_url: connection.webhook_url })
+                .to_return(json_data("id" => connection.qube_id))
+      regenerated = stub_request(:post, api_url("/connections/#{connection.qube_id}/onboarding-url"))
+                    .to_return(json_data("links" => { "onboarding" => onboarding, "company_file" => company_file }))
+
+      post "/quickbooks/connections/#{connection.id}/company_file", headers: signed_in
+
+      expect(updated).to have_been_requested
+      expect(regenerated).to have_been_requested
+      expect(response).to have_http_status(:see_other)
+      expect(response).to redirect_to(company_file)
+    end
+
+    it "sends them to the onboarding link when QuBe Sync gives no company file link" do
+      stub_request(:put, api_url("/connections/#{connection.qube_id}")).to_return(json_data({}))
+      stub_request(:post, api_url("/connections/#{connection.qube_id}/onboarding-url"))
+        .to_return(json_data("links" => { "onboarding" => onboarding, "company_file" => nil }))
+
+      post "/quickbooks/connections/#{connection.id}/company_file", headers: signed_in
+
+      expect(response).to redirect_to(onboarding)
+    end
+
+    it "answers 404 for a simulated connection, one QuBe Sync never answered, or another account's" do
+      simulated = make_connection(account, qube_id: "conn-q-sim").tap { |c| c.update!(connection_type: "simulated") }
+      lost = make_connection(account, qube_id: nil, status: "pending")
+      other = Account.create!(name: "Someone else")
+
+      post "/quickbooks/connections/#{simulated.id}/company_file", headers: signed_in
+      expect(response).to have_http_status(:not_found)
+      post "/quickbooks/connections/#{lost.id}/company_file", headers: signed_in
+      expect(response).to have_http_status(:not_found)
+      post "/quickbooks/connections/#{connection.id}/company_file", headers: { "X-Account" => other.id.to_s }
+      expect(response).to have_http_status(:not_found)
+      expect(a_request(:any, /qube\.example/)).not_to have_been_made
+    end
+
+    it "is behind the app's sign-in" do
+      post "/quickbooks/connections/#{connection.id}/company_file"
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe "the manage_connection partial" do
+    def actions(connection)
+      get "/account", headers: signed_in
+      Nokogiri::HTML(response.body).at_css("#qube-manage-connection-#{connection.id}")
+    end
+
+    it "offers Set up again and Use a different company file on a connected connection, with Turbo off" do
+      connection = make_connection(account)
+      shown = actions(connection)
+
+      set_up = shown.at_css("form.qube-set-up-again-form")
+      switch = shown.at_css("form.qube-use-different-company-file-form")
+      expect(set_up["action"]).to eq("/quickbooks/connections/#{connection.id}/onboarding")
+      expect(switch["action"]).to eq("/quickbooks/connections/#{connection.id}/company_file")
+      expect(switch["data-turbo"]).to eq("false")
+      expect(switch.at_css("button").text.strip).to eq("Use a different company file")
+    end
+
+    it "offers both on a stalled connection" do
+      connection = make_connection(account, status: "stalled")
+
+      expect(actions(connection).at_css("form.qube-use-different-company-file-form")).not_to be_nil
+    end
+
+    it "offers only Set up again on a simulated connection" do
+      connection = make_connection(account).tap { |c| c.update!(connection_type: "simulated") }
+      shown = actions(connection)
+
+      expect(shown.at_css("form.qube-set-up-again-form")).not_to be_nil
+      expect(shown.at_css("form.qube-use-different-company-file-form")).to be_nil
+    end
+
+    it "shows nothing while it isn't set up: pending, set up again after a company file change, or cancelled" do
+      pending = make_connection(account, status: "pending")
+      cancelled = make_connection(account, qube_id: "conn-q-2", status: "setup_cancelled")
+
+      expect(actions(pending)).to be_nil
+      expect(actions(cancelled)).to be_nil
+    end
+  end
+
   describe "DELETE /quickbooks/connections/:id" do
     let(:invoice) { Invoice.create!(number: "1001", account: account) }
 
