@@ -6,8 +6,8 @@ module QubeRails
   # request per kind, querying up to BATCH of its ids (ListID or TxnID). An id found there with the
   # same name is kept (current again, with the answer's EditSequence); one found under another name
   # waits for the app's review (Connection#confirm_link / #reject_link); one not found is kept as
-  # missing. All three are checked again on the next company file change. README, "A different
-  # company file".
+  # missing. A kind that can't be looked up by id is kept as missing when the check starts. All are
+  # checked again on the next company file change. README, "A different company file".
   #
   # Its record is the connection, and its slug "qube_rails.check_links:<kind>", so it needs no
   # entry in config.operations. The stale rows are its state: a check that's queued again (a second
@@ -15,9 +15,11 @@ module QubeRails
   class LinkCheck < Request
     SLUG_PREFIX = "qube_rails.check_links:"
     BATCH = 50
+    # How long after a check ended (or a queue got no answer) a held record queues it again.
+    RETRY_AFTER = 5 * 60
 
     # Which id each kind's query takes, when the qube_sync gem's Operations::INDEX can't say (an
-    # older gem, or the inline backend). A kind in neither is never queried: it stays stale.
+    # older gem, or the inline backend). A kind in neither is never queried: it's kept as missing.
     TXN_KINDS = %w[
       ar_refund_credit_card bill bill_payment_check bill_payment_credit_card build_assembly charge check
       credit_card_charge credit_card_credit credit_memo deposit estimate inventory_adjustment invoice
@@ -47,11 +49,15 @@ module QubeRails
     end
 
     # Queues a check for each kind with stale links, when the connection is connected; a kind
-    # whose check is still going keeps it. Returns the requests.
+    # whose check is still going keeps it. A kind with no id to query is settled as missing at once.
+    # Returns the requests.
     def self.start(connection)
       return [] unless connection.connected? && !connection.qube_id.to_s.empty?
 
-      connection.stale_links.distinct.pluck(:kind).sort.filter_map do |kind|
+      kinds = connection.stale_links.distinct.pluck(:kind).sort
+      unqueryable, queryable = kinds.partition { |kind| id_param(kind).nil? }
+      unqueryable.each { |kind| settle_unqueryable(connection, kind) }
+      queryable.filter_map do |kind|
         self.for(kind).queue(connection, connection)
       rescue Backend::APIError => e
         raise unless e.status.between?(400, 499)
@@ -59,6 +65,59 @@ module QubeRails
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't check its #{kind} links (#{e.status})")
         nil
       end
+    end
+
+    # From Connection#wait_for_link_check!, for a held record's stale kinds: queues a kind's check
+    # again when its last one ended (or its queue got no answer) more than RETRY_AFTER ago, or it
+    # has none. Errors are logged: the caller still raises LinkBeingChecked.
+    def self.revive(connection, kinds)
+      return unless connection.connected? && !connection.qube_id.to_s.empty?
+
+      kinds.each do |kind|
+        if id_param(kind).nil?
+          settle_unqueryable(connection, kind)
+          next
+        end
+        check = self.for(kind)
+        last = QubeRails::QueuedRequest.where(connection: connection).latest_for(connection, check::SLUG)
+        next unless last.nil? || dormant?(last)
+
+        last.touch if last && !last.ended? # the back-off counts from this try
+        check.queue(connection, connection)
+      rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its #{kind} link check " \
+                              "again (#{e.class})")
+      end
+    end
+
+    def self.dormant?(row)
+      since = row.ended? ? row.ended_at : (row.qube_id.nil? ? row.updated_at : nil)
+      !since.nil? && since < Time.now - RETRY_AFTER
+    end
+    private_class_method :dormant?
+
+    # Links of a kind no query can look up: kept as missing, and reported like a checked batch.
+    def self.settle_unqueryable(connection, kind)
+      links = connection.transaction do
+        rows = connection.stale_links.where(kind: kind).lock.to_a
+        now = Time.now
+        rows.each { |link| link.update!(stale_since: nil, missing_since: now, check_alone: false) }
+      end
+      return if links.empty?
+
+      report(connection, kind, relinked: [], review: [], missing: links)
+    end
+    private_class_method :settle_unqueryable
+
+    def self.report(connection, kind, result)
+      found = result[:relinked].size + result[:review].size
+      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{kind} links checked: " \
+                            "#{found} found (#{result[:review].size} to review), " \
+                            "#{result[:missing].size} missing")
+      QubeRails.config.connection_events_class.new(connection).links_checked(
+        kind: kind, found: found, relinked: result[:relinked], review: result[:review],
+        missing: result[:missing], stale_left: connection.stale_links.count
+      )
     end
 
     # The check for one kind, as its own class (Request keys a request by record and SLUG).
@@ -117,34 +176,43 @@ module QubeRails
     # Every page is in (one: a query by id isn't paged): the app hears, and the next batch goes.
     def done
       result = @settled
+      # An answer from the old file: ask the new one.
+      @next = true if result.nil? && from_old_file?
       return unless result
 
       @next = true
-      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{self.class::KIND} links checked: " \
-                            "#{result[:relinked].size + result[:review].size} found " \
-                            "(#{result[:review].size} to review), " \
-                            "#{result[:missing].size} missing")
-      QubeRails.config.connection_events_class.new(connection).links_checked(
-        kind: self.class::KIND, found: result[:relinked].size + result[:review].size, relinked: result[:relinked],
-        review: result[:review], missing: result[:missing], stale_left: connection.stale_links.count
-      )
+      LinkCheck.report(connection, self.class::KIND, result)
     end
 
-    # The links stay stale, unused: the connection's next event (or check_stale_links) asks again.
+    # The links stay stale, unused: a held record queues the check again after RETRY_AFTER (revive).
     def failed(event)
       log_event(event)
     end
 
+    # A next batch that can't be queued now is queued again by revive.
     def handle(event)
       super
-      self.class.queue(connection, connection) if @next
+      return unless @next
+
+      begin
+        self.class.queue(connection, connection)
+      rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its next " \
+                              "#{self.class::KIND} link check (#{e.class})")
+      end
     end
 
     private
 
-    # nil when the answer isn't one it can trust (an error, rows it didn't ask for, an odd shape):
-    # nothing is settled, and the links stay stale.
+    # nil when the answer isn't one it can trust (an error, rows it didn't ask for, an odd shape, or
+    # an answer from a file the connection has switched from): nothing is settled.
     def settle(event)
+      if from_old_file?
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: #{self.class::KIND} link check " \
+                              "#{queued_request.id} was queued before its company file changed; nothing settled")
+        return nil
+      end
+
       key = self.class.id_key
       asked = Array((queued_request.params || {})[key]).map(&:to_s)
       found = found_rows(event, key, asked)
@@ -170,6 +238,11 @@ module QubeRails
         end
       end
       result
+    end
+
+    def from_old_file?
+      changed_at = connection.company_file_changed_at
+      !changed_at.nil? && queued_request.created_at < changed_at
     end
 
     def found_rows(event, key, asked)

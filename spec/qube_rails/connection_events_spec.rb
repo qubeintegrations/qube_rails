@@ -136,7 +136,7 @@ RSpec.describe QubeRails::ConnectionEvents do
     it "sets it back to pending, keeps its links but stale and unused, drops its sync marks, and calls the hook once" do
       run_event("connection.company_file_changed") # revision 5
 
-      expect(connection).to have_attributes(status: "pending", stall_reason: nil, revision: 5)
+      expect(connection).to have_attributes(status: "pending", stall_reason: nil, revision: 5, company_file_revision: 5)
       expect(connection.company_file_changed_at).to be_within(5.seconds).of(Time.now)
       expect(connection.quickbooks_records.pluck(:qb_id, :edit_sequence)).to eq([%w[1A-1760999990 1760999990]])
       expect(connection.stale_links.count).to eq(1)
@@ -169,13 +169,26 @@ RSpec.describe QubeRails::ConnectionEvents do
       expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq([:company_file_changed])
     end
 
-    it "is skipped when it's older than the last applied, and marks nothing stale" do
+    it "still forgets the old file when it comes after a later event, keeping status and revision, and checks its links" do
+      check = stub_request(:get, %r{\A#{Regexp.escape(api_url("/connections/#{connection.qube_id}/invoices"))}\?})
+              .to_return(json_data("id" => "check-q-1", "state" => "queued"))
       run_event("connection.resumed", "revision" => 7)
       run_event("connection.company_file_changed") # revision 5, came late
 
-      expect(connection.qb_id_for(invoice, kind: "invoice")).to eq("1A-1760999990")
-      expect(connection).to have_attributes(status: "connected", company_file_changed_at: nil)
+      expect(connection).to have_attributes(status: "connected", revision: 7, company_file_revision: 5)
+      expect(connection.company_file_changed_at).to be_within(5.seconds).of(Time.now)
+      expect(connection.stale_links.count).to eq(1)
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
+      expect(connection.last_synced_at("sync_customer")).to be_nil
       expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq([:resumed])
+      expect(check).to have_been_made.once
+
+      connection.link(invoice, kind: "invoice", qb_id: "9Z-1761000500") # learned on the new file
+      run_event("connection.company_file_changed", "delivery_id" => "redelivered")
+      run_event("connection.company_file_changed", "revision" => 4, "delivery_id" => "older")
+
+      expect(connection.stale_links).to be_empty
+      expect(connection).to have_attributes(status: "connected", revision: 7, company_file_revision: 5)
     end
 
     it "makes a record sent on the old file read as not sent until its link is checked" do

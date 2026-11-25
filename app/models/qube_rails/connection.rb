@@ -13,7 +13,8 @@ module QubeRails
   # "pending" until the setup ends, then "connected", "setup_cancelled" or "stalled" (with
   # stall_reason), kept up to date by its own webhooks (QubeRails::ConnectionEvents). revision
   # is the last of those applied. A switch to another company file (connection.company_file_changed)
-  # sets it back to "pending", marks its QuickBooks links stale and sets company_file_changed_at.
+  # sets it back to "pending", marks its QuickBooks links stale and sets company_file_changed_at
+  # and company_file_revision (a late one forgets the file without the status).
   # connection_type is "realtime", "standard" or "simulated": as
   # onboarding made it, then as its events (or refresh_type!) say. Workflows don't run on standard.
   #
@@ -240,8 +241,15 @@ module QubeRails
       own_links(record).under_review.exists?
     end
 
+    # A held record first makes sure its links' check is going (LinkCheck.revive), in case the last
+    # one failed or was lost.
     def wait_for_link_check!(record, what)
-      if checking_link?(record)
+      stale_kinds = own_links(record).stale.distinct.pluck(:kind)
+      unless stale_kinds.empty?
+        LinkCheck.revive(self, stale_kinds)
+        stale_kinds = own_links(record).stale.distinct.pluck(:kind)
+      end
+      unless stale_kinds.empty?
         raise LinkBeingChecked, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} is being " \
                                 "checked on its new company file; send #{what} again once it's settled"
       end

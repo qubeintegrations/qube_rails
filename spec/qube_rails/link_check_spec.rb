@@ -239,6 +239,92 @@ RSpec.describe QubeRails::LinkCheck do
       expect(checks("customer").last.params).to eq("list_id" => ["80000025-1760999991"])
     end
 
+    it "settles nothing from an answer to a check queued before the file changed again, and asks the new file" do
+      row = checks("customer").first
+      travel(1.second) do
+        run_event("connection.company_file_changed", "revision" => 7)
+        run_event("connection.connected", "revision" => 8)
+        expect(checks("customer").count).to eq(1) # the old one, still going
+
+        answer(row, [riverbend_found])
+        expect(connection.stale_links.where(kind: "customer").count).to eq(2)
+        expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).not_to include(:links_checked)
+        expect(log_output).to include("was queued before its company file changed; nothing settled")
+
+        expect(checks("customer").count).to eq(2)
+        answer(checks("customer").last, [riverbend_found])
+        expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+      end
+    end
+
+    it "queues a failed check again when a held record is sent, once RETRY_AFTER has passed" do
+      connection.update!(connection_type: "realtime")
+      row = checks("invoice").first
+      QubeRails::WebhookJob.new.perform("request", row.id.to_s,
+                                        vector_body("request: QuickBooks refused it", "id" => row.qube_id))
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::LinkBeingChecked)
+      expect(checks("invoice").count).to eq(1) # too soon
+
+      travel(QubeRails::LinkCheck::RETRY_AFTER + 1) do
+        2.times do
+          expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+            .to raise_error(QubeRails::LinkBeingChecked)
+        end
+      end
+      expect(checks("invoice").count).to eq(2) # the second found it going
+      expect(checks("invoice").last).to have_attributes(state: "queued", params: { "txn_id" => %w[1A-1760999990] })
+    end
+
+    it "still holds the record when the check can't be queued again, and sends that queue again later" do
+      row = checks("invoice").first
+      QubeRails::WebhookJob.new.perform("request", row.id.to_s,
+                                        vector_body("request: QuickBooks refused it", "id" => row.qube_id))
+      stub_request(:get, invoices_url).to_timeout
+
+      travel(QubeRails::LinkCheck::RETRY_AFTER + 1) do
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(log_output).to include("couldn't queue its invoice link check again")
+      expect(checks("invoice").last).to have_attributes(qube_id: nil, state: "queued")
+      tried = -> { WebMock::RequestRegistry.instance.times_executed(WebMock::RequestPattern.new(:get, invoices_url)) }
+      first = tried.call
+      travel(2 * (QubeRails::LinkCheck::RETRY_AFTER + 1)) do # that queue, sent again
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      second = tried.call
+      expect(second).to be > first
+      travel(2 * (QubeRails::LinkCheck::RETRY_AFTER + 1) + 1) do # too soon after that try
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(tried.call).to eq(second)
+
+      stub_queue(invoices_url)
+      travel(3 * (QubeRails::LinkCheck::RETRY_AFTER + 1)) do
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(checks("invoice").count).to eq(2)
+      expect(checks("invoice").last.qube_id).to eq("check-q-1")
+    end
+
+    it "keeps the answer when the next batch can't be queued, and a held record queues it later" do
+      stub_const("QubeRails::LinkCheck::BATCH", 1)
+      QubeRails::QueuedRequest.delete_all
+      connection.check_stale_links
+      stub_request(:get, customers_url).to_timeout
+
+      expect { answer(checks("customer").first, [riverbend_found]) }.not_to raise_error
+      expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+      expect(log_output).to include("couldn't queue its next customer link check")
+
+      stub_queue(customers_url)
+      travel(QubeRails::LinkCheck::RETRY_AFTER + 1) do
+        expect { connection.wait_for_link_check!(northwind, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(checks("customer").last).to have_attributes(qube_id: "check-q-1",
+                                                         params: { "list_id" => ["80000025-1760999991"] })
+    end
+
     it "leaves the links stale, unused, when the check fails" do
       row = checks("invoice").first
       body = vector_body("request: QuickBooks refused it", "id" => row.qube_id)
@@ -264,8 +350,10 @@ RSpec.describe QubeRails::LinkCheck do
     end
   end
 
-  it "leaves a kind it can't look up by id stale, and never queries it" do
-    connection.link(riverbend, kind: "company", qb_id: "C1")
+  it "keeps a kind it can't look up by id as missing when the check starts, reports it, and never queries it" do
+    acme = Customer.create!(account: account, name: "Acme")
+    connection.link(account, kind: "company", qb_id: "C1")
+    connection.link(acme, kind: "payment", qb_id: "P1") # a kind the app named itself
     connection.quickbooks_records.update_all(stale_since: Time.now)
     connection.update!(status: "connected")
     stub_queue(customers_url)
@@ -276,7 +364,15 @@ RSpec.describe QubeRails::LinkCheck do
     connection.check_stale_links
 
     expect(checks("company")).to be_empty
-    expect(connection.stale_links.where(kind: "company").count).to eq(1)
+    expect(checks("payment")).to be_empty
+    expect(connection.stale_links.where(kind: %w[company payment])).to be_empty
+    expect(connection.missing_links.where(kind: %w[company payment]).count).to eq(2)
+    expect(connection.checking_link?(acme)).to be(false)
+    expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([
+      [:links_checked, "company", 0, [], [], [account.id], 4],
+      [:links_checked, "payment", 0, [], [], [acme.id], 3]
+    ])
+    expect(checks("customer").count).to eq(1)
   end
 
   it "takes which id each kind's query uses from the gem, and its own lists agree with it" do

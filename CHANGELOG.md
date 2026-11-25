@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
-`qube_connections.company_file_changed_at` and `qube_quickbooks_records.stale_since`,
-`missing_since`, `review_since`, `review_name` and `check_alone`.
+Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` before this version
+serves any traffic: it adds `qube_connections.company_file_changed_at` and
+`company_file_revision`, and `qube_quickbooks_records.stale_since`, `missing_since`,
+`review_since`, `review_name` and `check_alone`, and every link read filters on them, so without
+the migration every sync fails.
 
 ### New
 
@@ -12,7 +14,10 @@ Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
 - `connection.company_file_changed` (the customer chose "Use a different company file" on the
   connection's setup page) sets the connection back to `pending`, clears `stall_reason`, marks
   its `qube_quickbooks_records` rows stale (`stale_since`, ids kept), deletes its sync marks, and
-  sets `company_file_changed_at`, under the row's lock with the revision check. Then the new
+  sets `company_file_changed_at` and `company_file_revision`, under the row's lock with the
+  revision check. One that comes after a later event (a retry landing after `connected`) still
+  forgets the file when it's newer than `company_file_revision`, leaving `status`, `revision` and
+  the hook alone; a redelivery does nothing. Then the new
   `ConnectionEvents#company_file_changed(event)` hook runs (it logs by default; the install
   generator's template has it). Pages with a run going on the connection refresh, as for a stall.
 - A stale link is never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks`,
@@ -22,7 +27,7 @@ Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
 - `QubeRails::LinkCheck`: on the next `connection.connected` it queues a plain request per kind
   with stale links (`<kind>.query` by up to 50 ListIDs or TxnIDs, as the gem's
   `Operations::INDEX` `id_param` says, else the engine's `TXN_KINDS` / `LIST_KINDS`; a kind with
-  neither is never queried). An id found with the same name (case and spacing ignored), or kept
+  neither is kept as missing when the check starts, and reported). An id found with the same name (case and spacing ignored), or kept
   without a name, is current again with the answer's EditSequence. One found under another name is
   held for review (`review_since`, `review_name`, unused): ids carry their record's creation time,
   so a shared id means a copied file, and a rename may be a repurposed record.
@@ -30,11 +35,14 @@ Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
   makes it missing; `#review_links`, `#link_under_review?`. One not found is kept as missing
   (`missing_since`, unused). The next company file change makes all of them stale again. An id a batch's
   500 warning left out is asked about alone (`check_alone`); an answer with rows it didn't ask for
-  or an odd shape settles nothing. After each batch the new
+  or an odd shape, or to a check queued before the last company file change, settles nothing.
+  After each batch the new
   `ConnectionEvents#links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs
   (it logs by default). `Connection#check_stale_links` starts the checks again by hand.
 - `Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` for a record whose link
-  is still stale on the connection (`Connection#checking_link?`), and `QubeRails::LinkNeedsReview`
+  is still stale on the connection (`Connection#checking_link?`), first queuing its kind's check
+  again when the last one ended (or never got an answer) over `LinkCheck::RETRY_AFTER` (5 minutes)
+  ago, and `QubeRails::LinkNeedsReview`
   for one under review (both `NotReady`), so nothing is sent for it until its link is settled.
 - `SyncStatus` ignores a run made before `company_file_changed_at`: a record sent to the old file
   reads `:not_sent` until its link is checked.

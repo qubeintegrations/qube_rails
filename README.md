@@ -106,9 +106,7 @@ It shows "Set up QuickBooks again" (`connection_onboarding_path`) and, unless th
 simulated, "Use a different company file" (`connection_company_file_path`), both with Turbo off,
 while the connection is connected or stalled (`Connection#set_up?`), and nothing otherwise: offer
 Connect then. Both links carry the onboarding token and expire with it, so each button renews
-them when clicked rather than keeping one. Where you show a request's `user_message` saying
-another company file is open (a `retrying` request, below), put the "Use a different company
-file" button beside it.
+them when clicked rather than keeping one.
 
 ## Settings
 
@@ -228,8 +226,8 @@ dropped ...") and returns.
 A `QubeRails::Connection` is one company file: `owner` (your account), `qube_id` (QuBe Sync's
 id, nil until it answers), `name`, `status` (`pending`, `connected`, `setup_cancelled`,
 `stalled`), `stall_reason`, `revision`, `connection_type` (`realtime`, `standard` or
-`simulated`) and `company_file_changed_at` (when the customer last switched it to another
-company file). `QubeRails::Connection.owned_by(account)` lists an account's.
+`simulated`), `company_file_changed_at` (when the customer last switched it to another
+company file) and `company_file_revision` (that switch's event revision). `QubeRails::Connection.owned_by(account)` lists an account's.
 
 A connection's type can't be changed through the API: the customer upgrades a standard one to
 realtime from its page in the QuBe Sync dashboard. Its next event carries the new type, and
@@ -270,7 +268,15 @@ away: they're checked. In the same transaction as the status and revision, the e
   out with an old id (`connection.stale_links` lists them);
 - deletes its sync marks, so the next sync's `last_synced_at` is nil;
 - sets `company_file_changed_at`: a run from before it no longer counts for `sync_status`, so a
-  record sent to the old file reads `:not_sent` until its link is checked.
+  record sent to the old file reads `:not_sent` until its link is checked, and a check queued
+  before it settles nothing (its answer may be the old file's) and is asked again;
+- sets `company_file_revision` to the event's revision.
+
+Events can arrive out of order. A `connection.company_file_changed` that comes after a later event
+(a retried delivery landing after `connection.connected`) still forgets the old file when its
+revision is newer than `company_file_revision`: the links go stale and are checked, but `status`,
+`revision` and your `company_file_changed` hook are left alone. A redelivery of one already
+applied does nothing.
 
 Then your `company_file_changed(event)` runs (by default it logs). Set aside any QuickBooks ids
 your app keeps itself for that connection, and tell the customer to finish the setup.
@@ -281,7 +287,8 @@ connection opens now (`QubeRails::LinkCheck`): a plain request per kind (`custom
 transaction, and the next 50 when that answer is in. Which id a kind's query takes comes from the
 qube_sync gem (`Operations::INDEX`'s `id_param`), or from the engine's own lists on an older gem;
 a kind that can't be looked up by id (company, preferences, a kind your app named itself) is never
-queried, and its links stay stale. For each id:
+queried: its links are kept as missing (below) as soon as the check starts, and reported in
+`links_checked` like a checked batch. For each id:
 
 - found with the same name (a list record's FullName, a transaction's RefNumber, compared
   ignoring case and spacing; blank and blank are the same): the link is kept, current again, with
@@ -320,8 +327,12 @@ the ones that are; an id a batch's 500 left out is asked about again on its own 
 missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
 nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
 delivery is taken once, and a second `connected` while a check is going reuses it. A run that
-links a record on the new file makes its link current at once. A link whose check fails stays
-stale, and the connection's next event (or `connection.check_stale_links`) asks again.
+links a record on the new file makes its link current at once. A link whose check fails (or
+whose answer can't be trusted, or whose queue or next batch couldn't be sent) stays stale. It's
+asked about again on the connection's next event, by `connection.check_stale_links`, or when your
+app sends one of its records: before raising `LinkBeingChecked`, `Operation.start` and
+`Request.queue` queue the kind's check again if its last one ended (or never got an answer) more
+than `LinkCheck::RETRY_AFTER` (5 minutes) ago.
 
 After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on
 your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
@@ -565,9 +576,7 @@ module QuickbooksDesktop
     def failed(event); end
 
     # QuBe Sync keeps trying (QuickBooks closed, a dialog open, another company file open). Show
-    # event.error["user_message"]; for another company file, with "Use a different company
-    # file" (qube_rails.connection_company_file_path(connection)) beside it. Never resend.
-    # Default: logs.
+    # event.error["user_message"]. Never resend. Default: logs.
     def retrying(event); end
 
     # The answer never came back: QuickBooks may have applied it. Default: failed(event). A query
@@ -1256,8 +1265,12 @@ gain `run` and `connection`), move `account_id`, `authorize_question!` and
 tables once nothing reads them.
 
 From qube_rails 0.2.1: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
-and `bin/rails db:migrate` for `qube_connections.company_file_changed_at`, which
-`connection.company_file_changed` sets.
+and `bin/rails db:migrate` before the new version serves any traffic or runs any job. The
+migration adds `qube_connections.company_file_changed_at` and `company_file_revision`, and
+`qube_quickbooks_records.stale_since`, `missing_since`, `review_since`, `review_name` and
+`check_alone`. Every link read (`qb_id_for`, `find_linked`, `in_quickbooks`, `sync_status`...)
+now filters on those columns, so without the migration every sync fails, not only
+`connection.company_file_changed`.
 
 From qube_rails 0.2.0: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
 and `bin/rails db:migrate` for `qube_connections.connection_type` and `qube_runs.headline`.
