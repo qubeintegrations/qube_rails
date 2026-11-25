@@ -12,8 +12,9 @@ module QubeRails
   # connection, family and qb_id, and by connection, kind and your record (one contact can be
   # both a customer and a vendor, as two QuickBooks names).
   #
-  # A row with stale_since is the old company file's, after connection.company_file_changed:
-  # never used (every reader takes current) until QubeRails::LinkCheck finds it on the new file.
+  # A row with stale_since is the old company file's, after connection.company_file_changed, until
+  # QubeRails::LinkCheck looks it up on the new file; one with missing_since wasn't there. Neither
+  # is used: every reader takes current.
   class QuickbooksRecord < ApplicationRecord
     self.table_name = "qube_quickbooks_records"
 
@@ -24,11 +25,16 @@ module QubeRails
 
     before_validation { self.list = self.class.family_for(kind) }
 
-    scope :current, -> { where(stale_since: nil) }
+    scope :current, -> { where(stale_since: nil, missing_since: nil) }
     scope :stale, -> { where.not(stale_since: nil) }
+    scope :missing, -> { where.not(missing_since: nil) }
 
     def stale?
       !stale_since.nil?
+    end
+
+    def missing?
+      !missing_since.nil?
     end
 
     # The list family a kind's ids are unique within: "name" for customers, vendors, employees

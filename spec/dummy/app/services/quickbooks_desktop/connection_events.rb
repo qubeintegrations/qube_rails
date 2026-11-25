@@ -27,8 +27,10 @@ module QuickbooksDesktop
       self.class.calls << [:company_file_changed, connection.id, owner.id, connection.status]
     end
 
-    def links_checked(kind:, relinked:, dropped:, stale_left:)
-      self.class.calls << [:links_checked, kind, relinked, dropped, stale_left]
+    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
+      self.class.calls << [:links_checked, kind, found, relinked.map(&:qb_id),
+                           renamed.map { |r| [r[:record].id, r[:old_name], r[:new_name]] },
+                           missing.map { |link| link.record.id }, stale_left]
     end
   end
 end

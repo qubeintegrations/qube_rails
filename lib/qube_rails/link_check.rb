@@ -3,10 +3,10 @@
 module QubeRails
   # Checks a connection's stale links (the old company file's, after
   # connection.company_file_changed) against the file it opens now, once it's connected: a plain
-  # request per kind, querying up to BATCH of its ids (ListID or TxnID). A link found there with
-  # the name it was kept with (FullName, or a transaction's RefNumber) is current again, with the
-  # answer's EditSequence; one not found, or found with another name, is deleted, so its record is
-  # matched by name like one never linked. README, "A different company file".
+  # request per kind, querying up to BATCH of its ids (ListID or TxnID). An id found there is kept
+  # (current again, with the answer's EditSequence and name), renamed or not; one not found is
+  # kept as missing (unused) until the next company file change checks it again. README, "A
+  # different company file".
   #
   # Its record is the connection, and its slug "qube_rails.check_links:<kind>", so it needs no
   # entry in config.operations. The stale rows are its state: a check that's queued again (a second
@@ -15,7 +15,8 @@ module QubeRails
     SLUG_PREFIX = "qube_rails.check_links:"
     BATCH = 50
 
-    # The kinds a query by TxnID checks. Every other kind is queried by ListID ("<kind>.query").
+    # Which id each kind's query takes, when the qube_sync gem's Operations::INDEX can't say (an
+    # older gem, or the inline backend). A kind in neither is never queried: it stays stale.
     TXN_KINDS = %w[
       ar_refund_credit_card bill bill_payment_check bill_payment_credit_card build_assembly charge check
       credit_card_charge credit_card_credit credit_memo deposit estimate inventory_adjustment invoice
@@ -24,6 +25,25 @@ module QubeRails
       sales_receipt sales_tax_payment_check time_tracking transaction transfer transfer_inventory
       vehicle_mileage vendor_credit
     ].freeze
+    LIST_KINDS = %w[
+      account billing_rate class currency customer customer_msg customer_type date_driven_terms employee
+      entity inventory_site item item_discount item_fixed_asset item_group item_inventory
+      item_inventory_assembly item_non_inventory item_other_charge item_payment item_sales_tax
+      item_sales_tax_group item_service item_sites item_subtotal job_type lead other_name payment_method
+      payroll_item payroll_item_non_wage payroll_item_wage price_level sales_rep sales_tax_code
+      ship_method standard_terms terms to_do unit_of_measure_set vehicle vendor vendor_type
+      workers_comp_code
+    ].freeze
+
+    # "list_id" or "txn_id": what kind's query looks records up by, from the gem's INDEX when it
+    # says, else the lists above; nil for a kind that can't be looked up by id.
+    def self.id_param(kind)
+      entry = defined?(QubeSync::Operations::INDEX) ? QubeSync::Operations::INDEX["#{kind}.query"] : nil
+      return entry[:id_param] if entry&.key?(:id_param)
+      return "txn_id" if TXN_KINDS.include?(kind.to_s)
+
+      LIST_KINDS.include?(kind.to_s) ? "list_id" : nil
+    end
 
     # Queues a check for each kind with stale links, when the connection is connected; a kind
     # whose check is still going keeps it. Returns the requests.
@@ -35,7 +55,6 @@ module QubeRails
       rescue Backend::APIError => e
         raise unless e.status.between?(400, 499)
 
-        # QuBe Sync refused it (a kind with no query): its links stay stale, unused.
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't check its #{kind} links (#{e.status})")
         nil
       end
@@ -63,19 +82,9 @@ module QubeRails
 
     def self.queue(_record, connection)
       return nil unless connection.connected? && kind_links(connection).exists?
-      return nil unless known_operation?(connection)
+      return nil unless id_key
 
       super(connection, connection)
-    end
-
-    # A kind with no "<kind>.query" (one your app named itself) can't be checked: its links stay
-    # stale, unused, and its records are matched by name when they're next sent.
-    def self.known_operation?(connection)
-      return true unless defined?(QubeSync::Operations::INDEX)
-      return true if QubeSync::Operations::INDEX.key?(self::OPERATION)
-
-      QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: no #{self::OPERATION} to check its #{self::KIND} links")
-      false
     end
 
     def self.kind_links(connection)
@@ -83,7 +92,7 @@ module QubeRails
     end
 
     def self.id_key
-      TXN_KINDS.include?(self::KIND) ? "txn_id" : "list_id"
+      LinkCheck.id_param(self::KIND)
     end
 
     # The ids asked about: one that a batch's answer left unsettled (check_alone) on its own, else
@@ -99,21 +108,24 @@ module QubeRails
       queued_request.connection
     end
 
-    # The answer settles each id it asked about that's still stale.
+    # The answer settles each id it asked about that's still stale, unless it's unsure.
     def answered(event)
-      result = settle(event)
-      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{self.class::KIND} links checked: " \
-                            "#{result[:relinked]} relinked, #{result[:dropped]} dropped")
-      @settled = result
+      @settled = settle(event)
     end
 
     # Every page is in (one: a query by id isn't paged): the app hears, and the next batch goes.
     def done
-      @done = true
-      result = @settled || { relinked: 0, dropped: 0 }
-      events = QubeRails.config.connection_events_class.new(connection)
-      events.links_checked(kind: self.class::KIND, relinked: result[:relinked], dropped: result[:dropped],
-                           stale_left: connection.stale_links.count)
+      result = @settled
+      return unless result
+
+      @next = true
+      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{self.class::KIND} links checked: " \
+                            "#{result[:relinked].size} found (#{result[:renamed].size} renamed), " \
+                            "#{result[:missing].size} missing")
+      QubeRails.config.connection_events_class.new(connection).links_checked(
+        kind: self.class::KIND, found: result[:relinked].size, relinked: result[:relinked],
+        renamed: result[:renamed], missing: result[:missing], stale_left: connection.stale_links.count
+      )
     end
 
     # The links stay stale, unused: the connection's next event (or check_stale_links) asks again.
@@ -123,45 +135,69 @@ module QubeRails
 
     def handle(event)
       super
-      self.class.queue(connection, connection) if @done
+      self.class.queue(connection, connection) if @next
     end
 
     private
 
+    # nil when the answer isn't one it can trust (an error, rows it didn't ask for, an odd shape):
+    # nothing is settled, and the links stay stale.
     def settle(event)
       key = self.class.id_key
-      asked = Array((queued_request.params || {})[key])
-      answer = event.response_json.is_a?(Hash) ? event.response_json : {}
-      found = Array(answer["data"]).select { |row| row.is_a?(Hash) }.to_h { |row| [row[key].to_s, row] }
+      asked = Array((queued_request.params || {})[key]).map(&:to_s)
+      found = found_rows(event, key, asked)
+      return nil unless found
+
+      answer = event.response_json
       # QuickBooks answers 500 when an id isn't there, and may leave out the ones that are.
       unsure = asked.size > 1 && answer.dig("warning", "code").to_s == "500"
-      result = { relinked: 0, dropped: 0 }
+      result = { relinked: [], renamed: [], missing: [] }
+      now = Time.now
       asked.each do |qb_id|
         link = self.class.kind_links(connection).find_by(qb_id: qb_id)
         next unless link # settled already: a redelivery, or linked again by a run since
 
-        record = found[qb_id.to_s]
-        if record && same_record?(link, record)
-          link.update!(stale_since: nil, check_alone: false,
-                       edit_sequence: record["edit_sequence"] || link.edit_sequence)
-          result[:relinked] += 1
-        elsif record.nil? && unsure
+        record = found[qb_id]
+        if record
+          keep(link, record, result)
+        elsif unsure
           link.update!(check_alone: true)
         else
-          link.destroy!
-          result[:dropped] += 1
+          link.update!(stale_since: nil, missing_since: now, check_alone: false)
+          result[:missing] << link
         end
       end
       result
     end
 
-    # The name the link was kept with: a list record's FullName (or Name), a transaction's
-    # RefNumber. A link kept without one is taken on its id alone.
-    def same_record?(link, record)
-      return true if link.name.to_s.empty?
+    def found_rows(event, key, asked)
+      answer = event.response_json
+      data = answer.is_a?(Hash) && answer["status"] == "success" ? answer["data"] : nil
+      rows = data.nil? ? [] : Array(data)
+      unless data.is_a?(Array) && rows.all? { |row| row.is_a?(Hash) && asked.include?(row[key].to_s) }
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: #{self.class::KIND} link check " \
+                              "answered unexpectedly; nothing settled, its links stay stale")
+        return nil
+      end
 
+      rows.to_h { |row| [row[key].to_s, row] }
+    end
+
+    # Found means kept: current again, with what the answer says now. A new name is reported.
+    def keep(link, record, result)
       theirs = self.class.id_key == "txn_id" ? record["ref_number"] : record["full_name"] || record["name"]
-      theirs.to_s == link.name.to_s
+      old_name = link.name
+      if !old_name.to_s.empty? && !theirs.to_s.empty? && normal(old_name) != normal(theirs)
+        result[:renamed] << { link: link, record: link.record, old_name: old_name, new_name: theirs }
+      end
+      link.update!(stale_since: nil, missing_since: nil, check_alone: false,
+                   edit_sequence: record["edit_sequence"] || link.edit_sequence,
+                   name: theirs.to_s.empty? ? old_name : theirs)
+      result[:relinked] << link
+    end
+
+    def normal(name)
+      name.to_s.strip.squeeze(" ").downcase
     end
   end
 end

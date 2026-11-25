@@ -278,29 +278,50 @@ your app keeps itself for that connection, and tell the customer to finish the s
 When `connection.connected` comes, the engine checks the stale links against the file the
 connection opens now (`QubeRails::LinkCheck`): a plain request per kind (`customer.query`,
 `invoice.query`...) asking for up to 50 of its ids at once, by ListID, or by TxnID for a
-transaction, and the next 50 when that answer is in. For each id:
+transaction, and the next 50 when that answer is in. Which id a kind's query takes comes from the
+qube_sync gem (`Operations::INDEX`'s `id_param`), or from the engine's own lists on an older gem;
+a kind that can't be looked up by id (company, preferences, a kind your app named itself) is never
+queried, and its links stay stale. For each id:
 
-- found with the name the link was kept with (a list record's FullName, a transaction's
-  RefNumber, both as `link`'s `name:`): the link is current again, with the answer's
-  EditSequence. A link kept without a name is taken on its id alone;
-- not found, or found with another name: the link is deleted, so its record is matched by name
-  (or asks your user) like one never linked.
+- found: the link is kept, current again, with the answer's EditSequence and name, whatever its
+  name. A different name (compared ignoring case and spacing) is reported as renamed, not acted
+  on;
+- not found: the link is kept as missing (`missing_since`, `connection.missing_links`), unused
+  like a stale one, so the record reads as not in QuickBooks and is matched by name (or asks your
+  user) when it's next sent. The next company file change makes it stale again and checks it,
+  so a customer who picked the wrong file and switches back gets their links back.
+
+Until a record's link is settled (current, missing, or replaced by a run), nothing is sent for it:
+`Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` (a `NotReady`), so
+retry them from a job. A record with no link goes as before.
 
 QuickBooks answers a query by id with a 500 warning when an id isn't there, and might leave out
-the ones that are; an id a batch's 500 left out is asked about again on its own before it's
-dropped. A check is safe to run twice: it asks only about links still stale, a delivery is taken
-once, and a second `connected` while a check is going reuses it. A run that links a record on
-the new file makes its link current at once. A link whose check fails stays stale and unused, and
-the connection's next event (or `connection.check_stale_links`) asks again; a kind your app named
-that has no `<kind>.query` stays stale, and its records are matched by name when next sent.
+the ones that are; an id a batch's 500 left out is asked about again on its own before it's called
+missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
+nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
+delivery is taken once, and a second `connected` while a check is going reuses it. A run that
+links a record on the new file makes its link current at once. A link whose check fails stays
+stale, and the connection's next event (or `connection.check_stale_links`) asks again.
 
-After each batch, `links_checked(kind:, relinked:, dropped:, stale_left:)` runs on your class
-(by default it logs): `stale_left` is 0 once every check is done, a moment to tell the customer
-how many records were found again. Match records by name before adding them (a workflow such
-as `add_transaction` finds or asks before it creates), and send past transactions only for a
-range your customer picks. QuBe Sync fails the connection's waiting requests and cancels its live
-runs, each with its own webhook: build that work again from your records after
-`connection.connected`, never resend it as it was.
+After each batch, `links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)` runs on
+your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
+record); `renamed` is `{ link:, record:, old_name:, new_name: }` for each; `stale_left` is 0 once
+every check is done. Tell the customer what was found again. Two things to watch:
+
+- When most found ids of a kind have other names, the new file is probably a different company
+  that happens to reuse ids (how QuickBooks makes ids across files isn't verified): warn the
+  customer before anything is sent.
+- A missing transaction needs your user's review before it's sent again: a RefNumber is often
+  blank or shared, so no name match will find it, and sending it adds it again.
+
+A restored backup is the common case. Records edited after the backup are relinked in their
+older state, so send again what changed since the backup; records created after it aren't
+found and are added again when next sent, which is right for a restore.
+
+Match records by name before adding them (a workflow such as `add_transaction` finds or asks
+before it creates), and send past transactions only for a range your customer picks. QuBe Sync
+fails the connection's waiting requests and cancels its live runs, each with its own webhook:
+build that work again from your records after `connection.connected`, never resend it as it was.
 
 A connection set up again is `pending`, so Connect sends it back through setup rather than making
 another.
@@ -334,9 +355,9 @@ module QuickbooksDesktop
       AccountMailer.quickbooks_finish_setup(owner, connection).deliver_later
     end
 
-    # A check of its stale links settled a batch; stale_left is 0 once they're all checked.
-    def links_checked(kind:, relinked:, dropped:, stale_left:)
-      AccountMailer.quickbooks_reconnected(owner, connection).deliver_later if stale_left.zero?
+    # A batch of its stale links was looked up on the new file; stale_left is 0 once all are.
+    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
+      AccountMailer.quickbooks_links_checked(owner, connection, kind, renamed, missing).deliver_later
     end
   end
 end
@@ -350,8 +371,8 @@ family of one company file (verified on QuickBooks Enterprise 24.0): customers, 
 employees and other names share one, every item type shares another, each other list (accounts,
 classes, terms...) has its own, and the same counter value turns up in several families.
 TxnIDs are kept per transaction type. Pass `name:` (a list record's FullName, a transaction's
-RefNumber): after a company file change it's how a stale link is told apart from another record
-with the same id. Only current links are read; stale ones wait for their check.
+RefNumber): after a company file change it's how a rename is reported. Only current links are
+read; stale and missing ones aren't.
 
 ```ruby
 connection.link(customer, kind: "customer", qb_id: list_id, edit_sequence: "171", name: "Riverbend Electric")

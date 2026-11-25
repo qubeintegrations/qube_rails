@@ -180,6 +180,7 @@ module QubeRails
           row.name = name unless name.nil?
           # Learned on the file it opens now: no longer the old file's.
           row.stale_since = nil
+          row.missing_since = nil
           row.check_alone = false
           row.save!
           row
@@ -213,6 +214,25 @@ module QubeRails
     # Its links still to be checked against the company file it opens now.
     def stale_links
       quickbooks_records.stale
+    end
+
+    # Its links the company file it opens now doesn't have: unused, checked again on the next change.
+    def missing_links
+      quickbooks_records.missing
+    end
+
+    # While record's link here waits for its check, nothing is sent for it (Operation.start and
+    # Request.queue raise LinkBeingChecked), so a record already in QuickBooks isn't added again.
+    def checking_link?(record)
+      type, id = self.class.key_for(record)
+      stale_links.where(record_type: type, record_id: id).exists?
+    end
+
+    def wait_for_link_check!(record, what)
+      return unless checking_link?(record)
+
+      raise LinkBeingChecked, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} is being " \
+                              "checked on its new company file; send #{what} again once it's settled"
     end
 
     # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.

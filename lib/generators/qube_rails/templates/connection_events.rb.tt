@@ -43,9 +43,10 @@ module QuickbooksDesktop
       log_event(event)
     end
 
-    # A batch of stale links of kind was checked on the new file: relinked found, dropped not
-    # (matched by name again). stale_left is 0 once every check is done.
-    def links_checked(kind:, relinked:, dropped:, stale_left:)
+    # A batch of stale links of kind was looked up on the new file: relinked found (kept), renamed
+    # found under another name, missing not found (kept unused; review a missing transaction before
+    # sending it again). stale_left is 0 once every check is done.
+    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
       super
     end
   end

@@ -80,6 +80,10 @@ RSpec.describe QubeRails::LinkCheck do
   end
 
   describe "an answer" do
+    let(:riverbend_found) do
+      { "list_id" => "80000024-1760999990", "full_name" => "Riverbend Electric", "edit_sequence" => "777" }
+    end
+
     before do
       stub_queue(customers_url)
       stub_queue(invoices_url)
@@ -87,69 +91,96 @@ RSpec.describe QubeRails::LinkCheck do
       QuickbooksDesktop::ConnectionEvents.calls.clear
     end
 
-    it "relinks a record found with the same name, with its new EditSequence, and drops one with another name" do
+    it "keeps every id found, renamed or not, with the answer's EditSequence and name, and reports the renames" do
       answer(checks("customer").first, [
-        { "list_id" => "80000024-1760999990", "full_name" => "Riverbend Electric", "edit_sequence" => "777" },
-        { "list_id" => "80000025-1760999991", "full_name" => "Someone Else", "edit_sequence" => "888" }
+        riverbend_found.merge("full_name" => " riverbend  ELECTRIC"), # the same name, spaced and cased
+        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Ltd", "edit_sequence" => "888" }
       ])
 
       expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
-      expect(connection.quickbooks_record("80000024-1760999990", kind: "customer").edit_sequence).to eq("777")
-      expect(connection.qb_id_for(northwind, kind: "customer")).to be_nil
-      expect(QubeRails::QuickbooksRecord.where(qb_id: "80000025-1760999991")).to be_empty
-      expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([[:links_checked, "customer", 1, 1, 1]])
+      expect(connection.qb_id_for(northwind, kind: "customer")).to eq("80000025-1760999991")
+      expect(connection.quickbooks_record("80000025-1760999991", kind: "customer"))
+        .to have_attributes(edit_sequence: "888", name: "Northwind Ltd")
+      expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([
+        [:links_checked, "customer", 2, %w[80000024-1760999990 80000025-1760999991],
+         [[northwind.id, "Northwind Builders", "Northwind Ltd"]], [], 1]
+      ])
     end
 
-    it "drops a transaction QuickBooks doesn't have, and relinks one by its RefNumber" do
+    it "keeps a transaction QuickBooks doesn't have as missing: unused, reported, and checked again on the next switch" do
       answer(checks("invoice").first, [], warning: true)
-      expect(connection.quickbooks_records.where(kind: "invoice")).to be_empty
 
-      connection.link(invoice, kind: "invoice", qb_id: "1A-1760999990", name: "1001")
-      connection.quickbooks_records.update_all(stale_since: Time.now)
-      stub_queue(invoices_url)
-      connection.check_stale_links
-      answer(checks("invoice").last, [{ "txn_id" => "1A-1760999990", "ref_number" => "1001", "edit_sequence" => "5" }])
+      link = QubeRails::QuickbooksRecord.find_by(qb_id: "1A-1760999990")
+      expect(link).to be_missing
+      expect(link).not_to be_stale
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
+      expect(connection.in_quickbooks(Invoice.all)).to be_empty
+      expect(connection.checking_link?(invoice)).to be(false)
+      expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([[:links_checked, "invoice", 0, [], [], [invoice.id], 2]])
 
-      expect(connection.qb_id_for(invoice, kind: "invoice")).to eq("1A-1760999990")
+      run_event("connection.company_file_changed", "revision" => 7)
+      expect(link.reload).to have_attributes(missing_since: nil)
+      expect(link).to be_stale
     end
 
-    it "asks again one at a time about ids a batch's 500 left out, rather than dropping them" do
-      answer(checks("customer").first,
-             [{ "list_id" => "80000024-1760999990", "full_name" => "Riverbend Electric", "edit_sequence" => "1" }],
-             warning: true)
+    it "gives a customer who switches back to the old file their links back" do
+      answer(checks("customer").first, [], warning: true) # both left out: asked about one at a time
+      answer(checks("customer").last, [], warning: true)
+      answer(checks("customer").last, [], warning: true)
+      expect(connection.missing_links.count).to eq(2)
+
+      run_event("connection.company_file_changed", "revision" => 7)
+      run_event("connection.connected", "revision" => 8)
+      answer(checks("customer").last, [riverbend_found,
+                                       { "list_id" => "80000025-1760999991", "full_name" => "Northwind Builders" }])
+
+      expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+      expect(connection.qb_id_for(northwind, kind: "customer")).to eq("80000025-1760999991")
+      expect(connection.missing_links.where(kind: "customer")).to be_empty
+    end
+
+    it "asks again one at a time about ids a batch's 500 left out, rather than calling them missing" do
+      answer(checks("customer").first, [riverbend_found], warning: true)
 
       expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
       expect(connection.stale_links.find_by(qb_id: "80000025-1760999991")).to have_attributes(check_alone: true)
       second = checks("customer").last
-      expect(second).not_to eq(checks("customer").first)
       expect(second.params).to eq("list_id" => ["80000025-1760999991"])
 
       answer(second, [], warning: true)
-      expect(QubeRails::QuickbooksRecord.where(qb_id: "80000025-1760999991")).to be_empty
+      expect(QubeRails::QuickbooksRecord.find_by(qb_id: "80000025-1760999991")).to be_missing
       expect(checks("customer").count).to eq(2) # nothing stale left of the kind
+    end
+
+    it "settles nothing from an answer with a row it didn't ask for, or an odd shape" do
+      answer(checks("customer").first, [riverbend_found, { "list_id" => "8000FFFF-1", "full_name" => "Who" }])
+      answer(checks("customer").first, { "list_id" => "80000024-1760999990" }, page_request_id: "pr-odd")
+
+      expect(connection.stale_links.where(kind: "customer").count).to eq(2)
+      expect(connection.missing_links).to be_empty
+      expect(QuickbooksDesktop::ConnectionEvents.calls).to be_empty
+      expect(checks("customer").count).to eq(1)
+      expect(log_output).to include("customer link check answered unexpectedly; nothing settled")
     end
 
     it "is safe to deliver twice, and leaves a link a run linked since alone" do
       row = checks("customer").first
       connection.link(northwind, kind: "customer", qb_id: "80000099-1761000500", name: "Northwind Builders")
-      found = [{ "list_id" => "80000024-1760999990", "full_name" => "Riverbend Electric", "edit_sequence" => "7" }]
-      answer(row, found)
-      answer(row, found)
+      answer(row, [riverbend_found])
+      answer(row, [riverbend_found])
 
       expect(connection.qb_id_for(northwind, kind: "customer")).to eq("80000099-1761000500")
       expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
-      expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([[:links_checked, "customer", 1, 0, 1]])
+      expect(QuickbooksDesktop::ConnectionEvents.calls.size).to eq(1)
     end
 
     it "queues the next batch when a kind has more than one" do
       stub_const("QubeRails::LinkCheck::BATCH", 1)
-      connection.quickbooks_records.where(kind: "customer").update_all(stale_since: Time.now)
       QubeRails::QueuedRequest.delete_all
       connection.check_stale_links
       expect(checks("customer").first.params).to eq("list_id" => ["80000024-1760999990"])
 
-      answer(checks("customer").first,
-             [{ "list_id" => "80000024-1760999990", "full_name" => "Riverbend Electric", "edit_sequence" => "7" }])
+      answer(checks("customer").first, [riverbend_found])
 
       expect(checks("customer").last.params).to eq("list_id" => ["80000025-1760999991"])
     end
@@ -162,6 +193,48 @@ RSpec.describe QubeRails::LinkCheck do
       expect(connection.stale_links.where(kind: "invoice").count).to eq(1)
       expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
     end
+
+    it "holds a start or a request for a record whose link waits for its check, and lets one with no link go" do
+      connection.update!(connection_type: "realtime")
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::LinkBeingChecked, /Invoice #{invoice.id}'s link/)
+      expect { QuickbooksDesktop::FindCustomer.queue(riverbend, connection) }.to raise_error(QubeRails::NotReady)
+      expect(QubeRails::Run.count).to eq(0)
+
+      answer(checks("invoice").first, [], warning: true) # settled: missing
+      stub_request(:post, %r{/workflow-runs}).to_return(json_data("id" => "run-q-1", "state" => "running"))
+      expect(QuickbooksDesktop::CreateInvoice.start(invoice, connection)).to be_a(QubeRails::Run)
+
+      other = Invoice.create!(account: account, number: "1002")
+      expect(connection.checking_link?(other)).to be(false)
+    end
+  end
+
+  it "leaves a kind it can't look up by id stale, and never queries it" do
+    connection.link(riverbend, kind: "company", qb_id: "C1")
+    connection.quickbooks_records.update_all(stale_since: Time.now)
+    connection.update!(status: "connected")
+    stub_queue(customers_url)
+    stub_queue(invoices_url)
+
+    expect(QubeRails::LinkCheck.id_param("company")).to be_nil
+    expect(QubeRails::LinkCheck.id_param("made_up")).to be_nil
+    connection.check_stale_links
+
+    expect(checks("company")).to be_empty
+    expect(connection.stale_links.where(kind: "company").count).to eq(1)
+  end
+
+  it "takes which id each kind's query uses from the gem, and its own lists agree with it" do
+    index = defined?(QubeSync::Operations::INDEX) ? QubeSync::Operations::INDEX : {}
+    queries = index.select { |id, entry| id.end_with?(".query") && entry.key?(:id_param) }
+    skip "this qube_sync's Operations::INDEX doesn't say which id a query takes" if queries.empty?
+
+    kinds = ->(param) { queries.select { |_, e| e[:id_param] == param }.keys.map { |id| id.delete_suffix(".query") }.sort }
+    expect(QubeRails::LinkCheck::TXN_KINDS.sort).to eq(kinds.call("txn_id"))
+    expect(QubeRails::LinkCheck::LIST_KINDS.sort).to eq(kinds.call("list_id"))
+    expect(QubeRails::LinkCheck.id_param("invoice")).to eq("txn_id")
+    expect(QubeRails::LinkCheck.id_param("item_service")).to eq("list_id")
   end
 
   it "never sends a stale link's id: an input refers by name, and a run linking it on the new file makes it current" do
@@ -182,9 +255,10 @@ RSpec.describe QubeRails::LinkCheck do
     stub_queue(customers_url)
     stub_queue(invoices_url)
     run_event("connection.connected", "revision" => 6)
-    answer(checks("customer").first, [], warning: true)
+    answer(checks("invoice").first, [], warning: true)
 
     expect(other.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
     expect(other.stale_links).to be_empty
+    expect(other.missing_links).to be_empty
   end
 end

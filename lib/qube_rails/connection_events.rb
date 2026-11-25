@@ -101,11 +101,14 @@ module QubeRails
       log_event(event)
     end
 
-    # A check of its stale links of kind settled: relinked found on the new file, dropped not (they
-    # are matched by name again). stale_left: 0 once every check is done.
-    def links_checked(kind:, relinked:, dropped:, stale_left:)
+    # A batch of its stale links of kind was looked up on the new file. relinked: the links found
+    # (kept); renamed: those with another name there ({link:, record:, old_name:, new_name:});
+    # missing: links not found, kept unused. A missing transaction needs your user's review before
+    # it's sent again (README). stale_left: 0 once every check is done.
+    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
       QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{kind} links checked on its company file: " \
-                            "#{relinked} relinked, #{dropped} dropped, #{stale_left} still to check")
+                            "#{found} found (#{renamed.size} renamed), #{missing.size} missing, " \
+                            "#{stale_left} still to check")
     end
 
     # The account disconnected it (DELETE quickbooks/connections/:id): delete your rows that
@@ -159,7 +162,9 @@ module QubeRails
     # each sync's since goes, and runs from before now stop counting (SyncStatus).
     def forget_company_file
       now = Time.now
-      QuickbooksRecord.where(connection_id: connection.id).update_all(stale_since: now, check_alone: false)
+      # Missing ones too: a switch back to the file that has them gets them back.
+      QuickbooksRecord.where(connection_id: connection.id)
+                      .update_all(stale_since: now, missing_since: nil, check_alone: false)
       SyncMark.where(connection_id: connection.id).delete_all
       connection.company_file_changed_at = now
     end

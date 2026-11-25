@@ -32,6 +32,10 @@ module QubeRails
   # connection.connected at once). The job raises it so the queue retries once it's there.
   class NotReady < StandardError; end
 
+  # Operation.start or Request.queue for a record whose link waits for its check after a company
+  # file change (Connection#checking_link?). Try again once it's settled; a job can retry on it.
+  class LinkBeingChecked < NotReady; end
+
   # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
   class NotConnected < ArgumentError; end

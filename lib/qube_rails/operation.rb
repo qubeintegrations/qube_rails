@@ -62,6 +62,7 @@ module QubeRails
       end
 
       raise_realtime_required(connection) if connection.standard?
+      connection.wait_for_link_check!(record, name)
 
       run, input_error = claim_run(record, connection)
       raise input_error if input_error
