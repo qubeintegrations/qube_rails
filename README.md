@@ -283,17 +283,37 @@ qube_sync gem (`Operations::INDEX`'s `id_param`), or from the engine's own lists
 a kind that can't be looked up by id (company, preferences, a kind your app named itself) is never
 queried, and its links stay stale. For each id:
 
-- found: the link is kept, current again, with the answer's EditSequence and name, whatever its
-  name. A different name (compared ignoring case and spacing) is reported as renamed, not acted
-  on;
+- found with the same name (a list record's FullName, a transaction's RefNumber, compared
+  ignoring case and spacing; blank and blank are the same): the link is kept, current again, with
+  the answer's EditSequence. A link kept without a name (`name: nil`) is kept on its id alone;
+- found under another name: the link is held for review (`review_since`, and `review_name`, the
+  name QuickBooks has now; `connection.review_links`), unused, and its record waits (below) until
+  your app settles it;
 - not found: the link is kept as missing (`missing_since`, `connection.missing_links`), unused
   like a stale one, so the record reads as not in QuickBooks and is matched by name (or asks your
   user) when it's next sent. The next company file change makes it stale again and checks it,
   so a customer who picked the wrong file and switches back gets their links back.
 
+Why a found id isn't enough: QuickBooks stamps every ListID and TxnID with its record's creation
+time (`<hex counter>-<TimeCreated as unix seconds>`, checked on QuickBooks Enterprise 24 for
+customers, items, accounts and invoices), so two files sharing an id share an origin: one was
+copied or restored from the other. After a copy the files go their own ways, and people reuse a
+record by renaming it, so an id found under another name may be another record now. Your
+customer decides:
+
+```ruby
+connection.review_links.each do |link|
+  # Ask: is link.record (kept as link.name) the record QuickBooks now calls link.review_name?
+end
+connection.confirm_link(link) # yes: current again, with QuickBooks' name
+connection.reject_link(link)  # no: missing, so the record is matched by name or added when sent
+```
+
 Until a record's link is settled (current, missing, or replaced by a run), nothing is sent for it:
-`Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` (a `NotReady`), so
-retry them from a job. A record with no link goes as before.
+`Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` while it's being checked
+and `QubeRails::LinkNeedsReview` while it waits for review (both `NotReady`), so retry them from a
+job. A record with no link goes as before. The next company file change makes stale again every
+link, under review and missing ones too, and checks them all.
 
 QuickBooks answers a query by id with a 500 warning when an id isn't there, and might leave out
 the ones that are; an id a batch's 500 left out is asked about again on its own before it's called
@@ -303,14 +323,14 @@ delivery is taken once, and a second `connected` while a check is going reuses i
 links a record on the new file makes its link current at once. A link whose check fails stays
 stale, and the connection's next event (or `connection.check_stale_links`) asks again.
 
-After each batch, `links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)` runs on
+After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on
 your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
-record); `renamed` is `{ link:, record:, old_name:, new_name: }` for each; `stale_left` is 0 once
-every check is done. Tell the customer what was found again. Two things to watch:
+record); `review` is `{ link:, record:, old_name:, new_name: }` for each link held for review;
+`stale_left` is 0 once every check is done. Tell the customer what was found again, and ask about
+the ones to review. Two things to watch:
 
-- When most found ids of a kind have other names, the new file is probably a different company
-  that happens to reuse ids (how QuickBooks makes ids across files isn't verified): warn the
-  customer before anything is sent.
+- When most found ids of a kind are under review, the new file is a copy that has drifted a long
+  way from the old one: warn the customer before they confirm links one by one.
 - A missing transaction needs your user's review before it's sent again: a RefNumber is often
   blank or shared, so no name match will find it, and sending it adds it again.
 
@@ -356,8 +376,8 @@ module QuickbooksDesktop
     end
 
     # A batch of its stale links was looked up on the new file; stale_left is 0 once all are.
-    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
-      AccountMailer.quickbooks_links_checked(owner, connection, kind, renamed, missing).deliver_later
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
+      AccountMailer.quickbooks_links_checked(owner, connection, kind, review, missing).deliver_later
     end
   end
 end
@@ -371,8 +391,8 @@ family of one company file (verified on QuickBooks Enterprise 24.0): customers, 
 employees and other names share one, every item type shares another, each other list (accounts,
 classes, terms...) has its own, and the same counter value turns up in several families.
 TxnIDs are kept per transaction type. Pass `name:` (a list record's FullName, a transaction's
-RefNumber): after a company file change it's how a rename is reported. Only current links are
-read; stale and missing ones aren't.
+RefNumber): after a company file change a found id is kept only when it still has that name.
+Only current links are read; stale, missing and under-review ones aren't.
 
 ```ruby
 connection.link(customer, kind: "customer", qb_id: list_id, edit_sequence: "171", name: "Riverbend Electric")

@@ -181,6 +181,8 @@ module QubeRails
           # Learned on the file it opens now: no longer the old file's.
           row.stale_since = nil
           row.missing_since = nil
+          row.review_since = nil
+          row.review_name = nil
           row.check_alone = false
           row.save!
           row
@@ -221,18 +223,47 @@ module QubeRails
       quickbooks_records.missing
     end
 
+    # Its links the new company file has under another name: unused until confirm_link or reject_link.
+    def review_links
+      quickbooks_records.under_review
+    end
+
     # While record's link here waits for its check, nothing is sent for it (Operation.start and
     # Request.queue raise LinkBeingChecked), so a record already in QuickBooks isn't added again.
     def checking_link?(record)
-      type, id = self.class.key_for(record)
-      stale_links.where(record_type: type, record_id: id).exists?
+      own_links(record).stale.exists?
+    end
+
+    # While record's link here waits for your decision (review_links), nothing is sent for it either
+    # (LinkNeedsReview).
+    def link_under_review?(record)
+      own_links(record).under_review.exists?
     end
 
     def wait_for_link_check!(record, what)
-      return unless checking_link?(record)
+      if checking_link?(record)
+        raise LinkBeingChecked, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} is being " \
+                                "checked on its new company file; send #{what} again once it's settled"
+      end
+      return unless link_under_review?(record)
 
-      raise LinkBeingChecked, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} is being " \
-                              "checked on its new company file; send #{what} again once it's settled"
+      raise LinkNeedsReview, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} has another " \
+                             "name on its new company file; confirm_link or reject_link it, then send #{what} again"
+    end
+
+    # A link under review is the same record after all: current again, with the name QuickBooks has.
+    def confirm_link(link)
+      link = own_review_link(link)
+      link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
+      link
+    end
+
+    # A link under review isn't the same record: kept as missing, so the record is matched by name
+    # (or added) when it's next sent.
+    def reject_link(link)
+      link = own_review_link(link)
+      link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
+      link
     end
 
     # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.
@@ -287,6 +318,18 @@ module QubeRails
     end
 
     private
+
+    def own_links(record)
+      type, id = self.class.key_for(record)
+      quickbooks_records.where(record_type: type, record_id: id)
+    end
+
+    def own_review_link(link)
+      row = review_links.find_by(id: link.respond_to?(:id) ? link.id : link)
+      raise ArgumentError, "QuBe Sync: link #{link.inspect} isn't under review on connection #{id}" unless row
+
+      row
+    end
 
     # The record's own link is a different row from the one holding this qb_id, so it gives way.
     def replaced?(mine, by:)

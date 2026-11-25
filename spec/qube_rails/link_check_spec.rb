@@ -91,20 +91,74 @@ RSpec.describe QubeRails::LinkCheck do
       QuickbooksDesktop::ConnectionEvents.calls.clear
     end
 
-    it "keeps every id found, renamed or not, with the answer's EditSequence and name, and reports the renames" do
+    it "keeps an id found with the same name, ignoring case and spacing, with its new EditSequence" do
       answer(checks("customer").first, [
-        riverbend_found.merge("full_name" => " riverbend  ELECTRIC"), # the same name, spaced and cased
-        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Ltd", "edit_sequence" => "888" }
+        riverbend_found.merge("full_name" => " riverbend  ELECTRIC"),
+        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Builders", "edit_sequence" => "888" }
       ])
 
       expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
-      expect(connection.qb_id_for(northwind, kind: "customer")).to eq("80000025-1760999991")
       expect(connection.quickbooks_record("80000025-1760999991", kind: "customer"))
-        .to have_attributes(edit_sequence: "888", name: "Northwind Ltd")
+        .to have_attributes(edit_sequence: "888", name: "Northwind Builders")
       expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([
-        [:links_checked, "customer", 2, %w[80000024-1760999990 80000025-1760999991],
-         [[northwind.id, "Northwind Builders", "Northwind Ltd"]], [], 1]
+        [:links_checked, "customer", 2, %w[80000024-1760999990 80000025-1760999991], [], [], 1]
       ])
+    end
+
+    it "holds an id found under another name for review: unused, reported, and its record waits" do
+      connection.update!(connection_type: "realtime")
+      answer(checks("customer").first, [
+        riverbend_found,
+        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Ltd", "edit_sequence" => "888" }
+      ])
+
+      link = QubeRails::QuickbooksRecord.find_by(qb_id: "80000025-1760999991")
+      expect(link).to have_attributes(review_name: "Northwind Ltd", name: "Northwind Builders")
+      expect(link).to be_under_review
+      expect(connection.qb_id_for(northwind, kind: "customer")).to be_nil
+      expect(connection.find_linked("80000025-1760999991", kind: "customer")).to be_nil
+      expect(connection.in_quickbooks(Customer.all)).to eq([riverbend])
+      expect(QuickbooksDesktop::ConnectionEvents.calls).to eq([
+        [:links_checked, "customer", 2, %w[80000024-1760999990], [[northwind.id, "Northwind Builders", "Northwind Ltd"]],
+         [], 1]
+      ])
+      expect { QuickbooksDesktop::FindCustomer.queue(northwind, connection) }
+        .to raise_error(QubeRails::LinkNeedsReview, /confirm_link or reject_link/)
+    end
+
+    it "confirms a link under review (current, with QuickBooks' name), or rejects it (missing)" do
+      answer(checks("customer").first, [
+        riverbend_found.merge("full_name" => "Riverbend Electric Co"),
+        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Ltd", "edit_sequence" => "888" }
+      ])
+      riverbend_link, northwind_link = connection.review_links.order(:qb_id).to_a
+
+      connection.confirm_link(riverbend_link)
+      expect(connection.quickbooks_record("80000024-1760999990", kind: "customer"))
+        .to have_attributes(name: "Riverbend Electric Co", edit_sequence: "777", review_name: nil)
+      expect(connection.link_under_review?(riverbend)).to be(false)
+
+      connection.reject_link(northwind_link.id)
+      expect(northwind_link.reload).to be_missing
+      expect(connection.qb_id_for(northwind, kind: "customer")).to be_nil
+      expect(connection.link_under_review?(northwind)).to be(false)
+
+      expect { connection.confirm_link(northwind_link) }.to raise_error(ArgumentError, /isn't under review/)
+    end
+
+    it "keeps an id found when the link was kept without a name, and checks a review link again on the next switch" do
+      connection.quickbooks_records.find_by(qb_id: "80000024-1760999990").update!(name: nil)
+      answer(checks("customer").first, [
+        riverbend_found.merge("full_name" => "Anything"),
+        { "list_id" => "80000025-1760999991", "full_name" => "Northwind Ltd" }
+      ])
+      expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+      link = QubeRails::QuickbooksRecord.find_by(qb_id: "80000025-1760999991")
+      expect(link).to be_under_review
+
+      run_event("connection.company_file_changed", "revision" => 7)
+      expect(link.reload).to have_attributes(review_since: nil, review_name: nil)
+      expect(link).to be_stale
     end
 
     it "keeps a transaction QuickBooks doesn't have as missing: unused, reported, and checked again on the next switch" do

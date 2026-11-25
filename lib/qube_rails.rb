@@ -36,6 +36,10 @@ module QubeRails
   # file change (Connection#checking_link?). Try again once it's settled; a job can retry on it.
   class LinkBeingChecked < NotReady; end
 
+  # The same for a record whose link the new company file has under another name: the app settles
+  # it with Connection#confirm_link or #reject_link (README).
+  class LinkNeedsReview < NotReady; end
+
   # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
   class NotConnected < ArgumentError; end

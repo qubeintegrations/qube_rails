@@ -3,10 +3,11 @@
 module QubeRails
   # Checks a connection's stale links (the old company file's, after
   # connection.company_file_changed) against the file it opens now, once it's connected: a plain
-  # request per kind, querying up to BATCH of its ids (ListID or TxnID). An id found there is kept
-  # (current again, with the answer's EditSequence and name), renamed or not; one not found is
-  # kept as missing (unused) until the next company file change checks it again. README, "A
-  # different company file".
+  # request per kind, querying up to BATCH of its ids (ListID or TxnID). An id found there with the
+  # same name is kept (current again, with the answer's EditSequence); one found under another name
+  # waits for the app's review (Connection#confirm_link / #reject_link); one not found is kept as
+  # missing. All three are checked again on the next company file change. README, "A different
+  # company file".
   #
   # Its record is the connection, and its slug "qube_rails.check_links:<kind>", so it needs no
   # entry in config.operations. The stale rows are its state: a check that's queued again (a second
@@ -120,11 +121,12 @@ module QubeRails
 
       @next = true
       QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{self.class::KIND} links checked: " \
-                            "#{result[:relinked].size} found (#{result[:renamed].size} renamed), " \
+                            "#{result[:relinked].size + result[:review].size} found " \
+                            "(#{result[:review].size} to review), " \
                             "#{result[:missing].size} missing")
       QubeRails.config.connection_events_class.new(connection).links_checked(
-        kind: self.class::KIND, found: result[:relinked].size, relinked: result[:relinked],
-        renamed: result[:renamed], missing: result[:missing], stale_left: connection.stale_links.count
+        kind: self.class::KIND, found: result[:relinked].size + result[:review].size, relinked: result[:relinked],
+        review: result[:review], missing: result[:missing], stale_left: connection.stale_links.count
       )
     end
 
@@ -151,7 +153,7 @@ module QubeRails
       answer = event.response_json
       # QuickBooks answers 500 when an id isn't there, and may leave out the ones that are.
       unsure = asked.size > 1 && answer.dig("warning", "code").to_s == "500"
-      result = { relinked: [], renamed: [], missing: [] }
+      result = { relinked: [], review: [], missing: [] }
       now = Time.now
       asked.each do |qb_id|
         link = self.class.kind_links(connection).find_by(qb_id: qb_id)
@@ -183,17 +185,19 @@ module QubeRails
       rows.to_h { |row| [row[key].to_s, row] }
     end
 
-    # Found means kept: current again, with what the answer says now. A new name is reported.
+    # An id is stamped with its record's creation time, so finding it only says the files share an
+    # origin. The same name (or no name kept) keeps it; another name may be a repurposed record.
     def keep(link, record, result)
       theirs = self.class.id_key == "txn_id" ? record["ref_number"] : record["full_name"] || record["name"]
-      old_name = link.name
-      if !old_name.to_s.empty? && !theirs.to_s.empty? && normal(old_name) != normal(theirs)
-        result[:renamed] << { link: link, record: link.record, old_name: old_name, new_name: theirs }
+      if link.name.nil? || normal(link.name) == normal(theirs)
+        link.update!(stale_since: nil, missing_since: nil, check_alone: false,
+                     edit_sequence: record["edit_sequence"] || link.edit_sequence)
+        result[:relinked] << link
+      else
+        link.update!(stale_since: nil, check_alone: false, review_since: Time.now, review_name: theirs.to_s,
+                     edit_sequence: record["edit_sequence"] || link.edit_sequence)
+        result[:review] << { link: link, record: link.record, old_name: link.name, new_name: theirs.to_s }
       end
-      link.update!(stale_since: nil, missing_since: nil, check_alone: false,
-                   edit_sequence: record["edit_sequence"] || link.edit_sequence,
-                   name: theirs.to_s.empty? ? old_name : theirs)
-      result[:relinked] << link
     end
 
     def normal(name)

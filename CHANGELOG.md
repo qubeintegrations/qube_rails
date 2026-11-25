@@ -4,7 +4,7 @@
 
 Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
 `qube_connections.company_file_changed_at` and `qube_quickbooks_records.stale_since`,
-`missing_since` and `check_alone`.
+`missing_since`, `review_since`, `review_name` and `check_alone`.
 
 ### New
 
@@ -17,20 +17,25 @@ Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` for
   generator's template has it). Pages with a run going on the connection refresh, as for a stall.
 - A stale link is never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks`,
   `not_in_quickbooks` and `SyncStatus` read current links only (`QuickbooksRecord.current`,
-  `.stale`, `.missing`, `#stale?`, `#missing?`; `Connection#stale_links`, `#missing_links`). `link` makes the row it writes current.
+  `.stale`, `.missing`, `.under_review`, `#stale?`, `#missing?`, `#under_review?`;
+  `Connection#stale_links`, `#missing_links`). `link` makes the row it writes current.
 - `QubeRails::LinkCheck`: on the next `connection.connected` it queues a plain request per kind
   with stale links (`<kind>.query` by up to 50 ListIDs or TxnIDs, as the gem's
   `Operations::INDEX` `id_param` says, else the engine's `TXN_KINDS` / `LIST_KINDS`; a kind with
-  neither is never queried). An id found is kept, current again with the answer's EditSequence and
-  name, whatever its name; a rename is reported. One not found is kept as missing
-  (`missing_since`, unused) and made stale again by the next company file change. An id a batch's
+  neither is never queried). An id found with the same name (case and spacing ignored), or kept
+  without a name, is current again with the answer's EditSequence. One found under another name is
+  held for review (`review_since`, `review_name`, unused): ids carry their record's creation time,
+  so a shared id means a copied file, and a rename may be a repurposed record.
+  `Connection#confirm_link(link)` makes it current with QuickBooks' name, `#reject_link(link)`
+  makes it missing; `#review_links`, `#link_under_review?`. One not found is kept as missing
+  (`missing_since`, unused). The next company file change makes all of them stale again. An id a batch's
   500 warning left out is asked about alone (`check_alone`); an answer with rows it didn't ask for
   or an odd shape settles nothing. After each batch the new
-  `ConnectionEvents#links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)` runs
+  `ConnectionEvents#links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs
   (it logs by default). `Connection#check_stale_links` starts the checks again by hand.
-- `Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` (a `NotReady`) for a
-  record whose link is still stale on the connection (`Connection#checking_link?`), so nothing is
-  added again while its check runs.
+- `Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` for a record whose link
+  is still stale on the connection (`Connection#checking_link?`), and `QubeRails::LinkNeedsReview`
+  for one under review (both `NotReady`), so nothing is sent for it until its link is settled.
 - `SyncStatus` ignores a run made before `company_file_changed_at`: a record sent to the old file
   reads `:not_sent` until its link is checked.
 - `POST quickbooks/connections/:id/company_file` (`connection_company_file_path`): renews the

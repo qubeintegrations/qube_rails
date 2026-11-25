@@ -101,13 +101,13 @@ module QubeRails
       log_event(event)
     end
 
-    # A batch of its stale links of kind was looked up on the new file. relinked: the links found
-    # (kept); renamed: those with another name there ({link:, record:, old_name:, new_name:});
-    # missing: links not found, kept unused. A missing transaction needs your user's review before
-    # it's sent again (README). stale_left: 0 once every check is done.
-    def links_checked(kind:, found:, relinked:, renamed:, missing:, stale_left:)
+    # A batch of its stale links of kind was looked up on the new file. relinked: found with the same
+    # name (kept); review: found under another name ({link:, record:, old_name:, new_name:}), unused
+    # until you ask the customer and call confirm_link or reject_link; missing: not found, kept
+    # unused (review a missing transaction before it's sent again). stale_left: 0 once all are done.
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
       QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{kind} links checked on its company file: " \
-                            "#{found} found (#{renamed.size} renamed), #{missing.size} missing, " \
+                            "#{found} found (#{review.size} to review), #{missing.size} missing, " \
                             "#{stale_left} still to check")
     end
 
@@ -164,7 +164,8 @@ module QubeRails
       now = Time.now
       # Missing ones too: a switch back to the file that has them gets them back.
       QuickbooksRecord.where(connection_id: connection.id)
-                      .update_all(stale_since: now, missing_since: nil, check_alone: false)
+                      .update_all(stale_since: now, missing_since: nil, review_since: nil, review_name: nil,
+                                  check_alone: false)
       SyncMark.where(connection_id: connection.id).delete_all
       connection.company_file_changed_at = now
     end

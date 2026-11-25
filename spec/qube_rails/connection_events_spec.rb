@@ -195,10 +195,10 @@ RSpec.describe QubeRails::ConnectionEvents do
       event = QubeRails::Backend.parse(vector_body("connection.company_file_changed"))
       events = described_class.new(connection)
       events.company_file_changed(event)
-      events.links_checked(kind: "invoice", found: 3, relinked: [], renamed: [{}], missing: [1], stale_left: 0)
+      events.links_checked(kind: "invoice", found: 3, relinked: [], review: [{}], missing: [1], stale_left: 0)
 
       expect(log_output).to include("INFO QuBe Sync: connection #{connection.id}: connection.company_file_changed (revision 5)")
-      expect(log_output).to include("invoice links checked on its company file: 3 found (1 renamed), 1 missing, " \
+      expect(log_output).to include("invoice links checked on its company file: 3 found (1 to review), 1 missing, " \
                                     "0 still to check")
     end
   end
