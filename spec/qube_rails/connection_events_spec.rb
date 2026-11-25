@@ -169,7 +169,7 @@ RSpec.describe QubeRails::ConnectionEvents do
       expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq([:company_file_changed])
     end
 
-    it "still forgets the old file when it comes after a later event, keeping status and revision, and checks its links" do
+    it "still forgets the old file and runs the hook when it comes after a later event, keeping status and revision, and checks its links" do
       check = stub_request(:get, %r{\A#{Regexp.escape(api_url("/connections/#{connection.qube_id}/invoices"))}\?})
               .to_return(json_data("id" => "check-q-1", "state" => "queued"))
       run_event("connection.resumed", "revision" => 7)
@@ -180,7 +180,7 @@ RSpec.describe QubeRails::ConnectionEvents do
       expect(connection.stale_links.count).to eq(1)
       expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
       expect(connection.last_synced_at("sync_customer")).to be_nil
-      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq([:resumed])
+      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq(%i[resumed company_file_changed])
       expect(check).to have_been_made.once
 
       connection.link(invoice, kind: "invoice", qb_id: "9Z-1761000500") # learned on the new file

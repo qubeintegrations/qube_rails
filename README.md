@@ -274,9 +274,9 @@ away: they're checked. In the same transaction as the status and revision, the e
 
 Events can arrive out of order. A `connection.company_file_changed` that comes after a later event
 (a retried delivery landing after `connection.connected`) still forgets the old file when its
-revision is newer than `company_file_revision`: the links go stale and are checked, but `status`,
-`revision` and your `company_file_changed` hook are left alone. A redelivery of one already
-applied does nothing.
+revision is newer than `company_file_revision`: the links go stale and are checked, and your
+`company_file_changed` hook runs (so you set aside ids you keep yourself), but `status` and
+`revision` are left alone. A redelivery of one already applied does nothing.
 
 Then your `company_file_changed(event)` runs (by default it logs). Set aside any QuickBooks ids
 your app keeps itself for that connection, and tell the customer to finish the setup.

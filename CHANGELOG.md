@@ -16,8 +16,8 @@ the migration every sync fails.
   its `qube_quickbooks_records` rows stale (`stale_since`, ids kept), deletes its sync marks, and
   sets `company_file_changed_at` and `company_file_revision`, under the row's lock with the
   revision check. One that comes after a later event (a retry landing after `connected`) still
-  forgets the file when it's newer than `company_file_revision`, leaving `status`, `revision` and
-  the hook alone; a redelivery does nothing. Then the new
+  forgets the file when it's newer than `company_file_revision` and runs the hook, leaving
+  `status` and `revision` alone; a redelivery does nothing. Then the new
   `ConnectionEvents#company_file_changed(event)` hook runs (it logs by default; the install
   generator's template has it). Pages with a run going on the connection refresh, as for a stall.
 - A stale link is never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks`,

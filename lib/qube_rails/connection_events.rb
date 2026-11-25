@@ -163,13 +163,14 @@ module QubeRails
     end
 
     # A company file change that came after a later event (connection.connected): the links are
-    # still the old file's. Your company_file_changed handler isn't called.
+    # still the old file's. Status and revision stay; your company_file_changed handler runs.
     def late_company_file_change(event)
       return false unless company_file_change_newer?(event)
 
       QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{event.event} (revision #{event.revision}) " \
                             "came late; its links are checked again")
       forget_company_file(event)
+      company_file_changed(event)
       connection.save!
       true
     end
