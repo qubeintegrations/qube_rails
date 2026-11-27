@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # For a connection switched to another company file (connection.company_file_changed): when it
-# was, so runs from before it stop counting, and the revision of the change applied last; which QuickBooks links are the old file's until
-# they're checked against the new one (stale_since), which must be checked one at a time, and
+# was, so runs from before it stop counting, and the revision of the change applied last; which
+# QuickBooks links are the old file's until they're checked against the new one (stale_since),
 # which the new file doesn't have (missing_since: kept, unused, checked again on the next change),
 # and which it has under another name (review_since, review_name: unused until the app decides).
 class AddQubeCompanyFileChange < ActiveRecord::Migration[5.2]
@@ -13,6 +13,5 @@ class AddQubeCompanyFileChange < ActiveRecord::Migration[5.2]
     add_column :qube_quickbooks_records, :missing_since, :datetime
     add_column :qube_quickbooks_records, :review_since, :datetime
     add_column :qube_quickbooks_records, :review_name, :string
-    add_column :qube_quickbooks_records, :check_alone, :boolean, null: false, default: false
   end
 end

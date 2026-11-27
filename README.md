@@ -322,9 +322,8 @@ and `QubeRails::LinkNeedsReview` while it waits for review (both `NotReady`), so
 job. A record with no link goes as before. The next company file change makes stale again every
 link, under review and missing ones too, and checks them all.
 
-QuickBooks answers a query by id with a 500 warning when an id isn't there, and might leave out
-the ones that are; an id a batch's 500 left out is asked about again on its own before it's called
-missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
+QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
+first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
 nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
 delivery is taken once, and a second `connected` while a check is going reuses it. A run that
 links a record on the new file makes its link current at once. A link whose check fails (or
@@ -1267,8 +1266,7 @@ tables once nothing reads them.
 From qube_rails 0.2.1: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
 and `bin/rails db:migrate` before the new version serves any traffic or runs any job. The
 migration adds `qube_connections.company_file_changed_at` and `company_file_revision`, and
-`qube_quickbooks_records.stale_since`, `missing_since`, `review_since`, `review_name` and
-`check_alone`. Every link read (`qb_id_for`, `find_linked`, `in_quickbooks`, `sync_status`...)
+`qube_quickbooks_records.stale_since`, `missing_since`, `review_since` and `review_name`. Every link read (`qb_id_for`, `find_linked`, `in_quickbooks`, `sync_status`...)
 now filters on those columns, so without the migration every sync fails, not only
 `connection.company_file_changed`.
 

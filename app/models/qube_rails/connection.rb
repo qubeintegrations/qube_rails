@@ -184,7 +184,6 @@ module QubeRails
           row.missing_since = nil
           row.review_since = nil
           row.review_name = nil
-          row.check_alone = false
           row.save!
           row
         end

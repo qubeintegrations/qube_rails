@@ -178,9 +178,7 @@ RSpec.describe QubeRails::LinkCheck do
     end
 
     it "gives a customer who switches back to the old file their links back" do
-      answer(checks("customer").first, [], warning: true) # both left out: asked about one at a time
-      answer(checks("customer").last, [], warning: true)
-      answer(checks("customer").last, [], warning: true)
+      answer(checks("customer").first, [], warning: true)
       expect(connection.missing_links.count).to eq(2)
 
       run_event("connection.company_file_changed", "revision" => 7)
@@ -193,17 +191,22 @@ RSpec.describe QubeRails::LinkCheck do
       expect(connection.missing_links.where(kind: "customer")).to be_empty
     end
 
-    it "asks again one at a time about ids a batch's 500 left out, rather than calling them missing" do
+    # QuickBooks, 2026-11-27: a 500 warning names only the first missing id, and every id it has
+    # still comes back (docs/quickbooks-findings in qube).
+    it "keeps the ids a 500 answer returns and calls the rest missing, in one request" do
       answer(checks("customer").first, [riverbend_found], warning: true)
 
       expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
-      expect(connection.stale_links.find_by(qb_id: "80000025-1760999991")).to have_attributes(check_alone: true)
-      second = checks("customer").last
-      expect(second.params).to eq("list_id" => ["80000025-1760999991"])
-
-      answer(second, [], warning: true)
       expect(QubeRails::QuickbooksRecord.find_by(qb_id: "80000025-1760999991")).to be_missing
-      expect(checks("customer").count).to eq(2) # nothing stale left of the kind
+      expect(checks("customer").count).to eq(1) # nothing stale left of the kind
+    end
+
+    it "calls every id missing when a 500 answer returns none of them" do
+      answer(checks("customer").first, [], warning: true)
+
+      expect(connection.stale_links.where(kind: "customer")).to be_empty
+      expect(connection.missing_links.where(kind: "customer").pluck(:qb_id))
+        .to contain_exactly("80000024-1760999990", "80000025-1760999991")
     end
 
     it "settles nothing from an answer with a row it didn't ask for, or an odd shape" do

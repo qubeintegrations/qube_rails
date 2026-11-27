@@ -185,8 +185,7 @@ module QubeRails
       now = Time.now
       # Missing ones too: a switch back to the file that has them gets them back.
       QuickbooksRecord.where(connection_id: connection.id)
-                      .update_all(stale_since: now, missing_since: nil, review_since: nil, review_name: nil,
-                                  check_alone: false)
+                      .update_all(stale_since: now, missing_since: nil, review_since: nil, review_name: nil)
       SyncMark.where(connection_id: connection.id).delete_all
       connection.company_file_changed_at = now
       connection.company_file_revision = event.revision

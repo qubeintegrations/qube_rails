@@ -101,7 +101,7 @@ module QubeRails
       links = connection.transaction do
         rows = connection.stale_links.where(kind: kind).lock.to_a
         now = Time.now
-        rows.each { |link| link.update!(stale_since: nil, missing_since: now, check_alone: false) }
+        rows.each { |link| link.update!(stale_since: nil, missing_since: now) }
       end
       return if links.empty?
 
@@ -155,12 +155,9 @@ module QubeRails
       LinkCheck.id_param(self::KIND)
     end
 
-    # The ids asked about: one that a batch's answer left unsettled (check_alone) on its own, else
-    # up to BATCH.
+    # The ids asked about: up to BATCH of the kind's stale links.
     def params
-      links = self.class.kind_links(connection).order(:id)
-      alone = links.where(check_alone: true).limit(1).pluck(:qb_id)
-      ids = alone.empty? ? links.where(check_alone: false).limit(BATCH).pluck(:qb_id) : alone
+      ids = self.class.kind_links(connection).order(:id).limit(BATCH).pluck(:qb_id)
       { self.class.id_key.to_sym => ids }
     end
 
@@ -168,7 +165,7 @@ module QubeRails
       queued_request.connection
     end
 
-    # The answer settles each id it asked about that's still stale, unless it's unsure.
+    # The answer settles each id it asked about that's still stale.
     def answered(event)
       @settled = settle(event)
     end
@@ -218,9 +215,8 @@ module QubeRails
       found = found_rows(event, key, asked)
       return nil unless found
 
-      answer = event.response_json
-      # QuickBooks answers 500 when an id isn't there, and may leave out the ones that are.
-      unsure = asked.size > 1 && answer.dig("warning", "code").to_s == "500"
+      # A missing id makes QuickBooks warn 500, naming only the first one, but every id it has
+      # still comes back: one not in the answer isn't in the file.
       result = { relinked: [], review: [], missing: [] }
       now = Time.now
       asked.each do |qb_id|
@@ -230,10 +226,8 @@ module QubeRails
         record = found[qb_id]
         if record
           keep(link, record, result)
-        elsif unsure
-          link.update!(check_alone: true)
         else
-          link.update!(stale_since: nil, missing_since: now, check_alone: false)
+          link.update!(stale_since: nil, missing_since: now)
           result[:missing] << link
         end
       end
@@ -263,11 +257,11 @@ module QubeRails
     def keep(link, record, result)
       theirs = self.class.id_key == "txn_id" ? record["ref_number"] : record["full_name"] || record["name"]
       if link.name.nil? || normal(link.name) == normal(theirs)
-        link.update!(stale_since: nil, missing_since: nil, check_alone: false,
+        link.update!(stale_since: nil, missing_since: nil,
                      edit_sequence: record["edit_sequence"] || link.edit_sequence)
         result[:relinked] << link
       else
-        link.update!(stale_since: nil, check_alone: false, review_since: Time.now, review_name: theirs.to_s,
+        link.update!(stale_since: nil, review_since: Time.now, review_name: theirs.to_s,
                      edit_sequence: record["edit_sequence"] || link.edit_sequence)
         result[:review] << { link: link, record: link.record, old_name: link.name, new_name: theirs.to_s }
       end

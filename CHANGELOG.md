@@ -5,7 +5,7 @@
 Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` before this version
 serves any traffic: it adds `qube_connections.company_file_changed_at` and
 `company_file_revision`, and `qube_quickbooks_records.stale_since`, `missing_since`,
-`review_since`, `review_name` and `check_alone`, and every link read filters on them, so without
+`review_since` and `review_name`, and every link read filters on them, so without
 the migration every sync fails.
 
 ### New
@@ -33,8 +33,8 @@ the migration every sync fails.
   so a shared id means a copied file, and a rename may be a repurposed record.
   `Connection#confirm_link(link)` makes it current with QuickBooks' name, `#reject_link(link)`
   makes it missing; `#review_links`, `#link_under_review?`. One not found is kept as missing
-  (`missing_since`, unused). The next company file change makes all of them stale again. An id a batch's
-  500 warning left out is asked about alone (`check_alone`); an answer with rows it didn't ask for
+  (`missing_since`, unused). The next company file change makes all of them stale again. An id the answer
+  leaves out is missing (QuickBooks' 500 warning still returns every id it has); an answer with rows it didn't ask for
   or an odd shape, or to a check queued before the last company file change, settles nothing.
   After each batch the new
   `ConnectionEvents#links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs
