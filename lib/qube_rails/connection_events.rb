@@ -10,6 +10,7 @@ module QubeRails
   #   connection.setup_cancelled  they chose "Cancel setup" on the setup page
   #   connection.stalled          requests are stuck; see stall_reason
   #   connection.resumed          after a stall, they're being taken again
+  #   connection.company_file_changed  they chose "Use a different company file": set up again
   #
   # The setup ends on the QuickBooks computer, which usually isn't signed in to your app, so
   # nothing comes back to it there: connection.connected, signed by QuBe Sync, is how your app
@@ -20,8 +21,12 @@ module QubeRails
       "connection.connected" => "connected",
       "connection.setup_cancelled" => "setup_cancelled",
       "connection.stalled" => "stalled",
-      "connection.resumed" => "connected"
+      "connection.resumed" => "connected",
+      # Set up again, like a new connection, until connection.connected comes.
+      "connection.company_file_changed" => "pending"
     }.freeze
+
+    COMPANY_FILE_CHANGED = "connection.company_file_changed"
 
     attr_reader :connection
 
@@ -40,7 +45,9 @@ module QubeRails
     # - an event whose connection isn't this row's qube_id (a signed body posted to another
     #   connection's URL) is logged and skipped;
     # - any other is applied only when its revision is newer than the last one applied, so a
-    #   retried connection.stalled that comes after its connection.resumed is skipped.
+    #   retried connection.stalled that comes after its connection.resumed is skipped;
+    # - but a connection.company_file_changed newer than the last one applied (company_file_revision)
+    #   still forgets the old file when it comes late, leaving status and revision as they are.
     # It holds the connection row's lock while it does, so two workers never apply its events at
     # once, and what your handler writes is saved with the revision or not at all.
     #
@@ -56,7 +63,9 @@ module QubeRails
       end
 
       applied = connection.with_lock { apply(event) }
-      refresh_pages if applied && (event.stalled? || event.resumed?)
+      refresh_pages if applied && (event.stalled? || event.resumed? || event.event == COMPANY_FILE_CHANGED)
+      # Connected with links from an earlier company file: check them (again, after a retry).
+      LinkCheck.start(connection) if connection.connected? && connection.stale_links.exists?
     end
 
     # What your app does with each: until you fill them in, each logs.
@@ -88,6 +97,22 @@ module QubeRails
       log_event(event)
     end
 
+    # Its QuickBooks links are stale (unused) until they're checked on connected. Set aside ids you
+    # keep yourself, and ask the customer to finish the setup.
+    def company_file_changed(event)
+      log_event(event)
+    end
+
+    # A batch of its stale links of kind was looked up on the new file. relinked: found with the same
+    # name (kept); review: found under another name ({link:, record:, old_name:, new_name:}), unused
+    # until you ask the customer and call confirm_link or reject_link; missing: not found, kept
+    # unused (review a missing transaction before it's sent again). stale_left: 0 once all are done.
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
+      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{kind} links checked on its company file: " \
+                            "#{found} found (#{review.size} to review), #{missing.size} missing, " \
+                            "#{stale_left} still to check")
+    end
+
     # The account disconnected it (DELETE quickbooks/connections/:id): delete your rows that
     # point at it. Runs in the transaction that deletes it, before its runs and links go.
     def disconnected; end
@@ -104,8 +129,10 @@ module QubeRails
         return false
       end
 
-      # Applied already, or older than what was.
-      return false unless event.newer_than?(connection.revision)
+      unless event.newer_than?(connection.revision)
+        # Applied already, or older than what was.
+        return event.event == COMPANY_FILE_CHANGED ? late_company_file_change(event) : false
+      end
 
       status = STATUS[event.event]
       if status
@@ -116,6 +143,7 @@ module QubeRails
       type = event.connection.is_a?(Hash) ? event.connection["type"].to_s : ""
       connection.connection_type = type if Connection::TYPES.include?(type)
       connection.revision = event.revision
+      forget_company_file(event) if event.event == COMPANY_FILE_CHANGED
 
       if event.connected?
         connected(event)
@@ -125,6 +153,8 @@ module QubeRails
         stalled(event)
       elsif event.resumed?
         resumed(event)
+      elsif event.event == COMPANY_FILE_CHANGED
+        company_file_changed(event)
       else
         log_event(event)
       end
@@ -132,10 +162,40 @@ module QubeRails
       true
     end
 
-    # At most this many records' pages are told to refresh when the connection stalls or resumes.
+    # A company file change that came after a later event (connection.connected): the links are
+    # still the old file's. Status and revision stay; your company_file_changed handler runs.
+    def late_company_file_change(event)
+      return false unless company_file_change_newer?(event)
+
+      QubeRails.logger.info("QuBe Sync: connection #{connection.id}: #{event.event} (revision #{event.revision}) " \
+                            "came late; its links are checked again")
+      forget_company_file(event)
+      company_file_changed(event)
+      connection.save!
+      true
+    end
+
+    def company_file_change_newer?(event)
+      connection.company_file_revision.nil? || event.newer_than?(connection.company_file_revision)
+    end
+
+    # Every id kept for the connection is the old file's until checked on the new one (LinkCheck),
+    # each sync's since goes, and runs from before now stop counting (SyncStatus).
+    def forget_company_file(event)
+      now = Time.now
+      # Missing ones too: a switch back to the file that has them gets them back.
+      QuickbooksRecord.where(connection_id: connection.id)
+                      .update_all(stale_since: now, missing_since: nil, review_since: nil, review_name: nil)
+      SyncMark.where(connection_id: connection.id).delete_all
+      connection.company_file_changed_at = now
+      connection.company_file_revision = event.revision
+    end
+
+    # At most this many records' pages are told to refresh when the connection stalls, resumes or
+    # changes company file.
     REFRESH_LIMIT = 200
 
-    # A stall or a resume changes what the run status says on the pages of the records with a run
+    # A stall, a resume or a company file change changes what the run status says on the pages of the records with a run
     # still going on this connection: tell them to refresh, after the change is committed (by the
     # connection's runs index, at most REFRESH_LIMIT records).
     def refresh_pages

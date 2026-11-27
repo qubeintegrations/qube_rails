@@ -114,6 +114,8 @@ module QubeRails
 
     # The operation class for a slug, or nil when none of your operations has it.
     def operation_class(slug)
+      return LinkCheck.for_slug(slug) if slug.to_s.start_with?(LinkCheck::SLUG_PREFIX)
+
       name = operations[slug.to_s]
       name && constantize(name)
     end

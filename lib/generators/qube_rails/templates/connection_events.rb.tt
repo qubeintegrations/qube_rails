@@ -1,7 +1,8 @@
 # What your app does when one of its customers' QuickBooks Desktop connections changes. The
 # qube_rails gem does the rest: it checks each event is this connection's and newer than the
 # last one applied, under the connection row's lock, and updates the row's status
-# ("connected", "setup_cancelled", "stalled") and stall_reason before your handler runs.
+# ("connected", "setup_cancelled", "stalled", or "pending" while it's set up again) and
+# stall_reason before your handler runs.
 #
 # connection is the QubeRails::Connection (one company file; an account can have several) and
 # owner the account that connected it. Start a run on it with
@@ -33,6 +34,21 @@ module QuickbooksDesktop
     # Clear what stalled showed, whichever its reason.
     def resumed(event)
       log_event(event)
+    end
+
+    # They chose "Use a different company file": the gem keeps this connection's QuickBooks links
+    # stale (unused) and checks them once it's connected. Set aside ids you keep yourself, and ask
+    # them to finish the setup.
+    def company_file_changed(event)
+      log_event(event)
+    end
+
+    # A batch of stale links of kind was looked up on the new file: relinked found with the same name
+    # (kept); review found under another name (ask the customer, then connection.confirm_link or
+    # reject_link each); missing not found (review a missing transaction before sending it again).
+    # stale_left is 0 once every check is done.
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
+      super
     end
   end
 end

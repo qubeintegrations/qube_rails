@@ -12,16 +12,20 @@ module QubeRails
   # qube_id is QuBe Sync's id for it, nil until QuBe Sync answers the create. status is
   # "pending" until the setup ends, then "connected", "setup_cancelled" or "stalled" (with
   # stall_reason), kept up to date by its own webhooks (QubeRails::ConnectionEvents). revision
-  # is the last of those applied. connection_type is "realtime", "standard" or "simulated": as
+  # is the last of those applied. A switch to another company file (connection.company_file_changed)
+  # sets it back to "pending", marks its QuickBooks links stale and sets company_file_changed_at
+  # and company_file_revision (a late one forgets the file without the status).
+  # connection_type is "realtime", "standard" or "simulated": as
   # onboarding made it, then as its events (or refresh_type!) say. Workflows don't run on standard.
   #
   # The QuickBooks ids your app learns are kept against it, by list family (link, qb_id_for,
-  # find_linked), since a ListID is unique only within one list family of one company file.
+  # find_linked), since a ListID is unique only within one list family of one company file. After a
+  # company file change they're stale (unused) until QubeRails::LinkCheck checks them.
   class Connection < ApplicationRecord
     self.table_name = "qube_connections"
 
-    # The ones that have never connected, newest first: what Connect sends back through setup
-    # rather than making another.
+    # The ones not connected yet (never set up, set up again after a company file change, or setup
+    # cancelled), newest first: what Connect sends back through setup rather than making another.
     scope :never_connected, -> { where(status: %w[pending setup_cancelled]).order(created_at: :desc, id: :desc) }
 
     STATUSES = %w[pending connected setup_cancelled stalled].freeze
@@ -66,6 +70,21 @@ module QubeRails
 
     def connected?
       status == "connected"
+    end
+
+    # Set up, and not being set up again: connected, or stalled since.
+    def set_up?
+      %w[connected stalled].include?(status)
+    end
+
+    def simulated?
+      connection_type == "simulated"
+    end
+
+    # Whether to offer "Use a different company file": set up, and not simulated (a simulated
+    # connection has no file to switch).
+    def company_file_switchable?
+      set_up? && !qube_id.to_s.empty? && !simulated?
     end
 
     # Workflows don't run on it: Operation.start raises RealtimeRequired.
@@ -160,6 +179,11 @@ module QubeRails
           row.assign_attributes(kind: kind, qb_id: qb_id, record_type: type, record_id: id)
           row.edit_sequence = edit_sequence unless edit_sequence.nil?
           row.name = name unless name.nil?
+          # Learned on the file it opens now: no longer the old file's.
+          row.stale_since = nil
+          row.missing_since = nil
+          row.review_since = nil
+          row.review_name = nil
           row.save!
           row
         end
@@ -180,13 +204,79 @@ module QubeRails
     # kind.
     def qb_id_for(record, kind:)
       type, id = self.class.key_for(record)
-      mine = quickbooks_records.where(record_type: type, record_id: id)
+      mine = quickbooks_records.current.where(record_type: type, record_id: id)
       exact = mine.where(kind: kind.to_s).limit(1).pluck(:qb_id).first
       family = QuickbooksRecord.family_for(kind)
       return exact if exact || family == "name"
 
       row = only_one(mine.where(list: family), "#{type} #{id}'s #{kind}")
       row && row.qb_id
+    end
+
+    # Its links still to be checked against the company file it opens now.
+    def stale_links
+      quickbooks_records.stale
+    end
+
+    # Its links the company file it opens now doesn't have: unused, checked again on the next change.
+    def missing_links
+      quickbooks_records.missing
+    end
+
+    # Its links the new company file has under another name: unused until confirm_link or reject_link.
+    def review_links
+      quickbooks_records.under_review
+    end
+
+    # While record's link here waits for its check, nothing is sent for it (Operation.start and
+    # Request.queue raise LinkBeingChecked), so a record already in QuickBooks isn't added again.
+    def checking_link?(record)
+      own_links(record).stale.exists?
+    end
+
+    # While record's link here waits for your decision (review_links), nothing is sent for it either
+    # (LinkNeedsReview).
+    def link_under_review?(record)
+      own_links(record).under_review.exists?
+    end
+
+    # A held record first makes sure its links' check is going (LinkCheck.revive), in case the last
+    # one failed or was lost.
+    def wait_for_link_check!(record, what)
+      stale_kinds = own_links(record).stale.distinct.pluck(:kind)
+      unless stale_kinds.empty?
+        LinkCheck.revive(self, stale_kinds)
+        stale_kinds = own_links(record).stale.distinct.pluck(:kind)
+      end
+      unless stale_kinds.empty?
+        raise LinkBeingChecked, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} is being " \
+                                "checked on its new company file; send #{what} again once it's settled"
+      end
+      return unless link_under_review?(record)
+
+      raise LinkNeedsReview, "QuBe Sync: #{record.class.name} #{record.id}'s link on connection #{id} has another " \
+                             "name on its new company file; confirm_link or reject_link it, then send #{what} again"
+    end
+
+    # A link under review is the same record after all: current again, with the name QuickBooks has.
+    def confirm_link(link)
+      link = own_review_link(link)
+      link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
+      link
+    end
+
+    # A link under review isn't the same record: kept as missing, so the record is matched by name
+    # (or added) when it's next sent.
+    def reject_link(link)
+      link = own_review_link(link)
+      link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
+      link
+    end
+
+    # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.
+    # The engine does this on its events; call it to start them again after a check failed.
+    def check_stale_links
+      LinkCheck.start(self)
     end
 
     # Where record stands with QuickBooks on this connection for operation (its SLUG): a
@@ -223,18 +313,30 @@ module QubeRails
       row && row.record
     end
 
-    # The row for that QuickBooks id (with its kind, edit_sequence and name), or nil. With a kind,
+    # The current (not stale) row for that QuickBooks id (with its kind, edit_sequence and name), or nil. With a kind,
     # it's looked up in that kind's family; without one, in every family, and an id found in more
     # than one (the same counter value is a customer and an account) raises ArgumentError, so the
     # caller says which kind it means.
     def quickbooks_record(qb_id, kind: nil)
-      rows = quickbooks_records.where(qb_id: qb_id.to_s)
+      rows = quickbooks_records.current.where(qb_id: qb_id.to_s)
       return rows.find_by(list: QuickbooksRecord.family_for(kind)) if kind
 
       only_one(rows, "QuickBooks id #{qb_id}")
     end
 
     private
+
+    def own_links(record)
+      type, id = self.class.key_for(record)
+      quickbooks_records.where(record_type: type, record_id: id)
+    end
+
+    def own_review_link(link)
+      row = review_links.find_by(id: link.respond_to?(:id) ? link.id : link)
+      raise ArgumentError, "QuBe Sync: link #{link.inspect} isn't under review on connection #{id}" unless row
+
+      row
+    end
 
     # The record's own link is a different row from the one holding this qb_id, so it gives way.
     def replaced?(mine, by:)
@@ -277,7 +379,7 @@ module QubeRails
     # EXISTS a link on this connection for each row of scope's table.
     def linked_here(scope)
       model = scope.all.klass
-      QuickbooksRecord.where(connection_id: id, record_type: model.base_class.name)
+      QuickbooksRecord.current.where(connection_id: id, record_type: model.base_class.name)
                       .where("qube_quickbooks_records.record_id = #{id_as_text(model, QuickbooksRecord)}")
                       .arel.exists
     end

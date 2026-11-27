@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` before this version
+serves any traffic: it adds `qube_connections.company_file_changed_at` and
+`company_file_revision`, and `qube_quickbooks_records.stale_since`, `missing_since`,
+`review_since` and `review_name`, and every link read filters on them, so without
+the migration every sync fails.
+
+### New
+
+**A connection switched to another company file**
+- `connection.company_file_changed` (the customer chose "Use a different company file" on the
+  connection's setup page) sets the connection back to `pending`, clears `stall_reason`, marks
+  its `qube_quickbooks_records` rows stale (`stale_since`, ids kept), deletes its sync marks, and
+  sets `company_file_changed_at` and `company_file_revision`, under the row's lock with the
+  revision check. One that comes after a later event (a retry landing after `connected`) still
+  forgets the file when it's newer than `company_file_revision` and runs the hook, leaving
+  `status` and `revision` alone; a redelivery does nothing. Then the new
+  `ConnectionEvents#company_file_changed(event)` hook runs (it logs by default; the install
+  generator's template has it). Pages with a run going on the connection refresh, as for a stall.
+- A stale link is never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks`,
+  `not_in_quickbooks` and `SyncStatus` read current links only (`QuickbooksRecord.current`,
+  `.stale`, `.missing`, `.under_review`, `#stale?`, `#missing?`, `#under_review?`;
+  `Connection#stale_links`, `#missing_links`). `link` makes the row it writes current.
+- `QubeRails::LinkCheck`: on the next `connection.connected` it queues a plain request per kind
+  with stale links (`<kind>.query` by up to 50 ListIDs or TxnIDs, as the gem's
+  `Operations::INDEX` `id_param` says, else the engine's `TXN_KINDS` / `LIST_KINDS`; a kind with
+  neither is kept as missing when the check starts, and reported). An id found with the same name (case and spacing ignored), or kept
+  without a name, is current again with the answer's EditSequence. One found under another name is
+  held for review (`review_since`, `review_name`, unused): ids carry their record's creation time,
+  so a shared id means a copied file, and a rename may be a repurposed record.
+  `Connection#confirm_link(link)` makes it current with QuickBooks' name, `#reject_link(link)`
+  makes it missing; `#review_links`, `#link_under_review?`. One not found is kept as missing
+  (`missing_since`, unused). The next company file change makes all of them stale again. An id the answer
+  leaves out is missing (QuickBooks' 500 warning still returns every id it has); an answer with rows it didn't ask for
+  or an odd shape, or to a check queued before the last company file change, settles nothing.
+  After each batch the new
+  `ConnectionEvents#links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs
+  (it logs by default). `Connection#check_stale_links` starts the checks again by hand.
+- `Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` for a record whose link
+  is still stale on the connection (`Connection#checking_link?`), first queuing its kind's check
+  again when the last one ended (or never got an answer) over `LinkCheck::RETRY_AFTER` (5 minutes)
+  ago, and `QubeRails::LinkNeedsReview`
+  for one under review (both `NotReady`), so nothing is sent for it until its link is settled.
+- `SyncStatus` ignores a run made before `company_file_changed_at`: a record sent to the old file
+  reads `:not_sent` until its link is checked.
+- `POST quickbooks/connections/:id/company_file` (`connection_company_file_path`): renews the
+  connection's links and redirects to its `links.company_file`. 404 for a simulated connection.
+- `render "qube_rails/manage_connection", connection:`: "Set up QuickBooks again" and, unless
+  it's simulated, "Use a different company file", while the connection is connected or stalled.
+  New keys `connection.set_up_again` and `connection.use_different_company_file`;
+  `Connection#set_up?`, `#simulated?` and `#company_file_switchable?`.
+- The vendored webhook test vectors have `connection.company_file_changed`.
+
 ### Changed
 
 **Offered records, a decline and a search at once** (in place of 0.2.1's branch at a time)

@@ -52,8 +52,9 @@ Relative to where the engine is mounted (`"/"` above):
 
 | Route | What it does |
 | --- | --- |
-| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that has never connected (`pending` or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
+| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that isn't connected yet (`pending`, a connection set up again after a company file change included, or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
+| `POST quickbooks/connections/:id/company_file` | "Use a different company file" for one of the signed-in account's connections: its webhook URL brought up to date, its links renewed (`POST /api/v2/connections/:id/onboarding-url`), and a redirect (303) to its `links.company_file`, QuBe Sync's page for switching it to another company file (its onboarding link if QuBe Sync gives none). A simulated connection, one QuBe Sync never answered, or another account's answers 404. |
 | `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run or request hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
@@ -72,7 +73,8 @@ connection id against the row (a request's event, its id).
 Onboarding and the question routes inherit your `ApplicationController` (the `parent_controller`
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
 engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`,
-`qube_rails.connection_path(connection)` (with `method: :delete`).
+`qube_rails.connection_company_file_path(connection)`, `qube_rails.connection_path(connection)`
+(with `method: :delete`).
 
 Two buttons cover it: Connect, for an account setting up its first company file (or finishing a
 setup it started), and, once it has one, Connect another company file:
@@ -91,6 +93,20 @@ setup it started), and, once it has one, Connect another company file:
 Connect redirects to QuBe Sync's setup, on another site, so its forms need `data-turbo="false"`
 in an app with Turbo (Rails 7 and later): Turbo submits a form with `fetch`, which the browser
 won't follow to another origin, and the button would do nothing.
+
+Once a connection is set up, keep its setup within your customer's reach: they need it when
+QuickBooks moves to another computer, the Web Connector entry is removed, or they want this
+connection on another company file. On the page that shows its QuickBooks status:
+
+```erb
+<%= render "qube_rails/manage_connection", connection: connection %>
+```
+
+It shows "Set up QuickBooks again" (`connection_onboarding_path`) and, unless the connection is
+simulated, "Use a different company file" (`connection_company_file_path`), both with Turbo off,
+while the connection is connected or stalled (`Connection#set_up?`), and nothing otherwise: offer
+Connect then. Both links carry the onboarding token and expire with it, so each button renews
+them when clicked rather than keeping one.
 
 ## Settings
 
@@ -209,8 +225,9 @@ dropped ...") and returns.
 
 A `QubeRails::Connection` is one company file: `owner` (your account), `qube_id` (QuBe Sync's
 id, nil until it answers), `name`, `status` (`pending`, `connected`, `setup_cancelled`,
-`stalled`), `stall_reason`, `revision` and `connection_type` (`realtime`, `standard` or
-`simulated`). `QubeRails::Connection.owned_by(account)` lists an account's.
+`stalled`), `stall_reason`, `revision`, `connection_type` (`realtime`, `standard` or
+`simulated`), `company_file_changed_at` (when the customer last switched it to another
+company file) and `company_file_revision` (that switch's event revision). `QubeRails::Connection.owned_by(account)` lists an account's.
 
 A connection's type can't be changed through the API: the customer upgrades a standard one to
 realtime from its page in the QuBe Sync dashboard. Its next event carries the new type, and
@@ -236,6 +253,109 @@ So a row id used again (MySQL 5.7 after a restart, a restored database) never ta
 connection. The unpaged listing is acceptable because it only runs for a row without an id,
 which is rare: a lost create, or an event that beat the save.
 
+`connection.company_file_changed` comes when the customer chooses "Use a different company file"
+on the connection's setup page. The connection id stays the same, and every ListID, TxnID and
+EditSequence stored for it is the old file's. The "new" file is often the same company (renamed,
+moved, restored from a backup, copied to a new server) and keeps its ids, so they aren't thrown
+away: they're checked. In the same transaction as the status and revision, the engine:
+
+- sets `status` back to `pending` (it is set up again, so the Web Connector is installed again
+  from the setup page; `connection.connected` follows when it checks in) and clears
+  `stall_reason`;
+- marks the connection's `qube_quickbooks_records` rows stale (`stale_since`). A stale link is
+  kept but never used: `qb_id_for`, `find_linked`, `quickbooks_record`, `in_quickbooks` and
+  `sync_status` don't see it, so `quickbooks_ref` refers to the record by name and no request goes
+  out with an old id (`connection.stale_links` lists them);
+- deletes its sync marks, so the next sync's `last_synced_at` is nil;
+- sets `company_file_changed_at`: a run from before it no longer counts for `sync_status`, so a
+  record sent to the old file reads `:not_sent` until its link is checked, and a check queued
+  before it settles nothing (its answer may be the old file's) and is asked again;
+- sets `company_file_revision` to the event's revision.
+
+Events can arrive out of order. A `connection.company_file_changed` that comes after a later event
+(a retried delivery landing after `connection.connected`) still forgets the old file when its
+revision is newer than `company_file_revision`: the links go stale and are checked, and your
+`company_file_changed` hook runs (so you set aside ids you keep yourself), but `status` and
+`revision` are left alone. A redelivery of one already applied does nothing.
+
+Then your `company_file_changed(event)` runs (by default it logs). Set aside any QuickBooks ids
+your app keeps itself for that connection, and tell the customer to finish the setup.
+
+When `connection.connected` comes, the engine checks the stale links against the file the
+connection opens now (`QubeRails::LinkCheck`): a plain request per kind (`customer.query`,
+`invoice.query`...) asking for up to 50 of its ids at once, by ListID, or by TxnID for a
+transaction, and the next 50 when that answer is in. Which id a kind's query takes comes from the
+qube_sync gem (`Operations::INDEX`'s `id_param`), or from the engine's own lists on an older gem;
+a kind that can't be looked up by id (company, preferences, a kind your app named itself) is never
+queried: its links are kept as missing (below) as soon as the check starts, and reported in
+`links_checked` like a checked batch. For each id:
+
+- found with the same name (a list record's FullName, a transaction's RefNumber, compared
+  ignoring case and spacing; blank and blank are the same): the link is kept, current again, with
+  the answer's EditSequence. A link kept without a name (`name: nil`) is kept on its id alone;
+- found under another name: the link is held for review (`review_since`, and `review_name`, the
+  name QuickBooks has now; `connection.review_links`), unused, and its record waits (below) until
+  your app settles it;
+- not found: the link is kept as missing (`missing_since`, `connection.missing_links`), unused
+  like a stale one, so the record reads as not in QuickBooks and is matched by name (or asks your
+  user) when it's next sent. The next company file change makes it stale again and checks it,
+  so a customer who picked the wrong file and switches back gets their links back.
+
+Why a found id isn't enough: QuickBooks stamps every ListID and TxnID with its record's creation
+time (`<hex counter>-<TimeCreated as unix seconds>`, checked on QuickBooks Enterprise 24 for
+customers, items, accounts and invoices), so two files sharing an id share an origin: one was
+copied or restored from the other. After a copy the files go their own ways, and people reuse a
+record by renaming it, so an id found under another name may be another record now. Your
+customer decides:
+
+```ruby
+connection.review_links.each do |link|
+  # Ask: is link.record (kept as link.name) the record QuickBooks now calls link.review_name?
+end
+connection.confirm_link(link) # yes: current again, with QuickBooks' name
+connection.reject_link(link)  # no: missing, so the record is matched by name or added when sent
+```
+
+Until a record's link is settled (current, missing, or replaced by a run), nothing is sent for it:
+`Operation.start` and `Request.queue` raise `QubeRails::LinkBeingChecked` while it's being checked
+and `QubeRails::LinkNeedsReview` while it waits for review (both `NotReady`), so retry them from a
+job. A record with no link goes as before. The next company file change makes stale again every
+link, under review and missing ones too, and checks them all.
+
+QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
+first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
+nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
+delivery is taken once, and a second `connected` while a check is going reuses it. A run that
+links a record on the new file makes its link current at once. A link whose check fails (or
+whose answer can't be trusted, or whose queue or next batch couldn't be sent) stays stale. It's
+asked about again on the connection's next event, by `connection.check_stale_links`, or when your
+app sends one of its records: before raising `LinkBeingChecked`, `Operation.start` and
+`Request.queue` queue the kind's check again if its last one ended (or never got an answer) more
+than `LinkCheck::RETRY_AFTER` (5 minutes) ago.
+
+After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on
+your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
+record); `review` is `{ link:, record:, old_name:, new_name: }` for each link held for review;
+`stale_left` is 0 once every check is done. Tell the customer what was found again, and ask about
+the ones to review. Two things to watch:
+
+- When most found ids of a kind are under review, the new file is a copy that has drifted a long
+  way from the old one: warn the customer before they confirm links one by one.
+- A missing transaction needs your user's review before it's sent again: a RefNumber is often
+  blank or shared, so no name match will find it, and sending it adds it again.
+
+A restored backup is the common case. Records edited after the backup are relinked in their
+older state, so send again what changed since the backup; records created after it aren't
+found and are added again when next sent, which is right for a restore.
+
+Match records by name before adding them (a workflow such as `add_transaction` finds or asks
+before it creates), and send past transactions only for a range your customer picks. QuBe Sync
+fails the connection's waiting requests and cancels its live runs, each with its own webhook:
+build that work again from your records after `connection.connected`, never resend it as it was.
+
+A connection set up again is `pending`, so Connect sends it back through setup rather than making
+another.
+
 ```ruby
 module QuickbooksDesktop
   class ConnectionEvents < QubeRails::ConnectionEvents
@@ -258,6 +378,17 @@ module QuickbooksDesktop
     def resumed(event)
       log_event(event)
     end
+
+    # Its QuickBooks links are stale until they're checked: set your own ids aside too, and ask
+    # them to finish the setup.
+    def company_file_changed(event)
+      AccountMailer.quickbooks_finish_setup(owner, connection).deliver_later
+    end
+
+    # A batch of its stale links was looked up on the new file; stale_left is 0 once all are.
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
+      AccountMailer.quickbooks_links_checked(owner, connection, kind, review, missing).deliver_later
+    end
   end
 end
 ```
@@ -269,7 +400,9 @@ QuickBooks gives out ListIDs from one counter per family, so an id is unique onl
 family of one company file (verified on QuickBooks Enterprise 24.0): customers, vendors,
 employees and other names share one, every item type shares another, each other list (accounts,
 classes, terms...) has its own, and the same counter value turns up in several families.
-TxnIDs are kept per transaction type.
+TxnIDs are kept per transaction type. Pass `name:` (a list record's FullName, a transaction's
+RefNumber): after a company file change a found id is kept only when it still has that name.
+Only current links are read; stale, missing and under-review ones aren't.
 
 ```ruby
 connection.link(customer, kind: "customer", qb_id: list_id, edit_sequence: "171", name: "Riverbend Electric")
@@ -441,7 +574,8 @@ module QuickbooksDesktop
     # error or discarded: show event.error["user_message"].
     def failed(event); end
 
-    # QuBe Sync keeps trying (QuickBooks closed, a dialog open). Never resend. Default: logs.
+    # QuBe Sync keeps trying (QuickBooks closed, a dialog open, another company file open). Show
+    # event.error["user_message"]. Never resend. Default: logs.
     def retrying(event); end
 
     # The answer never came back: QuickBooks may have applied it. Default: failed(event). A query
@@ -807,6 +941,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
+| `qube_rails/_manage_connection` | `connection` | a set-up connection's "Set up QuickBooks again" and "Use a different company file" buttons |
 | `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
@@ -1067,6 +1202,8 @@ en:
 | `errors.question_changed` | This question changed after the page loaded, so your answer wasn't sent. The page now shows the latest. | an answer to a changed question |
 | `errors.question_moved_on` | This question was already answered or has changed, so your answer wasn't sent. If QuickBooks needs anything else, it will ask here. | an answer QuBe Sync says came too late (409, or a 400 such as `not_awaiting_input`) |
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
+| `connection.set_up_again` | Set up QuickBooks again | `qube_rails/manage_connection`'s button to its setup |
+| `connection.use_different_company_file` | Use a different company file | `qube_rails/manage_connection`'s button to switch its company file |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |
 | `question.used_for_all` | one: Also filled in on the other record.; other: Also filled in on the other %{count} records. | where that button was, once pressed |
@@ -1125,6 +1262,13 @@ gain `run` and `connection`), move `account_id`, `authorize_question!` and
 `QubeSync` module and routes in favour of the mount line. Copy each account's connection into
 `qube_connections` (its owner, `qube_id` and status) and drop the `qube_*` columns from your
 tables once nothing reads them.
+
+From qube_rails 0.2.1: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
+and `bin/rails db:migrate` before the new version serves any traffic or runs any job. The
+migration adds `qube_connections.company_file_changed_at` and `company_file_revision`, and
+`qube_quickbooks_records.stale_since`, `missing_since`, `review_since` and `review_name`. Every link read (`qb_id_for`, `find_linked`, `in_quickbooks`, `sync_status`...)
+now filters on those columns, so without the migration every sync fails, not only
+`connection.company_file_changed`.
 
 From qube_rails 0.2.0: `bundle update qube_rails`, then `bin/rails qube_rails:install:migrations`
 and `bin/rails db:migrate` for `qube_connections.connection_type` and `qube_runs.headline`.

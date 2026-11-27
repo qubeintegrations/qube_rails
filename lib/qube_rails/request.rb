@@ -28,6 +28,8 @@ module QubeRails
                             "qube_id): the customer finishes onboarding first"
       end
 
+      connection.wait_for_link_check!(record, name) if connection.is_a?(QubeRails::Connection)
+
       row, params_error = claim(record, connection)
       raise params_error if params_error
       return retry_queue(row) if row.reused?

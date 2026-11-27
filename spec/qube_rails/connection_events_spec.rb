@@ -120,6 +120,102 @@ RSpec.describe QubeRails::ConnectionEvents do
     expect(other.reload.status).to eq("pending")
   end
 
+  describe "connection.company_file_changed" do
+    let(:invoice) { Invoice.create!(account: account, number: "1001") }
+    let(:other) { make_connection(account, qube_id: "conn-q-2") }
+
+    before do
+      run_event("connection.connected") # revision 1
+      connection.link(invoice, kind: "invoice", qb_id: "1A-1760999990", edit_sequence: "1760999990", name: "1001")
+      other.link(invoice, kind: "invoice", qb_id: "2B-1760999990")
+      QubeRails::SyncMark.advance(connection, "sync_customer", 1.hour.ago)
+      QubeRails::SyncMark.advance(other, "sync_customer", 1.hour.ago)
+      QuickbooksDesktop::ConnectionEvents.calls.clear
+    end
+
+    it "sets it back to pending, keeps its links but stale and unused, drops its sync marks, and calls the hook once" do
+      run_event("connection.company_file_changed") # revision 5
+
+      expect(connection).to have_attributes(status: "pending", stall_reason: nil, revision: 5, company_file_revision: 5)
+      expect(connection.company_file_changed_at).to be_within(5.seconds).of(Time.now)
+      expect(connection.quickbooks_records.pluck(:qb_id, :edit_sequence)).to eq([%w[1A-1760999990 1760999990]])
+      expect(connection.stale_links.count).to eq(1)
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
+      expect(connection.find_linked("1A-1760999990", kind: "invoice")).to be_nil
+      expect(connection.in_quickbooks(Invoice.all)).to be_empty
+      expect(connection.last_synced_at("sync_customer")).to be_nil
+      expect(QuickbooksDesktop::ConnectionEvents.calls)
+        .to eq([[:company_file_changed, connection.id, account.id, "pending"]])
+      expect(a_request(:any, /qube\.example/)).not_to have_been_made
+    end
+
+    it "leaves the account's other connections alone" do
+      run_event("connection.company_file_changed")
+
+      expect(other.qb_id_for(invoice, kind: "invoice")).to eq("2B-1760999990")
+      expect(other.stale_links).to be_empty
+      expect(other.last_synced_at("sync_customer")).not_to be_nil
+      expect(other.reload.status).to eq("connected")
+    end
+
+    it "does nothing for a replay, or for an event older than the last applied" do
+      run_event("connection.company_file_changed")
+      connection.link(invoice, kind: "invoice", qb_id: "9Z-1761000500") # learned on the new file
+      run_event("connection.company_file_changed") # the same delivery again
+      run_event("connection.company_file_changed", "revision" => 4, "delivery_id" => "late")
+
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to eq("9Z-1761000500")
+      expect(connection.stale_links).to be_empty
+      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq([:company_file_changed])
+    end
+
+    it "still forgets the old file and runs the hook when it comes after a later event, keeping status and revision, and checks its links" do
+      check = stub_request(:get, %r{\A#{Regexp.escape(api_url("/connections/#{connection.qube_id}/invoices"))}\?})
+              .to_return(json_data("id" => "check-q-1", "state" => "queued"))
+      run_event("connection.resumed", "revision" => 7)
+      run_event("connection.company_file_changed") # revision 5, came late
+
+      expect(connection).to have_attributes(status: "connected", revision: 7, company_file_revision: 5)
+      expect(connection.company_file_changed_at).to be_within(5.seconds).of(Time.now)
+      expect(connection.stale_links.count).to eq(1)
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
+      expect(connection.last_synced_at("sync_customer")).to be_nil
+      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to eq(%i[resumed company_file_changed])
+      expect(check).to have_been_made.once
+
+      connection.link(invoice, kind: "invoice", qb_id: "9Z-1761000500") # learned on the new file
+      run_event("connection.company_file_changed", "delivery_id" => "redelivered")
+      run_event("connection.company_file_changed", "revision" => 4, "delivery_id" => "older")
+
+      expect(connection.stale_links).to be_empty
+      expect(connection).to have_attributes(status: "connected", revision: 7, company_file_revision: 5)
+    end
+
+    it "makes a record sent on the old file read as not sent until its link is checked" do
+      make_run(invoice, connection).update!(state: "completed", ended_at: Time.now, created_at: 1.minute.ago)
+      expect(connection.sync_status(invoice, operation: "create_invoice")).to be_in_quickbooks
+
+      run_event("connection.company_file_changed")
+
+      expect(connection.sync_status(invoice, operation: "create_invoice")).to be_not_sent
+      expect(connection.not_in_quickbooks(Invoice.all)).to include(invoice)
+
+      travel(1.second) { make_run(invoice, connection, reference: "create_invoice-after") }
+      expect(connection.sync_status(invoice, operation: "create_invoice")).to be_sending
+    end
+
+    it "logs in the base handlers" do
+      event = QubeRails::Backend.parse(vector_body("connection.company_file_changed"))
+      events = described_class.new(connection)
+      events.company_file_changed(event)
+      events.links_checked(kind: "invoice", found: 3, relinked: [], review: [{}], missing: [1], stale_left: 0)
+
+      expect(log_output).to include("INFO QuBe Sync: connection #{connection.id}: connection.company_file_changed (revision 5)")
+      expect(log_output).to include("invoice links checked on its company file: 3 found (1 to review), 1 missing, " \
+                                    "0 still to check")
+    end
+  end
+
   it "raises naming the initializer when connection_events isn't set" do
     QubeRails.config.connection_events = nil
 

@@ -22,5 +22,15 @@ module QuickbooksDesktop
     def resumed(event)
       self.class.calls << [:resumed, connection.id, owner.id, connection.stall_reason]
     end
+
+    def company_file_changed(event)
+      self.class.calls << [:company_file_changed, connection.id, owner.id, connection.status]
+    end
+
+    def links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)
+      self.class.calls << [:links_checked, kind, found, relinked.map(&:qb_id),
+                           review.map { |r| [r[:record].id, r[:old_name], r[:new_name]] },
+                           missing.map { |link| link.record.id }, stale_left]
+    end
   end
 end

@@ -1,0 +1,19 @@
+<%# A set-up connection's actions, for the page that shows its QuickBooks status:
+      render "qube_rails/manage_connection", connection: connection
+    "Set up QuickBooks again" (a moved computer, a removed Web Connector) and, unless it's
+    simulated, "Use a different company file". Nothing while it isn't set up: offer Connect then.
+    Both leave for QuBe Sync's setup, so their forms opt out of Turbo. The words are I18n's:
+    qube_rails.connection.set_up_again and .use_different_company_file. %>
+<% connection = local_assigns.fetch(:connection) %>
+<% if connection.set_up? %>
+<div class="qube-manage-connection" id="qube-manage-connection-<%= connection.id %>">
+<%= button_to QubeRails.t("connection.set_up_again"), qube_rails.connection_onboarding_path(connection),
+              class: qube_classes(:button_secondary, "qube-set-up-again"),
+              form: { class: "qube-set-up-again-form", data: { turbo: false } } %>
+<% if connection.company_file_switchable? %>
+<%= button_to QubeRails.t("connection.use_different_company_file"), qube_rails.connection_company_file_path(connection),
+              class: qube_classes(:button_secondary, "qube-use-different-company-file"),
+              form: { class: "qube-use-different-company-file-form", data: { turbo: false } } %>
+<% end %>
+</div>
+<% end %>

@@ -16,6 +16,7 @@ AddQubeSyncStatusIndexes.new.migrate(:up)
 CreateQubeSyncMarks.new.migrate(:up)
 CreateQubeRequests.new.migrate(:up)
 AddQubeConnectionTypeAndRunHeadline.new.migrate(:up)
+AddQubeCompanyFileChange.new.migrate(:up)
 
 Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require f }
 

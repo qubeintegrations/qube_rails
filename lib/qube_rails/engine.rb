@@ -7,6 +7,7 @@ module QubeRails
   # to where it's mounted:
   #   POST quickbooks/connections                  a connection for the signed-in account
   #   POST quickbooks/connections/:id/onboarding   one of its connections, through setup again
+  #   POST quickbooks/connections/:id/company_file one of its connections, to another company file
   #   POST webhooks/qube/runs/:id                  a run's webhooks: no sign-in, no CSRF
   #   POST webhooks/qube/connections/:id           a connection's webhooks: no sign-in, no CSRF
   #   POST qube/questions/runs/:id                 an answer, behind your sign-in and CSRF
