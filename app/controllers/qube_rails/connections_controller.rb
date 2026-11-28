@@ -70,6 +70,18 @@ module QubeRails
       send_to_setup(connection, link: "company_file")
     end
 
+    # POST /quickbooks/connections/:id/links/:link_id/confirm and /reject, from the review_links
+    # partial: one of the signed-in account's connections' links under review is the same record
+    # (Connection#confirm_link) or not (#reject_link), then back to the page. Another account's
+    # connection, or a link not under review on it, answers 404.
+    def confirm_link
+      settle_link(:confirm_link)
+    end
+
+    def reject_link
+      settle_link(:reject_link)
+    end
+
     # What the page says when it can't, as I18n keys under qube_rails (config/locales/en.yml).
     RUNS_GOING = :"errors.still_syncing"
     NO_ANSWER = :"errors.disconnect_unreachable"
@@ -101,6 +113,19 @@ module QubeRails
       not_checks = QubeRails::QueuedRequest.arel_table[:operation].does_not_match(prefix, "\\", true)
       connection.runs.where.not(state: QubeRails::Run::ENDED_STATES + %w[realtime_required]).exists? ||
         connection.queued_requests.where(ended_at: nil).where(not_checks).exists?
+    end
+
+    def settle_link(how)
+      account = signed_in_account
+      return head(:unauthorized) unless account
+
+      connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
+      link = connection&.review_links&.find_by(id: params[:link_id])
+      return head(:not_found) unless link
+
+      connection.public_send(how, link)
+      QubeRails.broadcast_refresh(link.record) if link.record
+      redirect_back fallback_location: "/", status: :see_other
     end
 
     # Already gone there (404) is gone.

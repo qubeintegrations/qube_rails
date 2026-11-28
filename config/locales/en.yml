@@ -31,6 +31,11 @@ en:
     connection:
       set_up_again: "Set up QuickBooks again"
       use_different_company_file: "Use a different company file"
+      review_links:
+        intro: "This company file has these records under other names. Check whether each is still the same record."
+        renamed: "%{record} “%{old_name}” is “%{new_name}” in QuickBooks now."
+        same: "Same record"
+        not_same: "Not the same"
     errors:
       not_starting: "This was already sent, so there's nothing to try again."
       not_quiet: "This was updated recently. Check again in a few minutes."

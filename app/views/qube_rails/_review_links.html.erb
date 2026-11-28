@@ -1,0 +1,28 @@
+<%# A connection's links the new company file has under another name, after "Use a different
+    company file", for the customer to settle:
+      render "qube_rails/review_links", connection: connection
+    Each shows its record, the name it was kept with and QuickBooks' name now, with "Same record"
+    (Connection#confirm_link) and "Not the same" (#reject_link). Nothing when none is under
+    review. label: (optional) a lambda giving a record's words, else its model's name. The words
+    are I18n's: qube_rails.connection.review_links.*. %>
+<% connection = local_assigns.fetch(:connection) %>
+<% label = local_assigns[:label] %>
+<% links = connection.review_links.includes(:record).order(:id).limit(QubeRails::Connection::REVIEW_LINKS_SHOWN).to_a %>
+<% unless links.empty? %>
+<section class="qube-review-links" id="qube-review-links-<%= connection.id %>">
+<p class="qube-review-links-intro"><%= QubeRails.t("connection.review_links.intro") %></p>
+<ul class="qube-review-links-list">
+<% links.each do |link| %>
+<% record = link.record %>
+<% words = if label && record then label.call(record) elsif record then record.model_name.human else link.kind.to_s.humanize end %>
+<li class="qube-review-link" id="qube-review-link-<%= link.id %>">
+<span class="qube-review-link-text"><%= QubeRails.t("connection.review_links.renamed", record: words, old_name: link.name.to_s, new_name: link.review_name.to_s) %></span>
+<%= button_to QubeRails.t("connection.review_links.same"), qube_rails.connection_confirm_link_path(connection, link),
+              class: qube_classes(:button_secondary, "qube-confirm-link"), form: { class: "qube-confirm-link-form" } %>
+<%= button_to QubeRails.t("connection.review_links.not_same"), qube_rails.connection_reject_link_path(connection, link),
+              class: qube_classes(:button_secondary, "qube-reject-link"), form: { class: "qube-reject-link-form" } %>
+</li>
+<% end %>
+</ul>
+</section>
+<% end %>

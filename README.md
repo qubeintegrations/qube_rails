@@ -55,6 +55,7 @@ Relative to where the engine is mounted (`"/"` above):
 | `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that isn't connected yet (`pending`, a connection set up again after a company file change included, or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
 | `POST quickbooks/connections/:id/company_file` | "Use a different company file" for one of the signed-in account's connections: its webhook URL brought up to date, its links renewed (`POST /api/v2/connections/:id/onboarding-url`), and a redirect (303) to its `links.company_file`, QuBe Sync's page for switching it to another company file (its onboarding link if QuBe Sync gives none). A simulated connection, one QuBe Sync never answered, or another account's answers 404. |
+| `POST quickbooks/connections/:id/links/:link_id/confirm`, `.../reject` | One of the signed-in account's connections' links under review (found on the new company file under another name) settled from `qube_rails/review_links`: the same record (`Connection#confirm_link`) or not (`#reject_link`), then a redirect (303) back. Another account's connection, a link on another connection, or one not under review answers 404. |
 | `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run or request hasn't ended (the engine's own link checks aside: they go with it); another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
@@ -73,7 +74,7 @@ connection id against the row (a request's event, its id).
 Onboarding and the question routes inherit your `ApplicationController` (the `parent_controller`
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
 engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`,
-`qube_rails.connection_company_file_path(connection)`, `qube_rails.connection_path(connection)`
+`qube_rails.connection_company_file_path(connection)`, `qube_rails.connection_confirm_link_path(connection, link)`, `qube_rails.connection_reject_link_path(connection, link)`, `qube_rails.connection_path(connection)`
 (with `method: :delete`).
 
 Two buttons cover it: Connect, for an account setting up its first company file (or finishing a
@@ -310,6 +311,17 @@ customers, items, accounts and invoices), so two files sharing an id share an or
 copied or restored from the other. After a copy the files go their own ways, and people reuse a
 record by renaming it, so an id found under another name may be another record now. Your
 customer decides:
+
+```erb
+<%= render "qube_rails/review_links", connection: connection %>
+```
+
+lists the connection's links under review (the oldest 100, `Connection::REVIEW_LINKS_SHOWN`), each
+with its record (its model's name, or what an optional `label: ->(record) { ... }` returns), the
+name it was kept with and QuickBooks' name now, and two buttons: "Same record" (`confirm_link`)
+and "Not the same" (`reject_link`). They post to the connection's links routes (above), which
+redirect back to the page, so Turbo can stay on. It renders nothing while no link is under review,
+so it can sit on the connection's page for good. Or ask your own way:
 
 ```ruby
 connection.review_links.each do |link|
@@ -964,6 +976,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
 | `qube_rails/_manage_connection` | `connection` | a connection's "Set up QuickBooks again" (once QuBe Sync has made it) and, while it's set up, "Use a different company file" buttons |
+| `qube_rails/_review_links` | `connection`, `label` (optional) | a connection's links under review, each with "Same record" and "Not the same" buttons; nothing when there are none |
 | `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
@@ -1227,6 +1240,9 @@ en:
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `connection.set_up_again` | Set up QuickBooks again | `qube_rails/manage_connection`'s button to its setup |
 | `connection.use_different_company_file` | Use a different company file | `qube_rails/manage_connection`'s button to switch its company file |
+| `connection.review_links.intro` | This company file has these records under other names. Check whether each is still the same record. | above `qube_rails/review_links`' list |
+| `connection.review_links.renamed` | %{record} “%{old_name}” is “%{new_name}” in QuickBooks now. | each link under review (`%{record}`: its model's name, or the `label:` lambda's) |
+| `connection.review_links.same`, `connection.review_links.not_same` | Same record; Not the same | its buttons: `confirm_link`, `reject_link` |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |
 | `question.used_for_all` | one: Also filled in on the other record.; other: Also filled in on the other %{count} records. | where that button was, once pressed |

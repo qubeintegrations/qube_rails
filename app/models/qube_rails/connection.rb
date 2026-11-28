@@ -256,6 +256,9 @@ module QubeRails
       quickbooks_records.under_review
     end
 
+    # At most this many show in the review_links partial, oldest first.
+    REVIEW_LINKS_SHOWN = 100
+
     # While record's link here waits for its check, nothing is sent for it (Operation.start and
     # Request.queue raise LinkBeingChecked), so a record already in QuickBooks isn't added again.
     def checking_link?(record)
