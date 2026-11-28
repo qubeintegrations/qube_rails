@@ -314,12 +314,22 @@ RSpec.describe "Onboarding", type: :request do
       expect(shown.at_css("form.qube-use-different-company-file-form")).to be_nil
     end
 
-    it "shows nothing while it isn't set up: pending, set up again after a company file change, or cancelled" do
+    it "offers only Set up again while it isn't set up: pending, set up again after a company file change, or cancelled" do
       pending = make_connection(account, status: "pending")
       cancelled = make_connection(account, qube_id: "conn-q-2", status: "setup_cancelled")
 
-      expect(actions(pending)).to be_nil
-      expect(actions(cancelled)).to be_nil
+      [pending, cancelled].each do |connection|
+        shown = actions(connection)
+        expect(shown.at_css("form.qube-set-up-again-form")["action"])
+          .to eq("/quickbooks/connections/#{connection.id}/onboarding")
+        expect(shown.at_css("form.qube-use-different-company-file-form")).to be_nil
+      end
+    end
+
+    it "shows nothing for a connection QuBe Sync never made: offer Connect then" do
+      lost = make_connection(account, qube_id: nil, status: "pending")
+
+      expect(actions(lost)).to be_nil
     end
   end
 

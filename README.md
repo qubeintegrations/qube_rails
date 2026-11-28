@@ -102,10 +102,13 @@ connection on another company file. On the page that shows its QuickBooks status
 <%= render "qube_rails/manage_connection", connection: connection %>
 ```
 
-It shows "Set up QuickBooks again" (`connection_onboarding_path`) and, unless the connection is
-simulated, "Use a different company file" (`connection_company_file_path`), both with Turbo off,
-while the connection is connected or stalled (`Connection#set_up?`), and nothing otherwise: offer
-Connect then. Both links carry the onboarding token and expire with it, so each button renews
+It shows "Set up QuickBooks again" (`connection_onboarding_path`) for any connection QuBe Sync has
+made (`Connection#set_up_again?`): set up, or not set up yet (`pending`, as it is right after "Use
+a different company file", or `setup_cancelled`), so a customer who leaves the setup halfway can
+go back to it. "Use a different company file" (`connection_company_file_path`) shows beside it
+only while the connection is connected or stalled (`Connection#set_up?`) and isn't simulated
+(`#company_file_switchable?`). Both have Turbo off. For a row QuBe Sync never made it shows
+nothing: offer Connect then. Both links carry the onboarding token and expire with it, so each button renews
 them when clicked rather than keeping one.
 
 ## Settings
@@ -960,7 +963,7 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
-| `qube_rails/_manage_connection` | `connection` | a set-up connection's "Set up QuickBooks again" and "Use a different company file" buttons |
+| `qube_rails/_manage_connection` | `connection` | a connection's "Set up QuickBooks again" (once QuBe Sync has made it) and, while it's set up, "Use a different company file" buttons |
 | `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across

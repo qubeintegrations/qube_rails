@@ -81,6 +81,12 @@ module QubeRails
       connection_type == "simulated"
     end
 
+    # Whether to offer "Set up QuickBooks again": QuBe Sync has made it, set up or not (pending after
+    # a company file change, or its setup cancelled).
+    def set_up_again?
+      !qube_id.to_s.empty?
+    end
+
     # Whether to offer "Use a different company file": set up, and not simulated (a simulated
     # connection has no file to switch).
     def company_file_switchable?
