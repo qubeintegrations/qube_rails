@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.3.1 (unreleased)
+
+No migration.
+
+### Fixed
+
+**Work from before a company file change**
+- A run or plain request made before the connection's `company_file_changed_at` is the old file's.
+  Its late events are still applied (state, outcome, revision) and your handlers still run, but
+  no sync mark advances, and `Connection#link` (so `link_references` too) writes nothing and
+  returns nil, logged, inside them (`Connection#holding_links`). Before, a run that completed on
+  the old file just before the switch, processed after it, recreated the deleted sync mark (so the
+  next incremental sync asked only for changes since the old run) and made old-file ids current
+  again. `link_references` now leaves out what `link` didn't write.
+- `Operation.start` and `Request.queue` no longer reuse such a run or request when it hasn't ended
+  here (`starting`, `realtime_required`, running, or a queue QuBe Sync never confirmed), which
+  `retry_start` would have sent again with the old file's ids. It's ended first, a run
+  `cancelled` (`cancel_reason` from the new key `status.company_file_changed`) and a request
+  `failed` (`error` `{"error_type" => "company_file_changed"}`), logged, and a new one is built
+  with a new reference. `Connection#before_company_file_change?(row)` says which rows are the old
+  file's. A link check from before the switch is ended the same way, so `connected` queues a fresh
+  one at once.
+
+**Link checks that keep failing or never answer**
+- A check QuBe Sync took but never answered (its webhook lost) was never queued again. Now, when a
+  held record is sent, one with no word for `LinkCheck::NO_ANSWER_AFTER` (an hour) is failed
+  (`error` `{"error_type" => "no_answer"}`) and queued again. Nothing is revived while the
+  connection is stalled.
+- An answer a check can't trust (rows it didn't ask for, an odd shape) now fails the check
+  (`state` `failed`) rather than leaving it answered.
+- A kind whose check kept failing stayed stale for good. After `LinkCheck::MAX_ATTEMPTS` (3)
+  failed checks of a kind since the last company file change (errors, timeouts, discards, answers
+  it can't trust, no answer), its links still stale are kept as missing and reported in
+  `links_checked`, and that's logged. The next company file change starts the count again.
+
+**Disconnect**
+- The engine's own link checks no longer count as work going: an in-flight check refused
+  Disconnect.
+
+**`qube_rails/manage_connection`**
+- "Set up QuickBooks again" now shows for any connection QuBe Sync has made
+  (`Connection#set_up_again?`), including `pending` (right after "Use a different company file")
+  and `setup_cancelled`, where the partial used to render nothing and the customer lost the way
+  back to the setup. "Use a different company file" still shows only for a set-up, switchable one.
+
+### New
+
+- `render "qube_rails/review_links", connection:` lists the connection's links under review (the
+  oldest `Connection::REVIEW_LINKS_SHOWN`, 100), each with its record (its model's name, or an
+  optional `label:` lambda's words), the name it was kept with and QuickBooks' name now, and
+  "Same record" / "Not the same" buttons. Nothing renders when none is under review. Before, an app
+  had to write its own UI, or a record whose id the new file has under another name raised
+  `LinkNeedsReview` on every send.
+- `POST quickbooks/connections/:id/links/:link_id/confirm` and `/reject`
+  (`connection_confirm_link_path`, `connection_reject_link_path`) call `confirm_link` /
+  `reject_link` and redirect (303) back. Scoped like `company_file`: another account's connection,
+  a link on another connection, or one not under review answers 404. Turbo can stay on.
+- New keys `connection.review_links.intro`, `.renamed`, `.same`, `.not_same`, and
+  `status.company_file_changed`.
+
 ## 0.3.0 (2026-11-27)
 
 Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` before this version
@@ -315,8 +375,9 @@ read as QuBe Sync now sends them. Run `bin/rails qube_rails:install:migrations` 
 ### Compatibility
 
 Matches QuBe Sync's reshaped workflow-run webhooks (qube PR #61): the error object, `headline`,
-an `output` per outcome without `output.outcome` (add_transaction's `added` keeps `record` and
-`references`, so `link_references` is unchanged), links only while they work, no
+an `output` per outcome without `output.outcome` (add_transaction's `added` keeps `record`;
+`link_references` now reads `output.refs` or a `records` notification, under Changed, and no
+longer `output.references`), links only while they work, no
 `prompt.options`, and `summary.changes` in place of `summary.side_effects` (the engine read
 neither). Webhooks in the old shape are still read. The start's 422 `realtime_required` answer is
 the same before and after that change.
