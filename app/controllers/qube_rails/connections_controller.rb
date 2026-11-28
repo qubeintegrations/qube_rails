@@ -77,7 +77,7 @@ module QubeRails
     # DELETE /quickbooks/connections/:id: disconnects one of the signed-in account's
     # connections. QuBe Sync deletes its connection (the Web Connector stops syncing that
     # company file), then the row goes, with its runs and its QuickBooks links. Refused while a
-    # run hasn't ended. Another account's connection answers 404.
+    # run or request hasn't ended (the engine's link checks aside). Another account's connection answers 404.
     def destroy
       account = signed_in_account
       return head(:unauthorized) unless account
@@ -95,9 +95,12 @@ module QubeRails
 
     private
 
+    # The engine's own link checks don't count: they go with the connection.
     def work_going?(connection)
+      prefix = "#{QubeRails::QueuedRequest.sanitize_sql_like(QubeRails::LinkCheck::SLUG_PREFIX)}%"
+      not_checks = QubeRails::QueuedRequest.arel_table[:operation].does_not_match(prefix, "\\", true)
       connection.runs.where.not(state: QubeRails::Run::ENDED_STATES + %w[realtime_required]).exists? ||
-        connection.queued_requests.where(ended_at: nil).exists?
+        connection.queued_requests.where(ended_at: nil).where(not_checks).exists?
     end
 
     # Already gone there (404) is gone.

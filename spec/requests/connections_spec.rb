@@ -400,6 +400,19 @@ RSpec.describe "Onboarding", type: :request do
       expect(QubeRails::Connection.exists?(connection.id)).to be(true)
     end
 
+    it "isn't held up by the engine's own link check" do
+      connection = make_connection(account)
+      QubeRails::QueuedRequest.create!(connection: connection, operation: "qube_rails.check_links:customer",
+                                       record: connection, reference: "check-1-x", state: "queued", qube_id: "q-1")
+      deleted = stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_return(status: 204)
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(deleted).to have_been_requested
+      expect(QubeRails::Connection.exists?(connection.id)).to be(false)
+      expect(QubeRails::QueuedRequest.count).to eq(0)
+    end
+
     it "answers 404 for another account's connection" do
       other = make_connection(Account.create!(name: "Other"))
 
