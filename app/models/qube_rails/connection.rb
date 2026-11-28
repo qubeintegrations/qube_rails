@@ -152,10 +152,18 @@ module QubeRails
     # one, and that's logged: the same QuickBooks record can stand for one of yours at a time. The
     # same record and id linked with another kind of the family (an item converted from service
     # to non-inventory) changes the row's kind.
+    #
+    # Inside holding_links (a handler of a run or request from before the last company file change)
+    # it writes nothing and returns nil.
     def link(record, kind:, qb_id:, edit_sequence: nil, name: nil)
       kind = kind.to_s
       qb_id = qb_id.to_s
       raise ArgumentError, "link needs a qb_id" if qb_id.empty?
+
+      if @links_held
+        QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}: #{@links_held}")
+        return nil
+      end
 
       family = QuickbooksRecord.family_for(kind)
       type, id = self.class.key_for(record)
@@ -194,6 +202,20 @@ module QubeRails
         retry if attempts < 2
         raise
       end
+    end
+
+    # Runs the block with link writing nothing (reason is logged): for the old company file's answers.
+    def holding_links(reason)
+      held = @links_held
+      @links_held = reason
+      yield
+    ensure
+      @links_held = held
+    end
+
+    # Made before the customer last switched this connection to another company file: the old file's.
+    def before_company_file_change?(row)
+      !company_file_changed_at.nil? && !row.created_at.nil? && row.created_at < company_file_changed_at
     end
 
     # record's QuickBooks id for kind on this connection, or nil: its link of that kind, else,

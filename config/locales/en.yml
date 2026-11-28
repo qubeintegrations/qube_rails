@@ -14,6 +14,7 @@ en:
       not_started: "it couldn't be sent"
       cancelled: "Cancelled"
       cancel_reason: "it was stopped before it finished"
+      company_file_changed: "its connection was switched to another company file"
       needs_answer: "Needs your answer"
       starting: "Sending to QuickBooks"
       unconfirmed: "Still waiting for QuickBooks"

@@ -322,6 +322,18 @@ and `QubeRails::LinkNeedsReview` while it waits for review (both `NotReady`), so
 job. A record with no link goes as before. The next company file change makes stale again every
 link, under review and missing ones too, and checks them all.
 
+A run or plain request made before `company_file_changed_at` is the old file's, wherever it got
+to. Its late events are still applied (state, outcome, revision) and your handlers still run, but
+they keep nothing about QuickBooks: no sync mark advances, and `connection.link` (so
+`link_references` too) writes nothing and returns nil, logged, so an old-file id never becomes
+current and the next sync still asks for everything. And it's never reused: when your app starts
+or queues for a record whose last run or request from before the change hasn't ended here
+(`starting`, `realtime_required`, still running, or a queue with no answer), that one is ended
+first (a run `cancelled`, with `cancel_reason` from `status.company_file_changed`; a request
+`failed`, with `error` `{"error_type" => "company_file_changed"}`), and a new one is made with a
+new reference, built from the record as it is now. QuBe Sync has already cancelled the old file's
+live runs and failed its waiting requests.
+
 QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
 first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
 nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
@@ -1180,6 +1192,7 @@ en:
 | `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |
 | `status.cancelled` | Cancelled | the status, cancelled (the reason, if any, below it) |
 | `status.cancel_reason` | it was stopped before it finished | `Run#cancel_reason_text` with no reason |
+| `status.company_file_changed` | its connection was switched to another company file | the `cancel_reason` of a run from before a company file change, ended when its record is started again |
 | `status.needs_answer` | Needs your answer | the status, asking a question |
 | `status.starting` | Sending to QuickBooks | the status, just started |
 | `status.unconfirmed` | Still waiting for QuickBooks | the status, a start unconfirmed for a minute |

@@ -247,7 +247,9 @@ RSpec.describe QubeRails::LinkCheck do
       travel(1.second) do
         run_event("connection.company_file_changed", "revision" => 7)
         run_event("connection.connected", "revision" => 8)
-        expect(checks("customer").count).to eq(1) # the old one, still going
+        # The old one is ended, not reused, and the new file is asked at once.
+        expect(checks("customer").count).to eq(2)
+        expect(row.reload).to have_attributes(state: "failed", error: { "error_type" => "company_file_changed" })
 
         answer(row, [riverbend_found])
         expect(connection.stale_links.where(kind: "customer").count).to eq(2)

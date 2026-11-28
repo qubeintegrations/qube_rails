@@ -51,12 +51,23 @@ module QubeRails
     def self.claim(record, connection)
       connection.with_lock do
         going = QubeRails::QueuedRequest.where(connection: connection).latest_for(record, self::SLUG)
+        going = end_old_file_row(going) if going && !going.ended? && connection.before_company_file_change?(going)
         next [going.tap { |row| row.reused = true }, nil] if going && !going.ended?
 
         new_row(record, connection)
       end
     end
     private_class_method :claim
+
+    # A request from before the company file change, not ended here: failed (QuBe Sync fails the old
+    # file's waiting requests), never sent again. Returns nil.
+    def self.end_old_file_row(row)
+      QubeRails.logger.warn("QuBe Sync: #{name} request #{row.id} (#{row.state}) was made before its connection's " \
+                            "company file changed: failed, and a new request made")
+      row.update!(state: "failed", ended_at: Time.now, error: { "error_type" => "company_file_changed" })
+      nil
+    end
+    private_class_method :end_old_file_row
 
     def self.new_row(record, connection)
       row = QubeRails::QueuedRequest.new(
@@ -189,6 +200,16 @@ module QubeRails
       end
       return false unless take_once(event)
 
+      if connection.before_company_file_change?(row)
+        connection.holding_links("request #{row.id} is the old company file's") { apply_state(event) }
+      else
+        apply_state(event)
+      end
+      true
+    end
+
+    def apply_state(event)
+      row = queued_request
       row.qube_id ||= event.id
       case event.state
       when "response_received" then page_answered(event)
@@ -198,7 +219,6 @@ module QubeRails
         QubeRails.logger.warn("QuBe Sync: #{self.class.name} request #{row.id}: unknown state #{event.state.inspect}")
       end
       row.save!
-      true
     end
 
     # Request events carry no connection id: the id is checked once the row has one.

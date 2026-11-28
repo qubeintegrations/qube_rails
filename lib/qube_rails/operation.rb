@@ -105,12 +105,24 @@ module QubeRails
     def self.claim_run(record, connection)
       connection.with_lock do
         going = QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG)
+        going = end_old_file_run(going) if going && !going.ended? && connection.before_company_file_change?(going)
         next [going.tap { |run| run.reused = true }, nil] if going && !going.ended?
 
         new_run(record, connection)
       end
     end
     private_class_method :claim_run
+
+    # A run from before the company file change, never ended here: cancelled (QuBe Sync cancels the
+    # old file's live runs), never sent again with the old file's ids. Returns nil.
+    def self.end_old_file_run(run)
+      QubeRails.logger.warn("QuBe Sync: #{name} run #{run.id} (#{run.state}) was made before its connection's " \
+                            "company file changed: cancelled, and a new run made")
+      run.update!(state: "cancelled", ended_at: Time.now, cancel_url: nil, question: nil, links: nil,
+                  cancel_reason: QubeRails.t("status.company_file_changed"))
+      nil
+    end
+    private_class_method :end_old_file_run
 
     # [run, nil], or for an input that raises, the run kept as "failed" (nothing was started) and
     # the error.
@@ -374,8 +386,9 @@ module QubeRails
         next unless app_record
 
         kind = entry["type"].to_s.empty? ? entry["kind"] : entry["type"]
-        linked << connection.link(app_record, kind: kind, qb_id: entry["list_id"],
-                                              edit_sequence: entry["edit_sequence"], name: entry["full_name"])
+        row = connection.link(app_record, kind: kind, qb_id: entry["list_id"],
+                                          edit_sequence: entry["edit_sequence"], name: entry["full_name"])
+        linked << row if row
       end
     end
 
@@ -434,11 +447,22 @@ module QubeRails
         return
       end
 
+      return unless event.type == "notification" || event.type == "workflow_run"
+
+      if connection.before_company_file_change?(run)
+        QubeRails.logger.warn("QuBe Sync: #{self.class.name} run #{run.id} was started before its connection's " \
+                              "company file changed: #{event.event} keeps no links and no sync mark")
+        connection.holding_links("run #{run.id} is the old company file's") { apply_event(event, old_file: true) }
+      else
+        apply_event(event, old_file: false)
+      end
+    end
+
+    def apply_event(event, old_file:)
       if event.type == "notification"
         take_once(event.dedupe_key) { notification(event) } # its delivery_id
         return
       end
-      return unless event.type == "workflow_run"
       # Applied already, or older than what was.
       return unless event.newer_than?(run.revision)
 
@@ -457,7 +481,7 @@ module QubeRails
       if event.awaiting_input?
         question(event)
       elsif event.completed?
-        QubeRails::SyncMark.advance(connection, self.class::WORKFLOW, run.created_at)
+        QubeRails::SyncMark.advance(connection, self.class::WORKFLOW, run.created_at) unless old_file
         ended(event)
       elsif stopped?(event)
         failed(event)
