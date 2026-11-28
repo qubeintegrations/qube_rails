@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-27)
 
 Run `bin/rails qube_rails:install:migrations` and `bin/rails db:migrate` before this version
 serves any traffic: it adds `qube_connections.company_file_changed_at` and
