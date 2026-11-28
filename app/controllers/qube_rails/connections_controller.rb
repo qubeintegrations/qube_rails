@@ -20,7 +20,8 @@ module QubeRails
     # comes, show it as waiting for QuickBooks: the setup doesn't come back here.
     #
     # type is "realtime" or "standard" (default config.connection_type); any other answers 422.
-    # Only a never-connected connection of that type is sent back through setup.
+    # Only a never-connected connection of that type is sent back through setup; one no event has
+    # typed yet is asked about first (a pre-0.2.1 row the migration labelled realtime).
     #
     # With simulated=1, outside production, it connects a simulated QuickBooks company file
     # instead, for testing with no Windows computer: a new row whose QuBe Sync connection is
@@ -35,7 +36,8 @@ module QubeRails
       return head(:unprocessable_entity) unless type
 
       unless params[:new].to_s == "1"
-        connection = QubeRails::Connection.owned_by(account).never_connected.find_by(connection_type: type)
+        connection = QubeRails::Connection.owned_by(account).never_connected.find_by(connection_type: type) ||
+                     untyped_never_connected(account, type)
       end
       return send_to_setup(connection) if connection
 
@@ -173,6 +175,22 @@ module QubeRails
                                                 type: "simulated")
       connection.update!(qube_id: made["id"])
       redirect_back fallback_location: "/", status: :see_other
+    end
+
+    # How many never-connected rows of another type Connect asks QuBe Sync about.
+    UNTYPED_LOOKUPS = 3
+
+    # A never-connected row no event has typed (revision nil) whose type QuBe Sync says is type:
+    # a row from before 0.2.1, which the migration labelled realtime.
+    def untyped_never_connected(account, type)
+      rows = QubeRails::Connection.owned_by(account).never_connected.where(revision: nil)
+                                  .where.not(connection_type: [type, "simulated"]).where.not(qube_id: nil)
+      rows.limit(UNTYPED_LOOKUPS).detect do |row|
+        row.refresh_type! == type
+      rescue QubeRails::Backend::APIError, *QubeRails::Backend::NETWORK_ERRORS => e
+        QubeRails.logger.warn("QuBe Sync: couldn't read connection #{row.id}'s type (#{e.class}); not reusing it")
+        false
+      end
     end
 
     def connection_name

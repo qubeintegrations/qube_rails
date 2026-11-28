@@ -55,12 +55,47 @@ RSpec.describe "Onboarding", type: :request do
       post "/quickbooks/connections", headers: signed_in
       expect(QubeRails::Connection.last.connection_type).to eq("realtime")
 
+      # Never confirmed by an event, so QuBe Sync is asked its type: it is realtime.
+      stub_request(:get, api_url("/connections/conn-q-1")).to_return(json_data("type" => "realtime"))
       stub_request(:post, api_url("/connections"))
         .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
       post "/quickbooks/connections", params: { type: "standard" }, headers: signed_in
 
       expect(QubeRails::Connection.owned_by(account).pluck(:qube_id, :connection_type))
         .to contain_exactly(%w[conn-q-1 realtime], %w[conn-q-2 standard])
+    end
+
+    it "reuses a pending row from before 0.2.1, labelled realtime by the migration, that QuBe Sync says is standard" do
+      QubeRails.config.connection_type = "standard"
+      old = make_connection(account, qube_id: "conn-q-old", status: "pending") # connection_type: the column's default
+      asked = stub_request(:get, api_url("/connections/conn-q-old")).to_return(json_data("type" => "standard"))
+      stub_request(:put, api_url("/connections/conn-q-old")).to_return(json_data({}))
+      stub_request(:post, api_url("/connections/conn-q-old/onboarding-url"))
+        .to_return(json_data("links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(asked).to have_been_made.once
+      expect(a_request(:post, api_url("/connections"))).not_to have_been_made
+      expect(response).to redirect_to(onboarding)
+      expect(old.reload.connection_type).to eq("standard")
+      expect(QubeRails::Connection.count).to eq(1)
+    end
+
+    it "doesn't ask about a row an event has already typed, and makes a new one if QuBe Sync can't say" do
+      QubeRails.config.connection_type = "standard"
+      make_connection(account, qube_id: "conn-q-typed", status: "setup_cancelled").update!(revision: 3)
+      make_connection(account, qube_id: "conn-q-old", status: "pending")
+      stub_request(:get, api_url("/connections/conn-q-old")).to_timeout
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-new", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(a_request(:get, api_url("/connections/conn-q-typed"))).not_to have_been_made
+      expect(response).to redirect_to(onboarding)
+      expect(QubeRails::Connection.find_by(qube_id: "conn-q-new").connection_type).to eq("standard")
+      expect(log_output).to include("couldn't read connection")
     end
 
     it "makes a new connection when the account's only one is connected" do

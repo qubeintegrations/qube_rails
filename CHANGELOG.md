@@ -39,6 +39,13 @@ No migration.
 - The engine's own link checks no longer count as work going: an in-flight check refused
   Disconnect.
 
+**Connect after upgrading from 0.2.0**
+- The 0.2.1 migration labelled every existing row `realtime`, so in an app with
+  `config.connection_type = "standard"` Connect didn't find a pending row from before the upgrade
+  and made a second connection (a never-connected row gets no event to correct its type). Connect
+  now asks QuBe Sync the type of up to three never-connected rows no event has typed
+  (`revision` nil) and reuses one whose type matches; a lookup that fails is logged and skipped.
+
 **`qube_rails/manage_connection`**
 - "Set up QuickBooks again" now shows for any connection QuBe Sync has made
   (`Connection#set_up_again?`), including `pending` (right after "Use a different company file")
