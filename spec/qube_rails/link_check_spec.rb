@@ -330,6 +330,66 @@ RSpec.describe QubeRails::LinkCheck do
                                                          params: { "list_id" => ["80000025-1760999991"] })
     end
 
+    def refuse(row)
+      QubeRails::WebhookJob.new.perform("request", row.id.to_s,
+                                        vector_body("request: QuickBooks refused it", "id" => row.qube_id))
+    end
+
+    it "keeps a kind's links as missing, and reports them, once MAX_ATTEMPTS checks since the change have failed" do
+      (QubeRails::LinkCheck::MAX_ATTEMPTS - 1).times do
+        refuse(checks("invoice").last)
+        expect(connection.stale_links.where(kind: "invoice").count).to eq(1)
+        connection.check_stale_links # the next event, or a held record, asks again
+      end
+      expect(checks("invoice").count).to eq(QubeRails::LinkCheck::MAX_ATTEMPTS)
+      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).not_to include(:links_checked)
+
+      refuse(checks("invoice").last)
+
+      expect(connection.stale_links.where(kind: "invoice")).to be_empty
+      expect(connection.missing_links.where(kind: "invoice").pluck(:qb_id)).to eq(["1A-1760999990"])
+      expect(QuickbooksDesktop::ConnectionEvents.calls.map(&:first)).to include(:links_checked)
+      expect(log_output).to include("gave up on its invoice link check after #{QubeRails::LinkCheck::MAX_ATTEMPTS}")
+      connection.check_stale_links
+      expect(checks("invoice").count).to eq(QubeRails::LinkCheck::MAX_ATTEMPTS)
+    end
+
+    it "counts an answer it can't trust as a failed check" do
+      answer(checks("customer").first, { "list_id" => "80000024-1760999990" })
+
+      expect(checks("customer").first).to have_attributes(state: "failed")
+      expect(checks("customer").first.ended_at).not_to be_nil
+    end
+
+    it "counts only checks since the last company file change" do
+      (QubeRails::LinkCheck::MAX_ATTEMPTS - 1).times do
+        refuse(checks("invoice").last)
+        connection.check_stale_links
+      end
+      travel(1.second) do
+        run_event("connection.company_file_changed", "revision" => 7)
+        run_event("connection.connected", "revision" => 8)
+        refuse(checks("invoice").last)
+        expect(connection.stale_links.where(kind: "invoice").count).to eq(1)
+      end
+    end
+
+    it "queues again a check that got no answer for NO_ANSWER_AFTER, when a held record is sent" do
+      row = checks("invoice").first
+
+      travel(QubeRails::LinkCheck::RETRY_AFTER + 1) do
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(checks("invoice").count).to eq(1) # it may still be waiting for the Web Connector
+
+      travel(QubeRails::LinkCheck::NO_ANSWER_AFTER + 1) do
+        expect { connection.wait_for_link_check!(invoice, "it") }.to raise_error(QubeRails::LinkBeingChecked)
+      end
+      expect(row.reload).to have_attributes(state: "failed", error: { "error_type" => "no_answer" })
+      expect(checks("invoice").count).to eq(2)
+      expect(checks("invoice").last).to have_attributes(state: "queued", qube_id: "check-q-2")
+    end
+
     it "leaves the links stale, unused, when the check fails" do
       row = checks("invoice").first
       body = vector_body("request: QuickBooks refused it", "id" => row.qube_id)

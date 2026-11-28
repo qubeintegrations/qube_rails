@@ -342,8 +342,15 @@ links a record on the new file makes its link current at once. A link whose chec
 whose answer can't be trusted, or whose queue or next batch couldn't be sent) stays stale. It's
 asked about again on the connection's next event, by `connection.check_stale_links`, or when your
 app sends one of its records: before raising `LinkBeingChecked`, `Operation.start` and
-`Request.queue` queue the kind's check again if its last one ended (or never got an answer) more
-than `LinkCheck::RETRY_AFTER` (5 minutes) ago.
+`Request.queue` queue the kind's check again if its last one ended, or its queue never reached
+QuBe Sync, more than `LinkCheck::RETRY_AFTER` (5 minutes) ago. A check QuBe Sync took but never
+answered (its webhook lost) is failed (`error` `{"error_type" => "no_answer"}`) and queued again
+the same way once `LinkCheck::NO_ANSWER_AFTER` (an hour) has passed with no word; nothing is
+revived while the connection is stalled, since QuickBooks can't answer then. It doesn't go on for
+ever: once `LinkCheck::MAX_ATTEMPTS` (3) checks of a kind have failed since the last company file
+change (an error, a timeout, a discard, an answer it can't trust, or no answer), that kind's
+links still stale are kept as missing, as if not found, and reported in `links_checked`, and the
+failure is logged. The next company file change starts the count again.
 
 After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on
 your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
