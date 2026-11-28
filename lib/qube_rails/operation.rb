@@ -62,6 +62,8 @@ module QubeRails
       end
 
       raise_realtime_required(connection) if connection.standard?
+      # First, so a live old run is cancelled even while the record's links are checked.
+      OldFileWork.settle_run(QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG), connection)
       connection.wait_for_link_check!(record, name)
 
       run, input_error = claim_run(record, connection)
@@ -77,12 +79,17 @@ module QubeRails
     # starting another, for as long as that run is kept (60 days after it ends); a start it never
     # took starts now. Returns the run; a run already answered is returned as it is. A start
     # refused as realtime_required is sent again too: QuBe Sync stored nothing for it.
+    #
+    # A run from before its connection's company file change is never sent again: it's settled with
+    # QuBe Sync (OldFileWork) and the record started afresh, or OldFileWorkPending is raised.
     def self.retry_start(run)
       return run if run.qube_run_id
       unless RETRYABLE_STATES.include?(run.state)
         raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer, or " \
                              "one refused as realtime_required, is sent again"
       end
+      return start_afresh(run) if run.connection.before_company_file_change?(run)
+
       raise_realtime_required(run.connection) if run.connection.standard?
 
       run.update_columns(state: "starting", error: nil, updated_at: Time.now) if run.realtime_required?
@@ -90,6 +97,17 @@ module QubeRails
     end
 
     RETRYABLE_STATES = %w[starting realtime_required].freeze
+
+    # An old file's unconfirmed start: settled with QuBe Sync, then the record started as it is now.
+    def self.start_afresh(run)
+      record = record_for(run)
+      raise ArgumentError, "QuBe Sync: run #{run.id}'s #{run.record_type} #{run.record_id} is gone" unless record
+
+      OldFileWork.settle_run(run, run.connection)
+
+      start(record, run.connection)
+    end
+    private_class_method :start_afresh
 
     def self.raise_realtime_required(connection)
       raise RealtimeRequired, "QuBe Sync: workflows run on realtime connections, and connection #{connection.id} " \
@@ -105,6 +123,8 @@ module QubeRails
     def self.claim_run(record, connection)
       connection.with_lock do
         going = QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG)
+        # Made from before the change since start settled it: settled on the next try.
+        OldFileWork.pending!(going, "it's being settled") if OldFileWork.old?(going, connection)
         next [going.tap { |run| run.reused = true }, nil] if going && !going.ended?
 
         new_run(record, connection)
@@ -132,6 +152,7 @@ module QubeRails
     private_class_method :new_run
 
     def self.send_start(run, input)
+      run.update_columns(updated_at: Time.now) # OldFileWork's margin counts from the last send
       started =
         begin
           QubeRails.client.start_run(run.connection.qube_id, self::WORKFLOW, input,
@@ -310,6 +331,7 @@ module QubeRails
       before = run.revision
       run.with_lock { apply(event) }
       QubeRails.broadcast_refresh(record) unless run.revision == before
+      OldFileWork.check_held_links(connection) if connection.before_company_file_change?(run)
     end
 
     # A question the run asks: kept whole on the run, with its links (where to answer it, and
@@ -374,8 +396,9 @@ module QubeRails
         next unless app_record
 
         kind = entry["type"].to_s.empty? ? entry["kind"] : entry["type"]
-        linked << connection.link(app_record, kind: kind, qb_id: entry["list_id"],
-                                              edit_sequence: entry["edit_sequence"], name: entry["full_name"])
+        row = connection.link(app_record, kind: kind, qb_id: entry["list_id"],
+                                          edit_sequence: entry["edit_sequence"], name: entry["full_name"])
+        linked << row if row
       end
     end
 
@@ -434,11 +457,22 @@ module QubeRails
         return
       end
 
+      return unless event.type == "notification" || event.type == "workflow_run"
+
+      if connection.before_company_file_change?(run)
+        QubeRails.logger.warn("QuBe Sync: #{self.class.name} run #{run.id} was started before its connection's " \
+                              "company file changed: #{event.event} keeps its links stale, to be checked, and no sync mark")
+        connection.holding_links("run #{run.id} is the old company file's") { apply_event(event, old_file: true) }
+      else
+        apply_event(event, old_file: false)
+      end
+    end
+
+    def apply_event(event, old_file:)
       if event.type == "notification"
         take_once(event.dedupe_key) { notification(event) } # its delivery_id
         return
       end
-      return unless event.type == "workflow_run"
       # Applied already, or older than what was.
       return unless event.newer_than?(run.revision)
 
@@ -457,7 +491,7 @@ module QubeRails
       if event.awaiting_input?
         question(event)
       elsif event.completed?
-        QubeRails::SyncMark.advance(connection, self.class::WORKFLOW, run.created_at)
+        QubeRails::SyncMark.advance(connection, self.class::WORKFLOW, run.created_at) unless old_file
         ended(event)
       elsif stopped?(event)
         failed(event)

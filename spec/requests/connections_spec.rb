@@ -55,12 +55,68 @@ RSpec.describe "Onboarding", type: :request do
       post "/quickbooks/connections", headers: signed_in
       expect(QubeRails::Connection.last.connection_type).to eq("realtime")
 
+      # Never confirmed by an event, so QuBe Sync is asked its type: it is realtime.
+      stub_request(:get, api_url("/connections/conn-q-1")).to_return(json_data("type" => "realtime"))
       stub_request(:post, api_url("/connections"))
         .to_return(json_data("id" => "conn-q-2", "links" => { "onboarding" => onboarding }))
       post "/quickbooks/connections", params: { type: "standard" }, headers: signed_in
 
       expect(QubeRails::Connection.owned_by(account).pluck(:qube_id, :connection_type))
         .to contain_exactly(%w[conn-q-1 realtime], %w[conn-q-2 standard])
+    end
+
+    it "reuses a pending row from before 0.2.1, labelled realtime by the migration, that QuBe Sync says is standard" do
+      QubeRails.config.connection_type = "standard"
+      old = make_connection(account, qube_id: "conn-q-old", status: "pending") # connection_type: the column's default
+      asked = stub_request(:get, api_url("/connections/conn-q-old")).to_return(json_data("type" => "standard"))
+      stub_request(:put, api_url("/connections/conn-q-old")).to_return(json_data({}))
+      stub_request(:post, api_url("/connections/conn-q-old/onboarding-url"))
+        .to_return(json_data("links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(asked).to have_been_made.once
+      expect(a_request(:post, api_url("/connections"))).not_to have_been_made
+      expect(response).to redirect_to(onboarding)
+      expect(old.reload.connection_type).to eq("standard")
+      expect(QubeRails::Connection.count).to eq(1)
+    end
+
+    it "asks about a row once: a type QuBe Sync confirmed isn't asked again, and the first lookup with no answer ends them" do
+      QubeRails.config.connection_type = "standard"
+      checked = make_connection(account, qube_id: "conn-q-real", status: "pending")
+      asked = stub_request(:get, api_url("/connections/conn-q-real")).to_return(json_data("type" => "realtime"))
+      made = 0
+      stub_request(:post, api_url("/connections"))
+        .to_return { json_data("id" => "conn-q-new-#{made += 1}", "links" => { "onboarding" => onboarding }) }
+      post "/quickbooks/connections", headers: signed_in
+      expect(checked.reload).to have_attributes(connection_type: "realtime", revision: 0)
+      QubeRails::Connection.where(connection_type: "standard").update_all(status: "connected")
+
+      post "/quickbooks/connections", headers: signed_in
+      QubeRails::Connection.where(connection_type: "standard").update_all(status: "connected")
+      expect(asked).to have_been_made.once
+
+      later = 2.times.map { |i| make_connection(account, qube_id: "conn-q-old-#{i}", status: "pending") }
+      timeouts = later.map { |row| stub_request(:get, api_url("/connections/#{row.qube_id}")).to_timeout }
+      post "/quickbooks/connections", headers: signed_in
+      expect(timeouts.sum { |t| WebMock::RequestRegistry.instance.times_executed(t.request_pattern) }).to eq(1)
+    end
+
+    it "doesn't ask about a row an event has already typed, and makes a new one if QuBe Sync can't say" do
+      QubeRails.config.connection_type = "standard"
+      make_connection(account, qube_id: "conn-q-typed", status: "setup_cancelled").update!(revision: 3)
+      make_connection(account, qube_id: "conn-q-old", status: "pending")
+      stub_request(:get, api_url("/connections/conn-q-old")).to_timeout
+      stub_request(:post, api_url("/connections"))
+        .to_return(json_data("id" => "conn-q-new", "links" => { "onboarding" => onboarding }))
+
+      post "/quickbooks/connections", headers: signed_in
+
+      expect(a_request(:get, api_url("/connections/conn-q-typed"))).not_to have_been_made
+      expect(response).to redirect_to(onboarding)
+      expect(QubeRails::Connection.find_by(qube_id: "conn-q-new").connection_type).to eq("standard")
+      expect(log_output).to include("couldn't read connection")
     end
 
     it "makes a new connection when the account's only one is connected" do
@@ -314,12 +370,22 @@ RSpec.describe "Onboarding", type: :request do
       expect(shown.at_css("form.qube-use-different-company-file-form")).to be_nil
     end
 
-    it "shows nothing while it isn't set up: pending, set up again after a company file change, or cancelled" do
+    it "offers only Set up again while it isn't set up: pending, set up again after a company file change, or cancelled" do
       pending = make_connection(account, status: "pending")
       cancelled = make_connection(account, qube_id: "conn-q-2", status: "setup_cancelled")
 
-      expect(actions(pending)).to be_nil
-      expect(actions(cancelled)).to be_nil
+      [pending, cancelled].each do |connection|
+        shown = actions(connection)
+        expect(shown.at_css("form.qube-set-up-again-form")["action"])
+          .to eq("/quickbooks/connections/#{connection.id}/onboarding")
+        expect(shown.at_css("form.qube-use-different-company-file-form")).to be_nil
+      end
+    end
+
+    it "shows nothing for a connection QuBe Sync never made: offer Connect then" do
+      lost = make_connection(account, qube_id: nil, status: "pending")
+
+      expect(actions(lost)).to be_nil
     end
   end
 
@@ -398,6 +464,19 @@ RSpec.describe "Onboarding", type: :request do
 
       expect(flash[:qube_rails_error]).to eq(QubeRails.t(QubeRails::ConnectionsController::RUNS_GOING))
       expect(QubeRails::Connection.exists?(connection.id)).to be(true)
+    end
+
+    it "isn't held up by the engine's own link check" do
+      connection = make_connection(account)
+      QubeRails::QueuedRequest.create!(connection: connection, operation: "qube_rails.check_links:customer",
+                                       record: connection, reference: "check-1-x", state: "queued", qube_id: "q-1")
+      deleted = stub_request(:delete, api_url("/connections/#{connection.qube_id}")).to_return(status: 204)
+
+      delete "/quickbooks/connections/#{connection.id}", headers: signed_in
+
+      expect(deleted).to have_been_requested
+      expect(QubeRails::Connection.exists?(connection.id)).to be(false)
+      expect(QubeRails::QueuedRequest.count).to eq(0)
     end
 
     it "answers 404 for another account's connection" do

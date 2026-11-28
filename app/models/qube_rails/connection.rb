@@ -81,6 +81,12 @@ module QubeRails
       connection_type == "simulated"
     end
 
+    # Whether to offer "Set up QuickBooks again": QuBe Sync has made it, set up or not (pending after
+    # a company file change, or its setup cancelled).
+    def set_up_again?
+      !qube_id.to_s.empty?
+    end
+
     # Whether to offer "Use a different company file": set up, and not simulated (a simulated
     # connection has no file to switch).
     def company_file_switchable?
@@ -94,11 +100,17 @@ module QubeRails
 
     # Reads its type from QuBe Sync again (GET /api/v2/connections/:id) and saves it: after it's
     # upgraded to realtime in the dashboard, before its next event says so. Returns the type.
-    def refresh_type!
+    #
+    # remember: on a row no event has typed (revision nil), revision 0 says QuBe Sync confirmed its
+    # type, so Connect doesn't ask again; any event is newer.
+    def refresh_type!(client: QubeRails.client, remember: false)
       raise NotConnected, "QuBe Sync: connection #{id} has no qube_id yet" if qube_id.to_s.empty?
 
-      type = QubeRails.client.get_connection(qube_id)["type"].to_s
-      update!(connection_type: type) if TYPES.include?(type) && type != connection_type
+      type = client.get_connection(qube_id)["type"].to_s
+      changes = TYPES.include?(type) && type != connection_type ? { connection_type: type } : {}
+      update!(changes) unless changes.empty?
+      # Only over no revision at all: an event applied since this row was loaded keeps its own.
+      self.class.where(id: id, revision: nil).update_all(revision: 0) if remember
       connection_type
     end
 
@@ -152,11 +164,16 @@ module QubeRails
     # one, and that's logged: the same QuickBooks record can stand for one of yours at a time. The
     # same record and id linked with another kind of the family (an item converted from service
     # to non-inventory) changes the row's kind.
+    #
+    # Inside holding_links (a handler of a run or request from before the last company file change)
+    # the row is written stale, for LinkCheck to look up on the file it opens now, and it never
+    # displaces a current link (then it writes nothing and returns nil).
     def link(record, kind:, qb_id:, edit_sequence: nil, name: nil)
       kind = kind.to_s
       qb_id = qb_id.to_s
       raise ArgumentError, "link needs a qb_id" if qb_id.empty?
 
+      held = links_held_reason
       family = QuickbooksRecord.family_for(kind)
       type, id = self.class.key_for(record)
       attempts = 0
@@ -166,6 +183,11 @@ module QubeRails
         transaction(requires_new: true) do
           taken = quickbooks_records.lock.find_by(list: family, qb_id: qb_id)
           mine = quickbooks_records.lock.find_by(kind: kind, record_type: type, record_id: id)
+          if held && [taken, mine].any? { |found| found&.current? }
+            QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}, " \
+                                  "a current link stands: #{held}")
+            next nil
+          end
           if replaced?(mine, by: taken)
             QubeRails.logger.info("QuBe Sync: connection #{self.id}: #{type} #{id}'s #{kind} " \
                                   "#{mine.qb_id} replaced by #{qb_id}")
@@ -179,8 +201,8 @@ module QubeRails
           row.assign_attributes(kind: kind, qb_id: qb_id, record_type: type, record_id: id)
           row.edit_sequence = edit_sequence unless edit_sequence.nil?
           row.name = name unless name.nil?
-          # Learned on the file it opens now: no longer the old file's.
-          row.stale_since = nil
+          # Learned on the file it opens now: no longer the old file's. Held: to be checked.
+          row.stale_since = held ? Time.now : nil
           row.missing_since = nil
           row.review_since = nil
           row.review_name = nil
@@ -194,6 +216,28 @@ module QubeRails
         retry if attempts < 2
         raise
       end
+    end
+
+    HELD_LINKS = :qube_rails_held_links
+
+    # Runs the block with link writing nothing on this connection (reason is logged), whichever
+    # object reaches it: kept per connection id, fiber-local. For the old company file's answers.
+    def holding_links(reason)
+      held = Thread.current[HELD_LINKS]
+      Thread.current[HELD_LINKS] = (held || {}).merge(id => reason)
+      yield
+    ensure
+      Thread.current[HELD_LINKS] = held
+    end
+
+    # Why link writes nothing here now, or nil.
+    def links_held_reason
+      (Thread.current[HELD_LINKS] || {})[id]
+    end
+
+    # Made before the customer last switched this connection to another company file: the old file's.
+    def before_company_file_change?(row)
+      !company_file_changed_at.nil? && !row.created_at.nil? && row.created_at < company_file_changed_at
     end
 
     # record's QuickBooks id for kind on this connection, or nil: its link of that kind, else,
@@ -228,6 +272,9 @@ module QubeRails
       quickbooks_records.under_review
     end
 
+    # At most this many show in the review_links partial, oldest first.
+    REVIEW_LINKS_SHOWN = 100
+
     # While record's link here waits for its check, nothing is sent for it (Operation.start and
     # Request.queue raise LinkBeingChecked), so a record already in QuickBooks isn't added again.
     def checking_link?(record)
@@ -260,17 +307,22 @@ module QubeRails
 
     # A link under review is the same record after all: current again, with the name QuickBooks has.
     def confirm_link(link)
-      link = own_review_link(link)
-      link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
-      link
+      transaction do
+        link = own_review_link(link)
+        link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil,
+                     missing_since: nil, stale_since: nil)
+        link
+      end
     end
 
     # A link under review isn't the same record: kept as missing, so the record is matched by name
     # (or added) when it's next sent.
     def reject_link(link)
-      link = own_review_link(link)
-      link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
-      link
+      transaction do
+        link = own_review_link(link)
+        link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
+        link
+      end
     end
 
     # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.
@@ -332,7 +384,8 @@ module QubeRails
     end
 
     def own_review_link(link)
-      row = review_links.find_by(id: link.respond_to?(:id) ? link.id : link)
+      # Locked, so two settles of one link at once can't both take it.
+      row = review_links.lock.find_by(id: link.respond_to?(:id) ? link.id : link)
       raise ArgumentError, "QuBe Sync: link #{link.inspect} isn't under review on connection #{id}" unless row
 
       row

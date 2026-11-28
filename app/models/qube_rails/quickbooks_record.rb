@@ -35,6 +35,11 @@ module QubeRails
       !stale_since.nil?
     end
 
+    # Used: not stale, missing or under review.
+    def current?
+      stale_since.nil? && missing_since.nil? && review_since.nil?
+    end
+
     def missing?
       !missing_since.nil?
     end

@@ -52,10 +52,11 @@ Relative to where the engine is mounted (`"/"` above):
 
 | Route | What it does |
 | --- | --- |
-| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that isn't connected yet (`pending`, a connection set up again after a company file change included, or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
+| `POST quickbooks/connections` | Connect, for the signed-in account (`current_account`). Sends its newest connection that isn't connected yet (`pending`, a connection set up again after a company file change included, or `setup_cancelled`) back through setup, so clicking Connect again doesn't pile up connections. Makes a new one (the row, then QuBe Sync's connection with the row's webhook URL and its type, then its `qube_id`, with an optional `name`) when the account has none of that type, or with `new=1`. A never-connected row no event has typed yet (`revision` nil; a row from before 0.2.1, which the migration labelled `realtime`) of another type is first asked about (`refresh_type!` with a short timeout and no retries, at most three, stopping at the first that gets no answer) and reused when QuBe Sync says it's of the type asked; one QuBe Sync typed is kept with `revision` 0, so it isn't asked again; if QuBe Sync can't say, that's logged and a new one is made. The type is the `type` param, `realtime` or `standard`, else `config.connection_type` (`"realtime"` by default, since workflows run only on realtime connections); any other `type` answers 422. The row keeps it as `connection_type`. Redirects (303) to the setup. With `simulated=1`, outside production, it makes a new connection to a simulated QuickBooks company file instead, connected as it's made, and redirects back: for testing with no Windows computer. In production that answers 404. |
 | `POST quickbooks/connections/:id/onboarding` | One of the signed-in account's connections, back through setup, with its webhook URL brought up to date (or made at QuBe Sync, for a row QuBe Sync never answered). Another account's connection answers 404. |
 | `POST quickbooks/connections/:id/company_file` | "Use a different company file" for one of the signed-in account's connections: its webhook URL brought up to date, its links renewed (`POST /api/v2/connections/:id/onboarding-url`), and a redirect (303) to its `links.company_file`, QuBe Sync's page for switching it to another company file (its onboarding link if QuBe Sync gives none). A simulated connection, one QuBe Sync never answered, or another account's answers 404. |
-| `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run or request hasn't ended; another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
+| `POST quickbooks/connections/:id/links/:link_id/confirm`, `.../reject` | One of the signed-in account's connections' links under review (found on the new company file under another name) settled from `qube_rails/review_links`: the same record (`Connection#confirm_link`) or not (`#reject_link`), then a redirect (303) back. One settled already (a second click, another tab) redirects back unchanged. Another account's connection, or a link on another connection, answers 404. |
+| `DELETE quickbooks/connections/:id` | Disconnects one of the signed-in account's connections: QuBe Sync deletes its connection (already gone counts), then the row goes, with its runs, requests and QuickBooks links. Refused while a run or request hasn't ended (the engine's own link checks aside: they go with it); another account's connection answers 404. Show its message with `render "qube_rails/error"`. |
 | `POST webhooks/qube/runs/:id` | A run's webhooks. |
 | `POST webhooks/qube/connections/:id` | A connection's webhooks. |
 | `POST webhooks/qube/requests/:id` | A plain request's webhooks ([Plain requests](#plain-requests)). |
@@ -73,7 +74,7 @@ connection id against the row (a request's event, its id).
 Onboarding and the question routes inherit your `ApplicationController` (the `parent_controller`
 setting), so its sign-in and CSRF protection apply. Your views reach the routes through the
 engine's proxy: `qube_rails.connections_path`, `qube_rails.connection_onboarding_path(connection)`,
-`qube_rails.connection_company_file_path(connection)`, `qube_rails.connection_path(connection)`
+`qube_rails.connection_company_file_path(connection)`, `qube_rails.connection_confirm_link_path(connection, link)`, `qube_rails.connection_reject_link_path(connection, link)`, `qube_rails.connection_path(connection)`
 (with `method: :delete`).
 
 Two buttons cover it: Connect, for an account setting up its first company file (or finishing a
@@ -102,10 +103,13 @@ connection on another company file. On the page that shows its QuickBooks status
 <%= render "qube_rails/manage_connection", connection: connection %>
 ```
 
-It shows "Set up QuickBooks again" (`connection_onboarding_path`) and, unless the connection is
-simulated, "Use a different company file" (`connection_company_file_path`), both with Turbo off,
-while the connection is connected or stalled (`Connection#set_up?`), and nothing otherwise: offer
-Connect then. Both links carry the onboarding token and expire with it, so each button renews
+It shows "Set up QuickBooks again" (`connection_onboarding_path`) for any connection QuBe Sync has
+made (`Connection#set_up_again?`): set up, or not set up yet (`pending`, as it is right after "Use
+a different company file", or `setup_cancelled`), so a customer who leaves the setup halfway can
+go back to it. "Use a different company file" (`connection_company_file_path`) shows beside it
+only while the connection is connected or stalled (`Connection#set_up?`) and isn't simulated
+(`#company_file_switchable?`). Both have Turbo off. For a row QuBe Sync never made it shows
+nothing: offer Connect then. Both links carry the onboarding token and expire with it, so each button renews
 them when clicked rather than keeping one.
 
 ## Settings
@@ -308,6 +312,17 @@ copied or restored from the other. After a copy the files go their own ways, and
 record by renaming it, so an id found under another name may be another record now. Your
 customer decides:
 
+```erb
+<%= render "qube_rails/review_links", connection: connection %>
+```
+
+lists the connection's links under review (the oldest 100, `Connection::REVIEW_LINKS_SHOWN`), each
+with its record (its model's name, or what an optional `label: ->(record) { ... }` returns), the
+name it was kept with and QuickBooks' name now, and two buttons: "Same record" (`confirm_link`)
+and "Not the same" (`reject_link`). They post to the connection's links routes (above), which
+redirect back to the page, so Turbo can stay on. It renders nothing while no link is under review,
+so it can sit on the connection's page for good. Or ask your own way:
+
 ```ruby
 connection.review_links.each do |link|
   # Ask: is link.record (kept as link.name) the record QuickBooks now calls link.review_name?
@@ -322,6 +337,105 @@ and `QubeRails::LinkNeedsReview` while it waits for review (both `NotReady`), so
 job. A record with no link goes as before. The next company file change makes stale again every
 link, under review and missing ones too, and checks them all.
 
+**Work from the old file.** A run or plain request made before `company_file_changed_at` (as
+this app applied the change) is the old file's. That time is when the webhook was applied, not
+when the customer switched, so a run started in between counts as the old file's too. It may have
+run on either file, so its ids are checked rather than trusted or dropped.
+
+- Its late events are still applied (state, outcome, revision) and your handlers still run. No
+  sync mark advances, and `connection.link` (so `link_references` too) writes its link stale,
+  with the id the answer gave, however the handler reaches the connection
+  (`Connection#holding_links`, per connection id for the handler's fiber). A held link never
+  displaces a current one: then nothing is written and `link` returns nil. Once the connection is
+  connected, `LinkCheck` looks the stale links up on the open file: an old file's id goes missing,
+  one the open file has is current again. A completed old run then counts for `sync_status` once
+  its record's link is current.
+- It's never sent again, and never ended here on the engine's say-so alone. Before
+  `Operation.start`, `Request.queue`, `run.retry_start!` or `request.retry_queue!` sends a record
+  whose last run or request is the old file's and hasn't ended here, the engine settles it with
+  QuBe Sync first (`QubeRails::OldFileWork`), outside the connection's lock and before it checks
+  the record's links, so a live old run is cancelled even while they're checked:
+  - a run QuBe Sync knows (a `qube_run_id`, or one found by its reference with
+    `GET .../workflow-runs?reference=`) is cancelled there (`links.cancel`; a 409 is read
+    again). One that ended `failed` or `cancelled` is ended here with that state. One QuBe Sync
+    completed may have added the record to the open file, so nothing new starts: its ending is
+    asked for again (`redeliver`), and the record waits for it (its `sync_status` reads
+    `:sending`), then for its link's check. If the ending still hasn't come
+    `OldFileWork::DELIVERY_WINDOW` (a day) after the run's last send, the run QuBe Sync returns is
+    applied in its place, through your operation's own handler (links stale), or, when the
+    operation or record is gone, the run is just ended here `completed`;
+  - a request QuBe Sync knows (a `qube_id`) is read there: one still `waiting` or `retryable` is
+    discarded first, and it's ended here with the state QuBe Sync answers (`discarded`, `error`,
+    `timed_out`). One QuickBooks answered (`response_received`) waits for its webhook, which
+    brings the answer to your handler (links stale), for up to `OldFileWork::DELIVERY_WINDOW`
+    (a day, beyond QuBe Sync's retries) after its last send; after that it's ended here without it,
+    so your handler never sees that answer and the record can be queued again. The engine's own
+    link checks from the old file are ended here at once, with no call: their answers settle
+    nothing, so the open file's check goes straight away;
+  - one QuBe Sync never acknowledged (no id, and no run found by its reference) is ended here once
+    `OldFileWork::UNCONFIRMED_AFTER` (5 minutes, well over the client's 60-second limit) has passed
+    since it was last sent (each start, queue and retry stamps `updated_at`), so a send still in
+    flight can't land after it: a run `cancelled`, with `cancel_reason` from
+    `status.company_file_changed`, a request `failed`, with `error`
+    `{"error_type" => "company_file_changed"}`. A run refused as `realtime_required` is ended so
+    at once (QuBe Sync stored nothing). Should a send land later all the same, its webhooks still
+    apply to the ended row (state, links stale), and nothing is sent for it again;
+  - anything else (QuBe Sync doesn't answer, a run it hasn't ended, a request QuickBooks has)
+    raises `QubeRails::OldFileWorkPending` (a `NotReady`), and nothing new is sent: retry it from a
+    job.
+
+  Once it has ended, a new run or request is made with a new reference, built from the record as it
+  is now. Its revision isn't touched, so its last webhooks still apply. A retry of a row that has
+  ended raises `ArgumentError`, as before, and so does one whose record is gone.
+
+Two things it doesn't do, by design: an old-window handler that links an id already current keeps
+the current row as it is, EditSequence included (the next write reads a fresh one or meets a
+conflict question), and a plain request QuickBooks answered whose webhook never came within a day
+is ended without its answer, so queueing the record again sends it again.
+
+#### The rules, in one place
+
+For porting or reviewing (the Python and Node libraries copy these). "Old" means: made before the
+connection's `company_file_changed_at` and not ended here. "Last send" is the later of
+`created_at` and `updated_at`, which each start, queue and retry stamps.
+
+1. **Late events of old work** are applied as usual and your handlers run, but no sync mark
+   advances and every `link` on that connection writes the row stale with the id given; a link
+   onto an id or record that's current writes nothing (nil). Then, if the connection is connected,
+   its stale links are checked.
+2. **Sending a record whose latest run or request is old** (start, queue or a retry) first settles
+   it with QuBe Sync, outside the connection lock and before the record's link check; a retry of an
+   ended row, or one whose record is gone, raises `ArgumentError`.
+   - Run, `realtime_required`: ended here `cancelled`.
+   - Run without a `qube_run_id`: looked up by reference; not found and last sent over 5 minutes
+     ago, ended here `cancelled` (`cancel_reason` `status.company_file_changed`); not found and
+     sooner, pending.
+   - Run QuBe Sync knows: cancelled there (409 or 404: read it). `failed` or `cancelled`: ended
+     here so. `completed`: redelivered and pending, until a day after its last send, then its run
+     resource is applied as its completed webhook (or it's just ended `completed`). Anything else:
+     pending.
+   - The engine's own link check: ended here `failed` at once.
+   - Request without a `qube_id`: last sent over 5 minutes ago, ended here `failed`
+     (`{"error_type" => "company_file_changed"}`); sooner, pending.
+   - Request QuBe Sync knows: read; `waiting`/`retryable` discarded and read again; 404 ended
+     `failed`; `response_received` pending until a day after its last send, then ended so;
+     `error`/`timed_out`/`discarded` ended with QuBe Sync's state and error; anything else pending.
+   - Pending raises `OldFileWorkPending` (a `NotReady`) and sends nothing. Ending here writes the
+     state under the row lock, only if it hasn't ended meanwhile, and keeps the revision.
+3. **Sync status**: an old run not ended here reads `:sending`; an old run that completed counts
+   once the record's link is current; any other old run counts as none.
+4. **Link checks give up** on a kind when, among its checks since the change, counted newest first
+   and stopping at the first ended one that isn't failed, 3 failed (error, timeout, discard, an
+   answer it can't trust, no answer) or 3 queues were refused 400, 404 or 422 (other refusals don't
+   count). Its stale links are then kept missing and reported. A later trusted answer settles stale
+   and missing links alike (each locked): found under the same name, current; under another, held
+   for review with missing cleared.
+5. **No answer**: a check QuBe Sync took, unanswered for an hour counted from the later of its own
+   and the connection's last change, is failed under its lock (`no_answer`) and queued again when a
+   held record is sent while the connection is connected. A late answer to it is still settled and
+   reported.
+6. **Reports** (`links_checked`) run inside the answer's row lock; the next batch is queued after.
+
 QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
 first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
 nothing, and is logged. A check is safe to run twice: it asks only about links still stale, a
@@ -330,8 +444,26 @@ links a record on the new file makes its link current at once. A link whose chec
 whose answer can't be trusted, or whose queue or next batch couldn't be sent) stays stale. It's
 asked about again on the connection's next event, by `connection.check_stale_links`, or when your
 app sends one of its records: before raising `LinkBeingChecked`, `Operation.start` and
-`Request.queue` queue the kind's check again if its last one ended (or never got an answer) more
-than `LinkCheck::RETRY_AFTER` (5 minutes) ago.
+`Request.queue` queue the kind's check again if its last one ended, or its queue never reached
+QuBe Sync, more than `LinkCheck::RETRY_AFTER` (5 minutes) ago. A check QuBe Sync took but never
+answered (its webhook lost) is failed (`error` `{"error_type" => "no_answer"}`), under its lock,
+and queued again the same way once `LinkCheck::NO_ANSWER_AFTER` (an hour) has passed with no word,
+counted from the later of the check's last change and the connection's (its last event, such as
+`connected` or `resumed`), so time it was stalled or set up again doesn't count, and nothing is
+revived while it isn't connected. A late answer to a check failed that way still settles its
+links and is reported in `links_checked`.
+
+It doesn't go on for ever. Counting a kind's checks since the last company file change and since
+its last check that answered, once `LinkCheck::MAX_ATTEMPTS` (3) have failed (an error, a timeout,
+a discard, an answer it can't trust, or no answer), or QuBe Sync has refused `MAX_ATTEMPTS` of its
+queues for good (400, 404 or 422, `LinkCheck::LASTING_REFUSALS`; a refused queue is kept as
+`failed` with `error` `{"error_type" => "refused", "status"}`, counted on its own, not as a failed
+check; 401, 403, 408, 429 and 5xx pass, so they don't count), the kind's links still stale are kept as missing, as if not found,
+reported in `links_checked`, and logged. An answer from the new file that comes later still finds
+them: a missing link it has is current again, or held for review (and `confirm_link` makes it
+current). `links_checked` runs inside the answer's row lock: if it raises, the answer is rolled
+back and the job's retry settles, reports and queues the next batch again. The next company file change
+starts the count again.
 
 After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on
 your class (by default it logs). `relinked` and `missing` are the links (`link.record` is your
@@ -941,7 +1073,8 @@ operation:` and `render "qube_rails/run_status", record:, operation:` don't chan
 | `qube_rails/question/rows/_segmented` | `field` | a short enum as a segmented control (radios posted as `field.input_name`) |
 | `qube_rails/run_status/_status` | `run_status` | the error, then the status: summary, detail, buttons |
 | `qube_rails/run_status/_summary`, `_detail`, `_stall`, `_retry`, `_redeliver` | `run_status` | each part (`_stall` while its connection is stalled) |
-| `qube_rails/_manage_connection` | `connection` | a set-up connection's "Set up QuickBooks again" and "Use a different company file" buttons |
+| `qube_rails/_manage_connection` | `connection` | a connection's "Set up QuickBooks again" (once QuBe Sync has made it) and, while it's set up, "Use a different company file" buttons |
+| `qube_rails/_review_links` | `connection`, `label` (optional) | a connection's links under review, each with "Same record" and "Not the same" buttons; nothing when there are none |
 | `qube_rails/_error` | `message`, `id` (optional) | a one-shot error; without `message:`, `flash[:qube_rails_error]` |
 
 The locals are view-models, plain Ruby objects. Their fields are the contract, kept stable across
@@ -1180,6 +1313,7 @@ en:
 | `status.not_started` | it couldn't be sent | a failure's message for a start that never went out |
 | `status.cancelled` | Cancelled | the status, cancelled (the reason, if any, below it) |
 | `status.cancel_reason` | it was stopped before it finished | `Run#cancel_reason_text` with no reason |
+| `status.company_file_changed` | its connection was switched to another company file | the `cancel_reason` of a run from before a company file change, ended when its record is started again |
 | `status.needs_answer` | Needs your answer | the status, asking a question |
 | `status.starting` | Sending to QuickBooks | the status, just started |
 | `status.unconfirmed` | Still waiting for QuickBooks | the status, a start unconfirmed for a minute |
@@ -1204,6 +1338,9 @@ en:
 | `errors.answer_refused`, `errors.answer_refused_with` | That answer couldn't be used. Check it and try again.; That answer couldn't be used: %{detail} | an answer QuBe Sync refused (422) |
 | `connection.set_up_again` | Set up QuickBooks again | `qube_rails/manage_connection`'s button to its setup |
 | `connection.use_different_company_file` | Use a different company file | `qube_rails/manage_connection`'s button to switch its company file |
+| `connection.review_links.intro` | This company file has these records under other names. Check whether each is still the same record. | above `qube_rails/review_links`' list |
+| `connection.review_links.renamed` | %{record} “%{old_name}” is “%{new_name}” in QuickBooks now. | each link under review (`%{record}`: its model's name, or the `label:` lambda's) |
+| `connection.review_links.same`, `connection.review_links.not_same` | Same record; Not the same | its buttons: `confirm_link`, `reject_link` |
 | `question.set_all` | Set all to: | before a rows field's buttons that set every record's choice (each an option's own label) |
 | `question.use_for_all` | one: Use for the other record too; other: Use for the other %{count} records too | under a filled field other records ask too (a plain string works too) |
 | `question.used_for_all` | one: Also filled in on the other record.; other: Also filled in on the other %{count} records. | where that button was, once pressed |

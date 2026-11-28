@@ -20,7 +20,8 @@ module QubeRails
     # comes, show it as waiting for QuickBooks: the setup doesn't come back here.
     #
     # type is "realtime" or "standard" (default config.connection_type); any other answers 422.
-    # Only a never-connected connection of that type is sent back through setup.
+    # Only a never-connected connection of that type is sent back through setup; one no event has
+    # typed yet is asked about first (a pre-0.2.1 row the migration labelled realtime).
     #
     # With simulated=1, outside production, it connects a simulated QuickBooks company file
     # instead, for testing with no Windows computer: a new row whose QuBe Sync connection is
@@ -35,7 +36,8 @@ module QubeRails
       return head(:unprocessable_entity) unless type
 
       unless params[:new].to_s == "1"
-        connection = QubeRails::Connection.owned_by(account).never_connected.find_by(connection_type: type)
+        connection = QubeRails::Connection.owned_by(account).never_connected.find_by(connection_type: type) ||
+                     untyped_never_connected(account, type)
       end
       return send_to_setup(connection) if connection
 
@@ -70,6 +72,18 @@ module QubeRails
       send_to_setup(connection, link: "company_file")
     end
 
+    # POST /quickbooks/connections/:id/links/:link_id/confirm and /reject, from the review_links
+    # partial: one of the signed-in account's connections' links under review is the same record
+    # (Connection#confirm_link) or not (#reject_link), then back to the page. One settled already (a
+    # second click) goes back as it is. Another account's connection, or a link not on it, is 404.
+    def confirm_link
+      settle_link(:confirm_link)
+    end
+
+    def reject_link
+      settle_link(:reject_link)
+    end
+
     # What the page says when it can't, as I18n keys under qube_rails (config/locales/en.yml).
     RUNS_GOING = :"errors.still_syncing"
     NO_ANSWER = :"errors.disconnect_unreachable"
@@ -77,7 +91,7 @@ module QubeRails
     # DELETE /quickbooks/connections/:id: disconnects one of the signed-in account's
     # connections. QuBe Sync deletes its connection (the Web Connector stops syncing that
     # company file), then the row goes, with its runs and its QuickBooks links. Refused while a
-    # run hasn't ended. Another account's connection answers 404.
+    # run or request hasn't ended (the engine's link checks aside). Another account's connection answers 404.
     def destroy
       account = signed_in_account
       return head(:unauthorized) unless account
@@ -95,9 +109,29 @@ module QubeRails
 
     private
 
+    # The engine's own link checks don't count: they go with the connection.
     def work_going?(connection)
+      prefix = "#{QubeRails::QueuedRequest.sanitize_sql_like(QubeRails::LinkCheck::SLUG_PREFIX)}%"
+      not_checks = QubeRails::QueuedRequest.arel_table[:operation].does_not_match(prefix, "\\", true)
       connection.runs.where.not(state: QubeRails::Run::ENDED_STATES + %w[realtime_required]).exists? ||
-        connection.queued_requests.where(ended_at: nil).exists?
+        connection.queued_requests.where(ended_at: nil).where(not_checks).exists?
+    end
+
+    def settle_link(how)
+      account = signed_in_account
+      return head(:unauthorized) unless account
+
+      connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
+      link = connection&.quickbooks_records&.find_by(id: params[:link_id])
+      return head(:not_found) unless link
+
+      begin
+        connection.public_send(how, link) if link.under_review?
+      rescue ArgumentError # settled meanwhile (a second click, another tab)
+        nil
+      end
+      QubeRails.broadcast_refresh(link.record) if link.record
+      redirect_back fallback_location: "/", status: :see_other
     end
 
     # Already gone there (404) is gone.
@@ -145,6 +179,24 @@ module QubeRails
                                                 type: "simulated")
       connection.update!(qube_id: made["id"])
       redirect_back fallback_location: "/", status: :see_other
+    end
+
+    # How many never-connected rows of another type Connect asks QuBe Sync about.
+    UNTYPED_LOOKUPS = 3
+
+    # A never-connected row no event has typed (revision nil) whose type QuBe Sync says is type:
+    # a row from before 0.2.1, which the migration labelled realtime. Each lookup is short (the
+    # quick client), the first that gets no answer ends them, and one checked isn't asked again.
+    def untyped_never_connected(account, type)
+      rows = QubeRails::Connection.owned_by(account).never_connected.where(revision: nil)
+                                  .where.not(connection_type: [type, "simulated"]).where.not(qube_id: nil)
+      rows.limit(UNTYPED_LOOKUPS).each do |row|
+        return row if row.refresh_type!(client: QubeRails.quick_client, remember: true) == type
+      rescue QubeRails::Backend::APIError, *QubeRails::Backend::NETWORK_ERRORS => e
+        QubeRails.logger.warn("QuBe Sync: couldn't read connection #{row.id}'s type (#{e.class}); not reusing it")
+        return nil if !e.is_a?(QubeRails::Backend::APIError) # no more waiting on QuBe Sync for this click
+      end
+      nil
     end
 
     def connection_name

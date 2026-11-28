@@ -8,6 +8,9 @@ QubeRails::Engine.routes.draw do
   post "quickbooks/connections/:id/onboarding", to: "connections#onboarding", as: :connection_onboarding
   # Its "Use a different company file": QuBe Sync's page for switching it to another file.
   post "quickbooks/connections/:id/company_file", to: "connections#company_file", as: :connection_company_file
+  # A link the new company file has under another name, settled from the review_links partial.
+  post "quickbooks/connections/:id/links/:link_id/confirm", to: "connections#confirm_link", as: :connection_confirm_link
+  post "quickbooks/connections/:id/links/:link_id/reject", to: "connections#reject_link", as: :connection_reject_link
   delete "quickbooks/connections/:id", to: "connections#destroy", as: :connection
 
   # Each run's webhook URL is QUBE_WEBHOOK_URL/runs/<run id> (QubeRails::Run#webhook_url), and a

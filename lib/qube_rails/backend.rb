@@ -11,8 +11,10 @@ module QubeRails
   #
   # What the rest of qube_rails relies on:
   # - client(api_key:, base_url:, on_retry:) answers create_connection, update_connection,
-  #   regenerate_onboarding, start_run, answer and search as QubeSync::Client does, returning the
-  #   response's data, and raises APIError (status, body) for anything outside 2xx;
+  #   regenerate_onboarding, start_run, answer and search as QubeSync::Client does, and get_connection,
+  #   list_runs (by reference), get_run, cancel_run, get_request and discard_request for work from
+  #   before a company file change, returning the response's data, and raises APIError (status,
+  #   body) for anything outside 2xx; it also takes open_timeout:, read_timeout: and max_retries:;
   # - verify(raw_body, header, secrets:) raises SignatureError (with a reason: missing, malformed,
   #   stale or mismatch) unless the delivery checks out;
   # - parse(raw_body) returns the typed event (QubeSync::Webhooks' WorkflowRunEvent,
@@ -33,8 +35,8 @@ module QubeRails
 
     module_function
 
-    def client(api_key:, base_url:, on_retry: nil)
-      QubeSync::Client.new(api_key: api_key, base_url: base_url, on_retry: on_retry)
+    def client(api_key:, base_url:, on_retry: nil, **timeouts)
+      QubeSync::Client.new(api_key: api_key, base_url: base_url, on_retry: on_retry, **timeouts)
     end
 
     def verify(raw_body, header, secrets:)

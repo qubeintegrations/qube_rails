@@ -27,7 +27,9 @@ module QubeRails
   #    :done, which a start may follow, since nothing in QuickBooks stands for the record;
   # 5. neither: :not_sent.
   # A run made before the connection last changed company file (company_file_changed_at) counts
-  # as none, and a stale link (not yet checked on the new file) as no link.
+  # as none, unless it completed and the record's link has checked out on the new file, or it
+  # hasn't ended here (being settled with QuBe Sync: :sending); a stale link (not yet checked on the
+  # new file) counts as no link.
   class SyncStatus
     STATUSES = %i[not_sent sending needs_answer in_quickbooks done failed cancelled].freeze
 
@@ -36,10 +38,15 @@ module QubeRails
     # record's status on connection for operation (its SLUG).
     def self.for(connection, record, operation:)
       run = QubeRails::Run.where(connection: connection).latest_for(record, operation)
-      run = nil if run && before_file_change?(run, connection)
       type, id = QubeRails::ApplicationRecord.key_for(record)
       link = connection.quickbooks_records.current.where(record_type: type, record_id: id)
                        .order(updated_at: :desc, id: :desc).first
+      if run && before_file_change?(run, connection)
+        # Not ended here: being settled with QuBe Sync (OldFileWork), so it's on its way, not unsent.
+        return new(:sending, run, link) unless run.ended?
+        # Otherwise it counts once it completed and the record's link checked out on this file.
+        run = nil unless run.state == "completed" && link
+      end
       new(status_of(run, link), run, link)
     end
 
