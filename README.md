@@ -339,37 +339,47 @@ link, under review and missing ones too, and checks them all.
 
 **Work from the old file.** A run or plain request made before `company_file_changed_at` (as
 this app applied the change) is the old file's. That time is when the webhook was applied, not
-when the customer switched, so a run started in between counts as the old file's too: it was
-built with the old file's ids either way.
+when the customer switched, so a run started in between counts as the old file's too. It may have
+run on either file, so its ids are checked rather than trusted or dropped.
 
-- Its late events are still applied (state, outcome, revision) and your handlers still run, but
-  they keep nothing about QuickBooks: no sync mark advances, and `connection.link` (so
-  `link_references` too) writes nothing and returns nil, logged, on that connection, however the
-  handler reaches it (`Connection#holding_links`, kept per connection for the handler's run).
+- Its late events are still applied (state, outcome, revision) and your handlers still run. No
+  sync mark advances, and `connection.link` (so `link_references` too) writes its link stale,
+  with the id the answer gave, however the handler reaches the connection
+  (`Connection#holding_links`, per connection id for the handler's fiber). A held link never
+  displaces a current one: then nothing is written and `link` returns nil. Once the connection is
+  connected, `LinkCheck` looks the stale links up on the open file: an old file's id goes missing,
+  one the open file has is current again. A completed old run then counts for `sync_status` once
+  its record's link is current.
 - It's never sent again, and never ended here on the engine's say-so alone. Before
   `Operation.start`, `Request.queue`, `run.retry_start!` or `request.retry_queue!` sends a record
   whose last run or request is the old file's and hasn't ended here, the engine settles it with
-  QuBe Sync (`QubeRails::OldFileWork`), outside the connection's lock:
+  QuBe Sync first (`QubeRails::OldFileWork`), outside the connection's lock and before it checks
+  the record's links, so a live old run is cancelled even while they're checked:
   - a run QuBe Sync knows (a `qube_run_id`, or one found by its reference with
-    `GET .../workflow-runs?reference=`) is cancelled there (`links.cancel`), and ended here with the
-    state QuBe Sync answers (`cancelled`, or how it had already ended: a 409 is read again);
+    `GET .../workflow-runs?reference=`) is cancelled there (`links.cancel`; a 409 is read
+    again). One that ended `failed` or `cancelled` is ended here with that state. One QuBe Sync
+    completed may have added the record to the open file, so nothing new starts: its ending is
+    asked for again (`redeliver`), and the record waits for it, then for its link's check;
   - a request QuBe Sync knows (a `qube_id`) is read there: one still `waiting` or `retryable` is
-    discarded first; it's ended here with the state QuBe Sync answers (`discarded`, `error`,
-    `timed_out` or `response_received`);
-  - one QuBe Sync never acknowledged (no id, and no run found by its reference), or a run refused as
-    `realtime_required` (QuBe Sync stored nothing), is ended here once
-    `OldFileWork::UNCONFIRMED_AFTER` (60 seconds) has passed since it was made, so a start or queue
-    still in flight can't land after it: a run `cancelled`, with `cancel_reason` from
+    discarded first, and it's ended here with the state QuBe Sync answers (`discarded`, `error`,
+    `timed_out`). One QuickBooks answered (`response_received`) waits for its webhook, which
+    brings the answer to your handler (links stale), for up to `OldFileWork::DELIVERY_WINDOW`
+    (a day, beyond QuBe Sync's retries) after its last send; after that it's ended here without it;
+  - one QuBe Sync never acknowledged (no id, and no run found by its reference) is ended here once
+    `OldFileWork::UNCONFIRMED_AFTER` (5 minutes, well over the client's 60-second limit) has passed
+    since it was last sent (each start, queue and retry stamps `updated_at`), so a send still in
+    flight can't land after it: a run `cancelled`, with `cancel_reason` from
     `status.company_file_changed`, a request `failed`, with `error`
-    `{"error_type" => "company_file_changed"}`;
-  - anything else (QuBe Sync doesn't answer, a run it hasn't ended, a request QuickBooks already
-    has) raises `QubeRails::OldFileWorkPending` (a `NotReady`), and nothing new is sent: retry it
-    from a job.
+    `{"error_type" => "company_file_changed"}`. A run refused as `realtime_required` is ended so
+    at once (QuBe Sync stored nothing). Should a send land later all the same, its webhooks still
+    apply to the ended row (state, links stale), and nothing is sent for it again;
+  - anything else (QuBe Sync doesn't answer, a run it hasn't ended, a request QuickBooks has)
+    raises `QubeRails::OldFileWorkPending` (a `NotReady`), and nothing new is sent: retry it from a
+    job.
 
   Once it has ended, a new run or request is made with a new reference, built from the record as it
-  is now. Its revision isn't touched, so its last webhooks still apply, with links held. A run the
-  old file completed in that window may have added the record there; a workflow that matches by
-  name before it adds (`add_transaction`) finds it if the new file is the same company.
+  is now. Its revision isn't touched, so its last webhooks still apply. A retry of a row that has
+  ended raises `ArgumentError`, as before, and so does one whose record is gone.
 
 QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
 first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles
@@ -391,10 +401,13 @@ links and is reported in `links_checked`.
 It doesn't go on for ever. Counting a kind's checks since the last company file change and since
 its last check that answered, once `LinkCheck::MAX_ATTEMPTS` (3) have failed (an error, a timeout,
 a discard, an answer it can't trust, or no answer), or QuBe Sync has refused `MAX_ATTEMPTS` of its
-queues (a 4xx, kept as `failed` with `error` `{"error_type" => "refused", "status"}`, counted on
-its own, not as a failed check), the kind's links still stale are kept as missing, as if not found,
+queues for good (400, 404 or 422, `LinkCheck::LASTING_REFUSALS`; a refused queue is kept as
+`failed` with `error` `{"error_type" => "refused", "status"}`, counted on its own, not as a failed
+check; 401, 403, 408, 429 and 5xx pass, so they don't count), the kind's links still stale are kept as missing, as if not found,
 reported in `links_checked`, and logged. An answer from the new file that comes later still finds
-them: a missing link it has is current again (or held for review). The next company file change
+them: a missing link it has is current again, or held for review (and `confirm_link` makes it
+current). `links_checked` runs inside the answer's row lock: if it raises, the answer is rolled
+back and the job's retry settles, reports and queues the next batch again. The next company file change
 starts the count again.
 
 After each batch, `links_checked(kind:, found:, relinked:, review:, missing:, stale_left:)` runs on

@@ -6,12 +6,17 @@ module QubeRails
   # again, so the old file's ids and input never go out twice. README, "Work from the old file".
   #
   # Known at QuBe Sync (a qube id, or found by its reference): cancelled there (a request
-  # discarded) and ended here only once QuBe Sync says it has ended; otherwise OldFileWorkPending.
-  # Never known: ended here once UNCONFIRMED_AFTER has passed (its start or queue can't still land),
-  # else OldFileWorkPending. Called outside the connection's lock: it calls QuBe Sync.
+  # discarded) and ended here once QuBe Sync says it failed or was cancelled. One QuBe Sync ran to
+  # the end waits for its own webhook (its links come in stale, for LinkCheck). Never known: ended
+  # here once UNCONFIRMED_AFTER has passed since its last send. Otherwise OldFileWorkPending.
+  # Called outside the connection's lock: it calls QuBe Sync.
   module OldFileWork
-    # Seconds after which a start or queue QuBe Sync never acknowledged can't still land.
-    UNCONFIRMED_AFTER = 60
+    # Seconds after its last send by which a start or queue QuBe Sync never acknowledged can't
+    # still land (the client gives up after 60).
+    UNCONFIRMED_AFTER = 5 * 60
+    # How long a request QuickBooks answered waits for its webhook (QuBe Sync retries for ~8 hours)
+    # before it's ended here without it.
+    DELIVERY_WINDOW = 24 * 60 * 60
     REASON = "The connection was switched to another company file."
     RUN_ENDED = %w[completed failed cancelled].freeze
     REQUEST_ENDED = %w[response_received error timed_out discarded].freeze
@@ -30,7 +35,7 @@ module QubeRails
 
       remote = run.qube_run_id ? nil : find_by_reference(run, connection)
       if run.qube_run_id.nil? && remote.nil?
-        return end_run(run, "cancelled") if run.created_at < Time.now - UNCONFIRMED_AFTER
+        return end_run(run, "cancelled") if last_sent(run) < Time.now - UNCONFIRMED_AFTER
 
         pending!(run, "its start may still reach QuBe Sync")
       end
@@ -39,7 +44,9 @@ module QubeRails
         url = remote["links"].is_a?(Hash) ? remote["links"]["cancel"] : nil
         remote = cancel_run(run, connection, url) if url
       end
-      return end_run(run, remote ? remote["state"] : "cancelled") if remote.nil? || RUN_ENDED.include?(remote["state"])
+      return end_run(run, "cancelled") if remote.nil? # QuBe Sync no longer has it
+      return await_ending(run, connection) if remote["state"] == "completed"
+      return end_run(run, remote["state"]) if RUN_ENDED.include?(remote["state"])
 
       pending!(run, "QuBe Sync hasn't ended it yet")
     rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
@@ -51,7 +58,7 @@ module QubeRails
       return unless old?(row, connection)
 
       unless row.qube_id
-        return end_row(row, "failed", nil) if row.created_at < Time.now - UNCONFIRMED_AFTER
+        return end_row(row, "failed", nil) if last_sent(row) < Time.now - UNCONFIRMED_AFTER
 
         pending!(row, "its queue may still reach QuBe Sync")
       end
@@ -61,11 +68,37 @@ module QubeRails
         remote = request_at_qube(row, connection)
       end
       return end_row(row, "failed", nil) if remote.nil? # QuBe Sync no longer has it
+      if remote["state"] == "response_received" && last_sent(row) > Time.now - DELIVERY_WINDOW
+        pending!(row, "QuickBooks answered it; its webhook brings the answer")
+      end
       return end_row(row, remote["state"], remote["error"]) if REQUEST_ENDED.include?(remote["state"])
 
       pending!(row, "QuickBooks has it (#{remote["state"]})")
     rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
       pending!(row, "QuBe Sync didn't answer (#{e.class})")
+    end
+
+    # A run QuBe Sync completed: its ending webhook is asked for again, and the record waits for it,
+    # since the run may have added it to the file the connection opens now.
+    def await_ending(run, connection)
+      begin
+        QubeRails.client.redeliver_run(connection.qube_id, run.qube_run_id)
+      rescue Backend::APIError => e
+        raise unless [409, 429].include?(e.status)
+      end
+      pending!(run, "QuBe Sync completed it; waiting for its ending")
+    end
+
+    def last_sent(row)
+      [row.created_at, row.updated_at].compact.max
+    end
+
+    # After an old file's event wrote links stale: checked at once when the connection is connected.
+    def check_held_links(connection)
+      connection = connection.reload
+      LinkCheck.start(connection) if connection.connected? && connection.stale_links.exists?
+    rescue Backend::APIError, OldFileWorkPending, *Backend::NETWORK_ERRORS => e
+      QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't check the links an old run wrote (#{e.class})")
     end
 
     def find_by_reference(run, connection)
@@ -111,8 +144,10 @@ module QubeRails
         next if run.ended?
 
         state = RUN_ENDED.include?(state) ? state : "cancelled"
-        run.update!(state: state, ended_at: Time.now, cancel_url: nil, question: nil, links: nil,
-                    cancel_reason: state == "cancelled" ? QubeRails.t("status.company_file_changed") : run.cancel_reason)
+        # Columns only: the record may be gone, and nothing else about the run changes.
+        reason = state == "cancelled" ? QubeRails.t("status.company_file_changed") : run.cancel_reason
+        run.update_columns(state: state, ended_at: Time.now, updated_at: Time.now, cancel_url: nil,
+                           question: nil, links: nil, cancel_reason: reason)
         QubeRails.logger.warn("QuBe Sync: run #{run.id}, from before its connection's company file changed, " \
                               "ended as #{state}")
       end
@@ -123,7 +158,8 @@ module QubeRails
       row.with_lock do
         next if row.ended?
 
-        row.update!(state: state, ended_at: Time.now, error: error || { "error_type" => "company_file_changed" })
+        row.update_columns(state: state, ended_at: Time.now, updated_at: Time.now,
+                           error: error || { "error_type" => "company_file_changed" })
         QubeRails.logger.warn("QuBe Sync: request #{row.id}, from before its connection's company file changed, " \
                               "ended as #{state}")
       end

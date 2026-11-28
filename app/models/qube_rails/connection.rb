@@ -108,8 +108,9 @@ module QubeRails
 
       type = client.get_connection(qube_id)["type"].to_s
       changes = TYPES.include?(type) && type != connection_type ? { connection_type: type } : {}
-      changes[:revision] = 0 if remember && revision.nil?
       update!(changes) unless changes.empty?
+      # Only over no revision at all: an event applied since this row was loaded keeps its own.
+      self.class.where(id: id, revision: nil).update_all(revision: 0) if remember
       connection_type
     end
 
@@ -165,18 +166,14 @@ module QubeRails
     # to non-inventory) changes the row's kind.
     #
     # Inside holding_links (a handler of a run or request from before the last company file change)
-    # it writes nothing and returns nil.
+    # the row is written stale, for LinkCheck to look up on the file it opens now, and it never
+    # displaces a current link (then it writes nothing and returns nil).
     def link(record, kind:, qb_id:, edit_sequence: nil, name: nil)
       kind = kind.to_s
       qb_id = qb_id.to_s
       raise ArgumentError, "link needs a qb_id" if qb_id.empty?
 
       held = links_held_reason
-      if held
-        QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}: #{held}")
-        return nil
-      end
-
       family = QuickbooksRecord.family_for(kind)
       type, id = self.class.key_for(record)
       attempts = 0
@@ -186,6 +183,11 @@ module QubeRails
         transaction(requires_new: true) do
           taken = quickbooks_records.lock.find_by(list: family, qb_id: qb_id)
           mine = quickbooks_records.lock.find_by(kind: kind, record_type: type, record_id: id)
+          if held && [taken, mine].any? { |found| found&.current? }
+            QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}, " \
+                                  "a current link stands: #{held}")
+            next nil
+          end
           if replaced?(mine, by: taken)
             QubeRails.logger.info("QuBe Sync: connection #{self.id}: #{type} #{id}'s #{kind} " \
                                   "#{mine.qb_id} replaced by #{qb_id}")
@@ -199,8 +201,8 @@ module QubeRails
           row.assign_attributes(kind: kind, qb_id: qb_id, record_type: type, record_id: id)
           row.edit_sequence = edit_sequence unless edit_sequence.nil?
           row.name = name unless name.nil?
-          # Learned on the file it opens now: no longer the old file's.
-          row.stale_since = nil
+          # Learned on the file it opens now: no longer the old file's. Held: to be checked.
+          row.stale_since = held ? Time.now : nil
           row.missing_since = nil
           row.review_since = nil
           row.review_name = nil
@@ -307,7 +309,8 @@ module QubeRails
     def confirm_link(link)
       transaction do
         link = own_review_link(link)
-        link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
+        link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil,
+                     missing_since: nil, stale_since: nil)
         link
       end
     end

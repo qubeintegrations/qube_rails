@@ -28,9 +28,9 @@ module QubeRails
                             "qube_id): the customer finishes onboarding first"
       end
 
-      connection.wait_for_link_check!(record, name) if connection.is_a?(QubeRails::Connection)
       OldFileWork.settle_request(QubeRails::QueuedRequest.where(connection: connection).latest_for(record, self::SLUG),
                                  connection)
+      connection.wait_for_link_check!(record, name) if connection.is_a?(QubeRails::Connection)
 
       row, params_error = claim(record, connection)
       raise params_error if params_error
@@ -44,12 +44,16 @@ module QubeRails
     # queued afresh instead.
     def self.retry_queue(row)
       return row if row.qube_id
-      if row.connection.before_company_file_change?(row)
-        OldFileWork.settle_request(row, row.connection)
-        return queue(record_for(row), row.connection)
-      end
       unless row.state == "queued"
         raise ArgumentError, "QuBe Sync: request #{row.id} is #{row.state}: only a queue that got no answer is sent again"
+      end
+      if row.connection.before_company_file_change?(row)
+        record = record_for(row)
+        raise ArgumentError, "QuBe Sync: request #{row.id}'s #{row.record_type} #{row.record_id} is gone" unless record
+
+        OldFileWork.settle_request(row, row.connection)
+
+        return queue(record, row.connection)
       end
 
       send_queue(row)
@@ -87,6 +91,7 @@ module QubeRails
     private_class_method :new_row
 
     def self.send_queue(row)
+      row.update_columns(updated_at: Time.now) # OldFileWork's margin counts from the last send
       answer =
         begin
           QubeRails.client.queue(self::OPERATION, row.connection.qube_id, row.params || {},
@@ -109,7 +114,7 @@ module QubeRails
     # error says it was refused (status), so a refused queue isn't taken for a failed answer.
     def self.mark_failed(row, error = nil)
       now = Time.now
-      refusal = { "error_type" => "refused", "status" => error&.status }
+      refusal = { "error_type" => "refused", "status" => error && error.status }
       row.update_columns(state: "failed", ended_at: now, updated_at: now, error: refusal)
     end
     private_class_method :mark_failed
@@ -184,6 +189,7 @@ module QubeRails
       changed = false
       queued_request.with_lock { changed = apply(event) }
       QubeRails.broadcast_refresh(record) if changed
+      OldFileWork.check_held_links(connection) if changed && connection.before_company_file_change?(queued_request)
     end
 
     private

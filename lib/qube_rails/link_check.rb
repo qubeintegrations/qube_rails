@@ -23,6 +23,8 @@ module QubeRails
     # Failed checks of a kind since the last company file change before its links are kept as missing.
     MAX_ATTEMPTS = 3
     FAILED_STATES = %w[error timed_out discarded failed].freeze
+    # Refusals QuBe Sync will give again for the same check (the others pass: a key, a rate limit).
+    LASTING_REFUSALS = [400, 404, 422].freeze
 
     # Which id each kind's query takes, when the qube_sync gem's Operations::INDEX can't say (an
     # older gem, or the inline backend). A kind in neither is never queried: it's kept as missing.
@@ -133,7 +135,7 @@ module QubeRails
     # A kind's stale links are kept as missing and reported once, since the last company file change
     # and the kind's last check that answered, MAX_ATTEMPTS of its checks have failed (an error, a
     # timeout, a discard, an answer it can't trust, no answer), or MAX_ATTEMPTS of its queues were
-    # refused (a 4xx). Returns whether it gave up.
+    # refused for good (LASTING_REFUSALS; 401, 403, 408 and 429 don't count). Returns whether it gave up.
     def self.give_up_if_exhausted(connection, kind)
       failures, refusals = recent_failures(connection, kind)
       return false if failures < MAX_ATTEMPTS && refusals < MAX_ATTEMPTS
@@ -156,7 +158,11 @@ module QubeRails
         break unless FAILED_STATES.include?(row.state) # it answered: the count starts again
 
         refused = row.error.is_a?(Hash) && row.error["error_type"] == "refused"
-        refused ? refusals += 1 : failures += 1
+        if !refused
+          failures += 1
+        elsif LASTING_REFUSALS.include?(row.error["status"])
+          refusals += 1
+        end
       end
       [failures, refusals]
     end
@@ -232,9 +238,16 @@ module QubeRails
     end
 
     # The answer settles each id it asked about that's still stale.
+    # Reported here, inside the row's lock, so a links_checked that raises rolls the answer back
+    # and the job's retry settles and reports it again. A late answer (to a check failed for no
+    # answer) is reported too, unless it settled nothing.
     def answered(event)
-      @late = queued_request.ended?
+      late = queued_request.ended?
       @settled = settle(event)
+      return unless @settled
+
+      LinkCheck.report(connection, self.class::KIND, @settled) unless late && @settled.values.all?(&:empty?)
+      @next = true
     end
 
     # Every page is in (one: a query by id isn't paged). An answer from the old file asks the new
@@ -258,14 +271,9 @@ module QubeRails
     end
 
     # A next batch that can't be queued now is queued again by revive.
-    # An answer it trusts is reported, a late one to a check failed for no answer too, and the
-    # next batch goes.
+    # After the row's lock: a give-up, and the next batch (revive queues one that can't go now).
     def handle(event)
       super
-      if @settled
-        LinkCheck.report(connection, self.class::KIND, @settled) unless @settled.values.all?(&:empty?) && @late
-        @next = true
-      end
       LinkCheck.give_up_if_exhausted(connection, self.class::KIND) if @failed && !from_old_file?
       return unless @next
 
@@ -346,7 +354,7 @@ module QubeRails
                      edit_sequence: record["edit_sequence"] || link.edit_sequence)
         result[:relinked] << link
       else
-        link.update!(stale_since: nil, review_since: Time.now, review_name: theirs.to_s,
+        link.update!(stale_since: nil, missing_since: nil, review_since: Time.now, review_name: theirs.to_s,
                      edit_sequence: record["edit_sequence"] || link.edit_sequence)
         result[:review] << { link: link, record: link.record, old_name: link.name, new_name: theirs.to_s }
       end

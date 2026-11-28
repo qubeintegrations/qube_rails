@@ -11,6 +11,14 @@ RSpec.describe "Work from before a company file change" do
   let(:realtime) { { "connection" => { "id" => QubeRailsHelpers::QUBE_ID, "type" => "realtime" } } }
   let(:runs_url) { api_url("/connections/#{QubeRailsHelpers::QUBE_ID}/workflow-runs") }
   let(:cancel_url) { "#{runs_url}/run-q-old/cancel" }
+  let(:invoices_url) { %r{/connections/#{QubeRailsHelpers::QUBE_ID}/invoices\?} }
+
+  def answer(row, data)
+    body = vector_body("request: an answer", "id" => row.qube_id, "page_request_id" => "pr-#{row.id}", "page" => 1,
+                                             "iteration_state" => "not_applicable", "state" => "response_received",
+                                             "response_json" => { "status" => "success", "data" => data })
+    QubeRails::WebhookJob.new.perform("request", row.id.to_s, body)
+  end
 
   def connection_event(name, changes = {})
     QubeRails::WebhookJob.new.perform("connection", connection.id.to_s, vector_body(name, realtime.merge(changes)))
@@ -41,17 +49,44 @@ RSpec.describe "Work from before a company file change" do
                                               "output" => { "record" => { "txn_id" => "T-OLD", "ref_number" => "1001" } })
     end
 
-    it "keeps the run's ending, but no sync mark and no link, and says so" do
+    it "keeps the run's ending and its link stale, checks the link on the open file, and keeps no sync mark" do
       run
       switch_file
+      check = stub_request(:get, invoices_url).to_return(json_data("id" => "check-q-1", "state" => "queued"))
 
       QubeRails::WebhookJob.new.perform("run", run.id.to_s, completed)
 
       expect(run.reload).to have_attributes(state: "completed", revision: 4)
       expect(invoice.reload.status).to eq("sent") # the handler still ran
       expect(QubeRails::SyncMark.where(connection_id: connection.id)).to be_empty
-      expect(connection.quickbooks_records.where(qb_id: "T-OLD")).to be_empty
+      expect(connection.stale_links.where(qb_id: "T-OLD").count).to eq(1)
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
+      expect(check).to have_been_made.once
       expect(log_output).to include("was started before its connection's company file changed")
+    end
+
+    it "counts the run once its link checks out on the open file: in QuickBooks, by that run" do
+      run
+      switch_file
+      stub_request(:get, invoices_url).to_return(json_data("id" => "check-q-1", "state" => "queued"))
+      QubeRails::WebhookJob.new.perform("run", run.id.to_s, completed)
+      check = QubeRails::QueuedRequest.find_by(qube_id: "check-q-1")
+
+      answer(check, [{ "txn_id" => "T-OLD", "ref_number" => "1001", "edit_sequence" => "9" }])
+
+      status = connection.sync_status(invoice, operation: "create_invoice")
+      expect(status).to have_attributes(status: :in_quickbooks, qb_id: "T-OLD", run: run)
+    end
+
+    it "never lets a held link displace a current one" do
+      run
+      switch_file
+      connection.link(invoice, kind: "invoice", qb_id: "T-NEWER", name: "1001") # a newer run's
+
+      QubeRails::WebhookJob.new.perform("run", run.id.to_s, completed)
+
+      expect(connection.qb_id_for(invoice, kind: "invoice")).to eq("T-NEWER")
+      expect(connection.quickbooks_records.where(qb_id: "T-OLD")).to be_empty
     end
 
     it "leaves a stale link stale rather than making the old file's id current" do
@@ -66,7 +101,8 @@ RSpec.describe "Work from before a company file change" do
       expect(connection.qb_id_for(invoice, kind: "invoice")).to be_nil
     end
 
-    it "links nothing through link_references in the run's real handler, nor through another copy of the connection" do
+    it "keeps links stale through link_references in the run's real handler, and through another copy of the connection" do
+      stub_request(:get, %r{/customers\?}).to_return(json_data("id" => "check-q-1", "state" => "queued"))
       linker = Class.new(QuickbooksDesktop::CreateInvoice) do
         def ended(event)
           customer = Customer.find_by!(name: "Riverbend Electric")
@@ -85,7 +121,8 @@ RSpec.describe "Work from before a company file change" do
       QubeRails::WebhookJob.new.perform("run", old.id.to_s, body)
 
       expect(old.reload.state).to eq("completed")
-      expect(connection.quickbooks_records.where(qb_id: %w[80-OLD 80-ELSEWHERE])).to be_empty
+      expect(connection.stale_links.where(qb_id: %w[80-OLD 80-ELSEWHERE]).count).to eq(1) # one customer link
+      expect(connection.quickbooks_records.current.where(qb_id: %w[80-OLD 80-ELSEWHERE])).to be_empty
     end
 
     it "advances the mark and links as before for a run started on the new file" do
@@ -99,7 +136,7 @@ RSpec.describe "Work from before a company file change" do
   end
 
   describe "a late request answer" do
-    it "runs the handler with links held" do
+    it "runs the handler with links written stale" do
       row = QubeRails::QueuedRequest.create!(connection: connection, operation: "find_customer", record: customer,
                                              reference: "find_customer-1-x", state: "queued", qube_id: "req-q-1")
       switch_file
@@ -113,10 +150,11 @@ RSpec.describe "Work from before a company file change" do
         end
       end
 
+      stub_request(:get, %r{/customers\?}).to_return(json_data("id" => "check-q-1", "state" => "queued"))
       linker.new(customer, row).handle(QubeRails::Backend.parse(vector_body("request: an answer", "id" => "req-q-1")))
 
-      expect(linker.linked).to eq([nil])
-      expect(connection.quickbooks_records.where(qb_id: "80-OLD")).to be_empty
+      expect(linker.linked.map(&:stale?)).to eq([true])
+      expect(connection.qb_id_for(customer, kind: "customer")).to be_nil
     end
   end
 
@@ -153,17 +191,52 @@ RSpec.describe "Work from before a company file change" do
       expect(QubeRails::Run.first.state).to eq("running")
     end
 
-    it "takes the ending QuBe Sync reports for a run that had already ended there" do
+    it "takes a failed or cancelled ending QuBe Sync reports for a run that had already ended there" do
+      old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
+      switch_file
+      stub_request(:post, cancel_url).to_return(status: 409, body: '{"errors":{"code":"already_finished"}}',
+                                                headers: { "Content-Type" => "application/json" })
+      stub_request(:get, "#{runs_url}/run-q-old").to_return(json_data(run_answer("failed")))
+      stub_request(:post, runs_url).to_return(json_data("id" => "run-q-new", "state" => "running"))
+
+      QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+
+      expect(old.reload.state).to eq("failed")
+    end
+
+    it "starts nothing after a run QuBe Sync completed: it asks for its ending, whose link is then checked" do
       old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
       switch_file
       stub_request(:post, cancel_url).to_return(status: 409, body: '{"errors":{"code":"already_finished"}}',
                                                 headers: { "Content-Type" => "application/json" })
       stub_request(:get, "#{runs_url}/run-q-old").to_return(json_data(run_answer("completed")))
-      stub_request(:post, runs_url).to_return(json_data("id" => "run-q-new", "state" => "running"))
+      redelivered = stub_request(:post, "#{runs_url}/run-q-old/redeliver").to_return(json_data({}))
+      started = stub_request(:post, runs_url)
 
-      QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }
+        .to raise_error(QubeRails::OldFileWorkPending, /waiting for its ending/)
+      expect(redelivered).to have_been_made.once
+      expect(started).not_to have_been_made
 
-      expect(old.reload.state).to eq("completed")
+      stub_request(:get, invoices_url).to_return(json_data("id" => "check-q-1", "state" => "queued"))
+      QubeRails::WebhookJob.new.perform("run", old.id.to_s, run_body("workflow_run.completed", old,
+        "revision" => 4, "workflow" => "add_transaction",
+        "output" => { "record" => { "txn_id" => "T-NEW", "ref_number" => "1001" } }))
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::LinkBeingChecked)
+      expect(started).not_to have_been_made
+    end
+
+    it "cancels a live old run even while its record's links are being checked" do
+      connection.link(invoice, kind: "invoice", qb_id: "T-1", name: "1001")
+      old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
+      stub_request(:get, invoices_url).to_return(json_data("id" => "check-q-1", "state" => "queued"))
+      switch_file
+      cancelled = stub_request(:post, cancel_url).to_return(json_data(run_answer("cancelled")))
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::LinkBeingChecked)
+
+      expect(cancelled).to have_been_made.once
+      expect(old.reload.state).to eq("cancelled")
     end
 
     it "finds a start QuBe Sync never confirmed by its reference, and cancels it there" do
@@ -216,6 +289,22 @@ RSpec.describe "Work from before a company file change" do
       expect(QuickbooksDesktop::CreateInvoice.start(invoice, connection).id).to eq(going.id)
     end
 
+    it "starts nothing while a run QuBe Sync finished, started as a company_file_changed was late, waits for its ending" do
+      stub_request(:post, runs_url)
+        .to_return(json_data("id" => "run-q-old", "state" => "running", "links" => { "cancel" => cancel_url }))
+      connection_event("connection.connected", "revision" => 3)
+      first = QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+      travel(2.seconds)
+      connection_event("connection.company_file_changed", "revision" => 2) # came late
+      stub_request(:post, cancel_url).to_return(status: 409, body: "{}", headers: { "Content-Type" => "application/json" })
+      stub_request(:get, "#{runs_url}/run-q-old").to_return(json_data(run_answer("completed")))
+      stub_request(:post, "#{runs_url}/run-q-old/redeliver").to_return(status: 429, body: "{}")
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::OldFileWorkPending)
+      expect(a_request(:post, runs_url)).to have_been_made.once
+      expect(first.reload.state).to eq("running") # until its ending comes
+    end
+
     it "settles a run started while a company_file_changed was late at QuBe Sync before starting another" do
       stub_request(:post, runs_url)
         .to_return(json_data("id" => "run-q-old", "state" => "running", "links" => { "cancel" => cancel_url }))
@@ -235,6 +324,27 @@ RSpec.describe "Work from before a company file change" do
   end
 
   describe "retrying an old start" do
+    it "refuses, as before, a retry of one that has ended, and one whose record is gone" do
+      ended = make_run(invoice, connection).tap { |r| r.update!(state: "cancelled") }
+      gone = make_run(Invoice.create!(account: account, number: "1002"), connection)
+             .tap { |r| r.update!(state: "realtime_required") }
+      switch_file
+      gone.record.destroy
+
+      expect { ended.retry_start! }.to raise_error(ArgumentError, /is cancelled/)
+      expect { gone.reload.retry_start! }.to raise_error(ArgumentError, /is gone/)
+    end
+
+    it "counts the margin for a start that never reached QuBe Sync from its last send, not its creation" do
+      old = make_run(invoice, connection).tap { |r| r.update!(state: "starting") }
+      switch_file
+      travel(QubeRails::OldFileWork::UNCONFIRMED_AFTER + 1)
+      old.update_columns(updated_at: Time.now - 30) # retried 30 seconds ago
+      no_run_by_reference
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::OldFileWorkPending)
+    end
+
     it "never resends the old reference and input: it's settled, and the record started afresh" do
       old = make_run(invoice, connection).tap { |r| r.update!(state: "starting", input: { "old" => "ids" }) }
       switch_file
@@ -277,6 +387,20 @@ RSpec.describe "Work from before a company file change" do
       expect(queued).to have_been_made.once
       expect(row).to have_attributes(qube_id: "req-q-new", reused?: false)
       expect(old.reload).to have_attributes(state: "discarded", error: { "error_type" => "discarded" })
+    end
+
+    it "waits for the webhook of one QuickBooks answered, for a day" do
+      old = old_request(qube_id: "req-q-old")
+      switch_file
+      stub_request(:get, request_url).to_return(json_data("id" => "req-q-old", "state" => "response_received"))
+      queued = stub_request(:get, customers_url).to_return(json_data("id" => "req-q-new", "state" => "queued"))
+
+      expect { QuickbooksDesktop::FindCustomer.queue(customer, connection) }.to raise_error(QubeRails::OldFileWorkPending)
+      travel(QubeRails::OldFileWork::DELIVERY_WINDOW + 1)
+      QuickbooksDesktop::FindCustomer.queue(customer, connection)
+
+      expect(old.reload.state).to eq("response_received")
+      expect(queued).to have_been_made.once
     end
 
     it "queues nothing while QuickBooks has the old one" do

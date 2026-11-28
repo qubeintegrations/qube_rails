@@ -437,12 +437,20 @@ RSpec.describe QubeRails::LinkCheck do
       expect(checked.size).to eq(1)
     end
 
+    def give_up_by_no_answer(record)
+      wait = QubeRails::LinkCheck::NO_ANSWER_AFTER + 1
+      QubeRails::LinkCheck::MAX_ATTEMPTS.times do |i|
+        travel((i + 1) * wait) do
+          connection.wait_for_link_check!(record, "it")
+        rescue QubeRails::LinkBeingChecked
+          nil
+        end
+      end
+    end
+
     it "finds links it gave up on when a later answer from the new file has them" do
       first = checks("customer").first
-      QubeRails::LinkCheck::MAX_ATTEMPTS.times do
-        refuse(checks("customer").last)
-        connection.check_stale_links
-      end
+      give_up_by_no_answer(riverbend)
       expect(connection.missing_links.where(kind: "customer").count).to eq(2)
 
       answer(first, [riverbend_found]) # a late answer to the first try
@@ -465,6 +473,51 @@ RSpec.describe QubeRails::LinkCheck do
 
       expect(checks("invoice").pluck(:state)).to all(eq("failed"))
       expect(connection.missing_links.where(kind: "invoice").count).to eq(1)
+    end
+
+    it "holds a link given up on and found later under another name for review, and confirming makes it current" do
+      first = checks("customer").first
+      give_up_by_no_answer(riverbend)
+
+      answer(first, [riverbend_found.merge("full_name" => "Riverbend Plumbing")])
+      link = connection.review_links.find_by(qb_id: "80000024-1760999990")
+      expect(link).to have_attributes(missing_since: nil, review_name: "Riverbend Plumbing")
+
+      connection.confirm_link(link)
+      expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+    end
+
+    [401, 403, 408, 429].each do |status|
+      it "doesn't give up on queues refused #{status}: that refusal passes" do
+        stub_request(:get, invoices_url).to_return(status: status, body: '{"errors":"later"}',
+                                                   headers: { "Content-Type" => "application/json" })
+        refuse(checks("invoice").first)
+        (QubeRails::LinkCheck::MAX_ATTEMPTS + 1).times { connection.check_stale_links }
+
+        expect(checks("invoice").where(state: "failed").count).to eq(QubeRails::LinkCheck::MAX_ATTEMPTS + 1)
+        expect(connection.stale_links.where(kind: "invoice").count).to eq(1)
+        expect(log_output).not_to include("gave up")
+      end
+    end
+
+    it "reports again, and queues the next batch, when the job retries an answer whose links_checked raised" do
+      stub_const("QubeRails::LinkCheck::BATCH", 1)
+      QubeRails::QueuedRequest.delete_all
+      connection.check_stale_links
+      row = checks("customer").first
+      calls = 0
+      allow_any_instance_of(QuickbooksDesktop::ConnectionEvents).to receive(:links_checked) do
+        calls += 1
+        raise "mailer down" if calls == 1
+      end
+
+      expect { answer(row, [riverbend_found]) }.to raise_error(RuntimeError, "mailer down")
+      expect(connection.stale_links.where(kind: "customer").count).to eq(2) # rolled back
+      answer(row, [riverbend_found]) # the job's retry
+
+      expect(calls).to eq(2)
+      expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
+      expect(checks("customer").count).to eq(2)
     end
 
     it "doesn't count time the connection was stalled as no answer" do

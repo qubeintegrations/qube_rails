@@ -176,4 +176,16 @@ RSpec.describe QubeRails::Connection do
       expect(second.qb_id_for(invoice, kind: "invoice")).to eq("T-2")
     end
   end
+
+  it "refresh_type!(remember: true) never writes revision 0 over a revision an event applied since it was loaded" do
+    account = Account.create!(name: "Riverbend")
+    row = make_connection(account, status: "pending")
+    loaded = QubeRails::Connection.find(row.id)
+    row.update!(revision: 6) # an event, applied meanwhile
+    stub_request(:get, api_url("/connections/#{row.qube_id}")).to_return(json_data("type" => "realtime"))
+
+    loaded.refresh_type!(remember: true)
+
+    expect(row.reload.revision).to eq(6)
+  end
 end

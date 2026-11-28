@@ -7,33 +7,35 @@ No migration.
 ### Fixed
 
 **Work from before a company file change**
-- A run or plain request made before the connection's `company_file_changed_at` is the old file's.
-  Its late events are still applied (state, outcome, revision) and your handlers still run, but
-  no sync mark advances, and `Connection#link` (so `link_references` too) writes nothing on that
-  connection and returns nil, logged, while they run (`Connection#holding_links`, kept per
-  connection id, fiber-local, so a handler that loads the connection again is held too). Before,
-  a run that completed on the old file just before the switch, processed after it, recreated the
-  deleted sync mark (so the next incremental sync asked only for changes since the old run) and
-  made old-file ids current again. `link_references` now leaves out what `link` didn't write.
+- A run or plain request made before the connection's `company_file_changed_at` is the old file's
+  (that time is when the webhook was applied, so it may have run on either file). Its late events
+  are still applied and your handlers still run, but no sync mark advances, and `Connection#link`
+  (so `link_references` too) writes the link stale, with the id the answer gave, for `LinkCheck`
+  to look up on the open file (`Connection#holding_links`, per connection id, fiber-local). It
+  never displaces a current link (then `link` returns nil). Before, such a run that completed
+  just before the switch recreated the deleted sync mark and made its ids current. A completed old
+  run counts for `SyncStatus` once its record's link is current.
 - `Operation.start`, `Request.queue`, `Run#retry_start!` and `QueuedRequest#retry_queue!` no
-  longer reuse or resend such a run or request when it hasn't ended here (`starting`,
-  `realtime_required`, running, or a queue QuBe Sync never confirmed): `retry_start` would have
+  longer reuse or resend such a run or request when it hasn't ended here: `retry_start` would have
   sent the old reference and input to the new file. It's settled with QuBe Sync first
-  (`QubeRails::OldFileWork`, outside the connection's lock), and never ended here on the engine's
-  word alone, since `company_file_changed_at` is when the webhook was applied and the run may
-  still be live there:
-  - a run QuBe Sync knows (its `qube_run_id`, or found by its reference) is cancelled there and
-    ended here with the state QuBe Sync answers (a 409 already-finished is read again);
+  (`QubeRails::OldFileWork`, outside the connection's lock, before the record's link check), and
+  never ended here on the engine's word alone:
+  - a run QuBe Sync knows (its `qube_run_id`, or found by its reference) is cancelled there; one
+    that ended failed or cancelled is ended here so; one QuBe Sync completed holds the record (its
+    ending is asked for again with `redeliver`, its links come in stale and are checked) rather
+    than starting a second;
   - a request QuBe Sync knows is read there, discarded if it's still waiting or retryable, and
-    ended with the state QuBe Sync answers;
-  - one QuBe Sync never acknowledged, or a run refused as `realtime_required`, is ended here once
-    60 seconds (`OldFileWork::UNCONFIRMED_AFTER`) have passed since it was made: a run
-    `cancelled` (`cancel_reason` from the new key `status.company_file_changed`), a request
-    `failed` (`error` `{"error_type" => "company_file_changed"}`);
+    ended with the state QuBe Sync answers; one QuickBooks answered waits for its webhook for up to
+    a day (`OldFileWork::DELIVERY_WINDOW`);
+  - one QuBe Sync never acknowledged is ended here once 5 minutes (`OldFileWork::UNCONFIRMED_AFTER`)
+    have passed since it was last sent (each send stamps `updated_at`): a run `cancelled`
+    (`cancel_reason` from the new key `status.company_file_changed`), a request `failed` (`error`
+    `{"error_type" => "company_file_changed"}`); a run refused as `realtime_required` at once;
   - otherwise the new `QubeRails::OldFileWorkPending` (a `NotReady`) is raised and nothing is
-    sent. Once it has ended, a new run or request is built with a new reference. The retry routes
-    log it rather than failing. `Connection#before_company_file_change?(row)` says which rows are
-    the old file's.
+    sent. Once it has ended, a new run or request is built with a new reference. A retry of a row
+    that has ended raises `ArgumentError` as before, as does one whose record is gone; the retry
+    route logs `NotReady` rather than failing. `Connection#before_company_file_change?(row)` and
+    `QuickbooksRecord#current?` are new.
 - A link check from before the switch is settled the same way, so `connected` queues a fresh one
   once QuBe Sync confirms the old one is over.
 
@@ -49,9 +51,13 @@ No migration.
 - A kind whose check kept failing stayed stale for good. Now, counting since the last company file
   change and the kind's last check that answered, after `LinkCheck::MAX_ATTEMPTS` (3) failed checks
   (errors, timeouts, discards, answers it can't trust, no answer), or 3 queues QuBe Sync refused
-  (a 4xx, counted on their own), its links still stale are kept as missing, reported in
-  `links_checked`, and logged. A later answer from the new file that has them makes them current
-  again. The next company file change starts the count again.
+  for good (400, 404, 422: `LinkCheck::LASTING_REFUSALS`, counted on their own; 401, 403, 408, 429
+  and 5xx don't count), its links still stale are kept as missing, reported in `links_checked`, and
+  logged. A later answer from the new file that has them makes them current again, or holds them
+  for review (`missing_since` cleared; `confirm_link` now also clears `missing_since` and
+  `stale_since`). The next company file change starts the count again.
+- `links_checked` runs inside the answer's row lock, so a handler that raises rolls the answer back
+  and the job's retry settles, reports and queues the next batch again.
 - A queue QuBe Sync refuses now keeps `error` `{"error_type" => "refused", "status" => <status>}` on
   its row (any plain request).
 
@@ -66,7 +72,8 @@ No migration.
   now asks QuBe Sync the type of up to three never-connected rows no event has typed
   (`revision` nil) and reuses one whose type matches. Each lookup has a short timeout and no
   retries (`QubeRails.quick_client`), the first that gets no answer ends them (logged), and a row
-  QuBe Sync typed is kept with `revision` 0 so it isn't asked again (any event is newer).
+  QuBe Sync typed is kept with `revision` 0 so it isn't asked again (any event is newer), written
+  only over no revision, so an event applied meanwhile keeps its own.
   `Connection#refresh_type!` takes `client:` and `remember:`.
 
 **`qube_rails/manage_connection`**

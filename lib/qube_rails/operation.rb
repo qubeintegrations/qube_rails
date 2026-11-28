@@ -62,8 +62,9 @@ module QubeRails
       end
 
       raise_realtime_required(connection) if connection.standard?
-      connection.wait_for_link_check!(record, name)
+      # First, so a live old run is cancelled even while the record's links are checked.
       OldFileWork.settle_run(QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG), connection)
+      connection.wait_for_link_check!(record, name)
 
       run, input_error = claim_run(record, connection)
       raise input_error if input_error
@@ -83,14 +84,12 @@ module QubeRails
     # QuBe Sync (OldFileWork) and the record started afresh, or OldFileWorkPending is raised.
     def self.retry_start(run)
       return run if run.qube_run_id
-      if run.connection.before_company_file_change?(run)
-        OldFileWork.settle_run(run, run.connection)
-        return start(record_for(run), run.connection)
-      end
       unless RETRYABLE_STATES.include?(run.state)
         raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer, or " \
                              "one refused as realtime_required, is sent again"
       end
+      return start_afresh(run) if run.connection.before_company_file_change?(run)
+
       raise_realtime_required(run.connection) if run.connection.standard?
 
       run.update_columns(state: "starting", error: nil, updated_at: Time.now) if run.realtime_required?
@@ -98,6 +97,17 @@ module QubeRails
     end
 
     RETRYABLE_STATES = %w[starting realtime_required].freeze
+
+    # An old file's unconfirmed start: settled with QuBe Sync, then the record started as it is now.
+    def self.start_afresh(run)
+      record = record_for(run)
+      raise ArgumentError, "QuBe Sync: run #{run.id}'s #{run.record_type} #{run.record_id} is gone" unless record
+
+      OldFileWork.settle_run(run, run.connection)
+
+      start(record, run.connection)
+    end
+    private_class_method :start_afresh
 
     def self.raise_realtime_required(connection)
       raise RealtimeRequired, "QuBe Sync: workflows run on realtime connections, and connection #{connection.id} " \
@@ -142,6 +152,7 @@ module QubeRails
     private_class_method :new_run
 
     def self.send_start(run, input)
+      run.update_columns(updated_at: Time.now) # OldFileWork's margin counts from the last send
       started =
         begin
           QubeRails.client.start_run(run.connection.qube_id, self::WORKFLOW, input,
@@ -320,6 +331,7 @@ module QubeRails
       before = run.revision
       run.with_lock { apply(event) }
       QubeRails.broadcast_refresh(record) unless run.revision == before
+      OldFileWork.check_held_links(connection) if connection.before_company_file_change?(run)
     end
 
     # A question the run asks: kept whole on the run, with its links (where to answer it, and
@@ -449,7 +461,7 @@ module QubeRails
 
       if connection.before_company_file_change?(run)
         QubeRails.logger.warn("QuBe Sync: #{self.class.name} run #{run.id} was started before its connection's " \
-                              "company file changed: #{event.event} keeps no links and no sync mark")
+                              "company file changed: #{event.event} keeps its links stale, to be checked, and no sync mark")
         connection.holding_links("run #{run.id} is the old company file's") { apply_event(event, old_file: true) }
       else
         apply_event(event, old_file: false)
