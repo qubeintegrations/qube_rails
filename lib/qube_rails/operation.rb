@@ -63,6 +63,7 @@ module QubeRails
 
       raise_realtime_required(connection) if connection.standard?
       connection.wait_for_link_check!(record, name)
+      OldFileWork.settle_run(QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG), connection)
 
       run, input_error = claim_run(record, connection)
       raise input_error if input_error
@@ -77,8 +78,15 @@ module QubeRails
     # starting another, for as long as that run is kept (60 days after it ends); a start it never
     # took starts now. Returns the run; a run already answered is returned as it is. A start
     # refused as realtime_required is sent again too: QuBe Sync stored nothing for it.
+    #
+    # A run from before its connection's company file change is never sent again: it's settled with
+    # QuBe Sync (OldFileWork) and the record started afresh, or OldFileWorkPending is raised.
     def self.retry_start(run)
       return run if run.qube_run_id
+      if run.connection.before_company_file_change?(run)
+        OldFileWork.settle_run(run, run.connection)
+        return start(record_for(run), run.connection)
+      end
       unless RETRYABLE_STATES.include?(run.state)
         raise ArgumentError, "QuBe Sync: run #{run.id} is #{run.state}: only a start that got no answer, or " \
                              "one refused as realtime_required, is sent again"
@@ -105,24 +113,14 @@ module QubeRails
     def self.claim_run(record, connection)
       connection.with_lock do
         going = QubeRails::Run.where(connection: connection).latest_for(record, self::SLUG)
-        going = end_old_file_run(going) if going && !going.ended? && connection.before_company_file_change?(going)
+        # Made from before the change since start settled it: settled on the next try.
+        OldFileWork.pending!(going, "it's being settled") if OldFileWork.old?(going, connection)
         next [going.tap { |run| run.reused = true }, nil] if going && !going.ended?
 
         new_run(record, connection)
       end
     end
     private_class_method :claim_run
-
-    # A run from before the company file change, never ended here: cancelled (QuBe Sync cancels the
-    # old file's live runs), never sent again with the old file's ids. Returns nil.
-    def self.end_old_file_run(run)
-      QubeRails.logger.warn("QuBe Sync: #{name} run #{run.id} (#{run.state}) was made before its connection's " \
-                            "company file changed: cancelled, and a new run made")
-      run.update!(state: "cancelled", ended_at: Time.now, cancel_url: nil, question: nil, links: nil,
-                  cancel_reason: QubeRails.t("status.company_file_changed"))
-      nil
-    end
-    private_class_method :end_old_file_run
 
     # [run, nil], or for an input that raises, the run kept as "failed" (nothing was started) and
     # the error.

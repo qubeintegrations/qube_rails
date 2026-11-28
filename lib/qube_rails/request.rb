@@ -29,6 +29,8 @@ module QubeRails
       end
 
       connection.wait_for_link_check!(record, name) if connection.is_a?(QubeRails::Connection)
+      OldFileWork.settle_request(QubeRails::QueuedRequest.where(connection: connection).latest_for(record, self::SLUG),
+                                 connection)
 
       row, params_error = claim(record, connection)
       raise params_error if params_error
@@ -38,8 +40,14 @@ module QubeRails
     end
 
     # Sends a queue that got no answer again, with the same params and Idempotency-Key.
+    # One from before its connection's company file change is settled (OldFileWork) and the record
+    # queued afresh instead.
     def self.retry_queue(row)
       return row if row.qube_id
+      if row.connection.before_company_file_change?(row)
+        OldFileWork.settle_request(row, row.connection)
+        return queue(record_for(row), row.connection)
+      end
       unless row.state == "queued"
         raise ArgumentError, "QuBe Sync: request #{row.id} is #{row.state}: only a queue that got no answer is sent again"
       end
@@ -51,23 +59,13 @@ module QubeRails
     def self.claim(record, connection)
       connection.with_lock do
         going = QubeRails::QueuedRequest.where(connection: connection).latest_for(record, self::SLUG)
-        going = end_old_file_row(going) if going && !going.ended? && connection.before_company_file_change?(going)
+        OldFileWork.pending!(going, "it's being settled") if OldFileWork.old?(going, connection)
         next [going.tap { |row| row.reused = true }, nil] if going && !going.ended?
 
         new_row(record, connection)
       end
     end
     private_class_method :claim
-
-    # A request from before the company file change, not ended here: failed (QuBe Sync fails the old
-    # file's waiting requests), never sent again. Returns nil.
-    def self.end_old_file_row(row)
-      QubeRails.logger.warn("QuBe Sync: #{name} request #{row.id} (#{row.state}) was made before its connection's " \
-                            "company file changed: failed, and a new request made")
-      row.update!(state: "failed", ended_at: Time.now, error: { "error_type" => "company_file_changed" })
-      nil
-    end
-    private_class_method :end_old_file_row
 
     def self.new_row(record, connection)
       row = QubeRails::QueuedRequest.new(
@@ -94,7 +92,7 @@ module QubeRails
           QubeRails.client.queue(self::OPERATION, row.connection.qube_id, row.params || {},
                                  webhook_url: row.webhook_url, idempotency_key: row.reference)
         rescue Backend::APIError => e
-          mark_failed(row) if refused?(e)
+          mark_failed(row, e) if refused?(e)
           raise
         end
       record_queue(row, answer.is_a?(Hash) ? answer : {})
@@ -108,9 +106,11 @@ module QubeRails
     end
     private_class_method :refused?
 
-    def self.mark_failed(row)
+    # error says it was refused (status), so a refused queue isn't taken for a failed answer.
+    def self.mark_failed(row, error = nil)
       now = Time.now
-      row.update_columns(state: "failed", ended_at: now, updated_at: now)
+      refusal = { "error_type" => "refused", "status" => error&.status }
+      row.update_columns(state: "failed", ended_at: now, updated_at: now, error: refusal)
     end
     private_class_method :mark_failed
 

@@ -100,11 +100,16 @@ module QubeRails
 
     # Reads its type from QuBe Sync again (GET /api/v2/connections/:id) and saves it: after it's
     # upgraded to realtime in the dashboard, before its next event says so. Returns the type.
-    def refresh_type!
+    #
+    # remember: on a row no event has typed (revision nil), revision 0 says QuBe Sync confirmed its
+    # type, so Connect doesn't ask again; any event is newer.
+    def refresh_type!(client: QubeRails.client, remember: false)
       raise NotConnected, "QuBe Sync: connection #{id} has no qube_id yet" if qube_id.to_s.empty?
 
-      type = QubeRails.client.get_connection(qube_id)["type"].to_s
-      update!(connection_type: type) if TYPES.include?(type) && type != connection_type
+      type = client.get_connection(qube_id)["type"].to_s
+      changes = TYPES.include?(type) && type != connection_type ? { connection_type: type } : {}
+      changes[:revision] = 0 if remember && revision.nil?
+      update!(changes) unless changes.empty?
       connection_type
     end
 
@@ -166,8 +171,9 @@ module QubeRails
       qb_id = qb_id.to_s
       raise ArgumentError, "link needs a qb_id" if qb_id.empty?
 
-      if @links_held
-        QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}: #{@links_held}")
+      held = links_held_reason
+      if held
+        QubeRails.logger.info("QuBe Sync: connection #{self.id}: kept no #{kind} link for #{qb_id}: #{held}")
         return nil
       end
 
@@ -210,13 +216,21 @@ module QubeRails
       end
     end
 
-    # Runs the block with link writing nothing (reason is logged): for the old company file's answers.
+    HELD_LINKS = :qube_rails_held_links
+
+    # Runs the block with link writing nothing on this connection (reason is logged), whichever
+    # object reaches it: kept per connection id, fiber-local. For the old company file's answers.
     def holding_links(reason)
-      held = @links_held
-      @links_held = reason
+      held = Thread.current[HELD_LINKS]
+      Thread.current[HELD_LINKS] = (held || {}).merge(id => reason)
       yield
     ensure
-      @links_held = held
+      Thread.current[HELD_LINKS] = held
+    end
+
+    # Why link writes nothing here now, or nil.
+    def links_held_reason
+      (Thread.current[HELD_LINKS] || {})[id]
     end
 
     # Made before the customer last switched this connection to another company file: the old file's.
@@ -291,17 +305,21 @@ module QubeRails
 
     # A link under review is the same record after all: current again, with the name QuickBooks has.
     def confirm_link(link)
-      link = own_review_link(link)
-      link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
-      link
+      transaction do
+        link = own_review_link(link)
+        link.update!(name: link.review_name.nil? ? link.name : link.review_name, review_since: nil, review_name: nil)
+        link
+      end
     end
 
     # A link under review isn't the same record: kept as missing, so the record is matched by name
     # (or added) when it's next sent.
     def reject_link(link)
-      link = own_review_link(link)
-      link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
-      link
+      transaction do
+        link = own_review_link(link)
+        link.update!(review_since: nil, review_name: nil, missing_since: Time.now)
+        link
+      end
     end
 
     # Queues the checks of its stale links (QubeRails::LinkCheck), when it's connected and has any.
@@ -363,7 +381,8 @@ module QubeRails
     end
 
     def own_review_link(link)
-      row = review_links.find_by(id: link.respond_to?(:id) ? link.id : link)
+      # Locked, so two settles of one link at once can't both take it.
+      row = review_links.lock.find_by(id: link.respond_to?(:id) ? link.id : link)
       raise ArgumentError, "QuBe Sync: link #{link.inspect} isn't under review on connection #{id}" unless row
 
       row

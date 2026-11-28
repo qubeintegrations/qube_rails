@@ -24,9 +24,9 @@ module QubeRails
 
       begin
         run.retry_start!
-      rescue Backend::APIError, RealtimeRequired, *Backend::NETWORK_ERRORS => e
-        # Refused (the run is now failed) or no answer again (still unconfirmed): the status on
-        # the page says which.
+      rescue Backend::APIError, RealtimeRequired, NotReady, *Backend::NETWORK_ERRORS => e
+        # Refused (the run is now failed), no answer again (still unconfirmed), or a run from
+        # before a company file change still being settled: the status on the page says which.
         QubeRails.logger.warn("QuBe Sync: run #{run.id}'s start retry didn't go through (#{e.class})")
       end
       redirect_back fallback_location: "/", status: :see_other

@@ -9,6 +9,7 @@ require "qube_rails/database_dedupe"
 require "qube_rails/json_coder"
 require "qube_rails/operation"
 require "qube_rails/request"
+require "qube_rails/old_file_work"
 require "qube_rails/link_check"
 require "qube_rails/sync_status"
 require "qube_rails/connection_events"
@@ -39,6 +40,11 @@ module QubeRails
   # The same for a record whose link the new company file has under another name: the app settles
   # it with Connection#confirm_link or #reject_link (README).
   class LinkNeedsReview < NotReady; end
+
+  # Operation.start or Request.queue (or a retry) for a record whose last run or request, from before
+  # its connection switched company file, may still be going at QuBe Sync: it's being cancelled
+  # there (README, "Work from the old file"). Try again shortly; a job can retry on it.
+  class OldFileWorkPending < NotReady; end
 
   # Operation.start was given a connection QuBe Sync hasn't made yet (no qube_id): the customer
   # hasn't finished onboarding, or QuBe Sync didn't answer it.
@@ -71,6 +77,7 @@ module QubeRails
     def configure
       yield config
       @client = nil
+      @quick_client = nil
       config
     end
 
@@ -80,6 +87,12 @@ module QubeRails
     def client
       @client ||= Backend.client(api_key: config.api_key, base_url: config.base_url,
                                  on_retry: method(:log_retry))
+    end
+
+    # A client that gives up fast (short timeouts, no retries): for lookups a page waits on.
+    def quick_client
+      @quick_client ||= Backend.client(api_key: config.api_key, base_url: config.base_url,
+                                       open_timeout: 3, read_timeout: 5, max_retries: 0)
     end
 
     # A call QuBe Sync didn't answer, sent again (safe calls only, within 60 seconds).
@@ -203,6 +216,7 @@ module QubeRails
     def reset!
       @config = nil
       @client = nil
+      @quick_client = nil
     end
   end
 end

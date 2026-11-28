@@ -63,7 +63,17 @@ RSpec.describe "Links under review", type: :request do
       expect(connection.qb_id_for(customer, kind: "customer")).to be_nil
     end
 
-    it "answers 404 for another account's connection, a link on another connection, or one not under review" do
+    it "goes back, changing nothing, for a link settled already (a second click, or another tab)" do
+      link = under_review
+      post "/quickbooks/connections/#{connection.id}/links/#{link.id}/confirm", headers: signed_in
+
+      post "/quickbooks/connections/#{connection.id}/links/#{link.id}/reject", headers: signed_in
+
+      expect(response).to have_http_status(:see_other)
+      expect(link.reload).to have_attributes(missing_since: nil, review_since: nil, name: "Riverbend Plumbing")
+    end
+
+    it "answers 404 for another account's connection or a link on another connection, and leaves a current link be" do
       other = make_connection(Account.create!(name: "Other"), qube_id: "conn-q-2")
       theirs = under_review(other, Customer.create!(account: other.owner, name: "Theirs"))
       mine_elsewhere = make_connection(account, qube_id: "conn-q-3")
@@ -76,7 +86,7 @@ RSpec.describe "Links under review", type: :request do
         post "/quickbooks/connections/#{connection.id}/links/#{elsewhere.id}/#{how}", headers: signed_in
         expect(response).to have_http_status(:not_found)
         post "/quickbooks/connections/#{connection.id}/links/#{current.id}/#{how}", headers: signed_in
-        expect(response).to have_http_status(:not_found)
+        expect(response).to have_http_status(:see_other)
       end
       expect([theirs.reload, elsewhere.reload].map(&:review_since)).to all(be_present)
       expect(current.reload.missing_since).to be_nil

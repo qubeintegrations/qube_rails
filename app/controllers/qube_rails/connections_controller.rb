@@ -74,8 +74,8 @@ module QubeRails
 
     # POST /quickbooks/connections/:id/links/:link_id/confirm and /reject, from the review_links
     # partial: one of the signed-in account's connections' links under review is the same record
-    # (Connection#confirm_link) or not (#reject_link), then back to the page. Another account's
-    # connection, or a link not under review on it, answers 404.
+    # (Connection#confirm_link) or not (#reject_link), then back to the page. One settled already (a
+    # second click) goes back as it is. Another account's connection, or a link not on it, is 404.
     def confirm_link
       settle_link(:confirm_link)
     end
@@ -122,10 +122,14 @@ module QubeRails
       return head(:unauthorized) unless account
 
       connection = QubeRails::Connection.owned_by(account).find_by(id: params[:id])
-      link = connection&.review_links&.find_by(id: params[:link_id])
+      link = connection&.quickbooks_records&.find_by(id: params[:link_id])
       return head(:not_found) unless link
 
-      connection.public_send(how, link)
+      begin
+        connection.public_send(how, link) if link.under_review?
+      rescue ArgumentError # settled meanwhile (a second click, another tab)
+        nil
+      end
       QubeRails.broadcast_refresh(link.record) if link.record
       redirect_back fallback_location: "/", status: :see_other
     end
@@ -181,16 +185,18 @@ module QubeRails
     UNTYPED_LOOKUPS = 3
 
     # A never-connected row no event has typed (revision nil) whose type QuBe Sync says is type:
-    # a row from before 0.2.1, which the migration labelled realtime.
+    # a row from before 0.2.1, which the migration labelled realtime. Each lookup is short (the
+    # quick client), the first that gets no answer ends them, and one checked isn't asked again.
     def untyped_never_connected(account, type)
       rows = QubeRails::Connection.owned_by(account).never_connected.where(revision: nil)
                                   .where.not(connection_type: [type, "simulated"]).where.not(qube_id: nil)
-      rows.limit(UNTYPED_LOOKUPS).detect do |row|
-        row.refresh_type! == type
+      rows.limit(UNTYPED_LOOKUPS).each do |row|
+        return row if row.refresh_type!(client: QubeRails.quick_client, remember: true) == type
       rescue QubeRails::Backend::APIError, *QubeRails::Backend::NETWORK_ERRORS => e
         QubeRails.logger.warn("QuBe Sync: couldn't read connection #{row.id}'s type (#{e.class}); not reusing it")
-        false
+        return nil if !e.is_a?(QubeRails::Backend::APIError) # no more waiting on QuBe Sync for this click
       end
+      nil
     end
 
     def connection_name

@@ -69,6 +69,10 @@ module QubeRails
         raise unless e.status.between?(400, 499)
 
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't check its #{kind} links (#{e.status})")
+        give_up_if_exhausted(connection, kind)
+        nil
+      rescue OldFileWorkPending => e
+        QubeRails.logger.info("QuBe Sync: connection #{connection.id}: its #{kind} link check waits: #{e.message}")
         nil
       end
     end
@@ -87,42 +91,76 @@ module QubeRails
         end
         check = self.for(kind)
         last = QubeRails::QueuedRequest.where(connection: connection).latest_for(connection, check::SLUG)
-        next unless last.nil? || dormant?(last)
+        next unless last.nil? || dormant?(last, connection)
 
-        if last && !last.ended? && last.qube_id
-          last.update!(state: "failed", ended_at: Time.now, error: { "error_type" => "no_answer" })
+        if last&.qube_id && !last.ended?
+          next unless fail_unanswered(last)
           next if give_up_if_exhausted(connection, kind)
         end
         last.touch if last && !last.ended? # the back-off counts from this try
         check.queue(connection, connection)
-      rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
+      rescue Backend::APIError => e
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its #{kind} link check " \
+                              "again (#{e.class})")
+        give_up_if_exhausted(connection, kind) if e.status.between?(400, 499)
+      rescue OldFileWorkPending, *Backend::NETWORK_ERRORS => e
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its #{kind} link check " \
                               "again (#{e.class})")
       end
     end
 
-    def self.dormant?(row)
+    # Unanswered time counts only while the connection is connected: from the later of the row's
+    # last change and the connection's (its last event: connected, resumed...).
+    def self.dormant?(row, connection)
       return row.ended_at < Time.now - RETRY_AFTER if row.ended?
       return row.updated_at < Time.now - RETRY_AFTER if row.qube_id.nil?
 
-      row.updated_at < Time.now - NO_ANSWER_AFTER
+      [row.updated_at, connection.updated_at].compact.max < Time.now - NO_ANSWER_AFTER
     end
     private_class_method :dormant?
 
-    # After MAX_ATTEMPTS failed checks of kind since the last company file change, its stale links
-    # are kept as missing and reported. Returns whether it gave up.
-    def self.give_up_if_exhausted(connection, kind)
-      failed = QubeRails::QueuedRequest.where(connection: connection, operation: self.for(kind)::SLUG,
-                                              state: FAILED_STATES)
-      changed_at = connection.company_file_changed_at
-      failed = failed.where("created_at >= ?", changed_at) if changed_at
-      return false if failed.count < MAX_ATTEMPTS
+    # Under the row's lock: false when an answer came meanwhile.
+    def self.fail_unanswered(row)
+      row.with_lock do
+        next false if row.ended?
 
+        row.update!(state: "failed", ended_at: Time.now, error: { "error_type" => "no_answer" })
+        true
+      end
+    end
+    private_class_method :fail_unanswered
+
+    # A kind's stale links are kept as missing and reported once, since the last company file change
+    # and the kind's last check that answered, MAX_ATTEMPTS of its checks have failed (an error, a
+    # timeout, a discard, an answer it can't trust, no answer), or MAX_ATTEMPTS of its queues were
+    # refused (a 4xx). Returns whether it gave up.
+    def self.give_up_if_exhausted(connection, kind)
+      failures, refusals = recent_failures(connection, kind)
+      return false if failures < MAX_ATTEMPTS && refusals < MAX_ATTEMPTS
+
+      why = failures >= MAX_ATTEMPTS ? "#{MAX_ATTEMPTS} failed tries" : "#{MAX_ATTEMPTS} refused queues"
       QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: gave up on its #{kind} link check after " \
-                            "#{MAX_ATTEMPTS} failed tries; its links are kept as missing")
+                            "#{why}; its links are kept as missing")
       keep_missing(connection, kind)
       true
     end
+
+    # [failed checks, refused queues] since the kind's last check that answered.
+    def self.recent_failures(connection, kind)
+      rows = QubeRails::QueuedRequest.where(connection: connection, operation: self.for(kind)::SLUG)
+      changed_at = connection.company_file_changed_at
+      rows = rows.where("created_at >= ?", changed_at) if changed_at
+      failures = refusals = 0
+      rows.order(id: :desc).limit(4 * MAX_ATTEMPTS).each do |row|
+        next unless row.ended?
+        break unless FAILED_STATES.include?(row.state) # it answered: the count starts again
+
+        refused = row.error.is_a?(Hash) && row.error["error_type"] == "refused"
+        refused ? refusals += 1 : failures += 1
+      end
+      [failures, refusals]
+    end
+    private_class_method :recent_failures
 
     # A kind's stale links (one no query can look up, or one given up on): kept as missing, and
     # reported like a checked batch.
@@ -195,22 +233,21 @@ module QubeRails
 
     # The answer settles each id it asked about that's still stale.
     def answered(event)
+      @late = queued_request.ended?
       @settled = settle(event)
     end
 
-    # Every page is in (one: a query by id isn't paged): the app hears, and the next batch goes.
+    # Every page is in (one: a query by id isn't paged). An answer from the old file asks the new
+    # one; one it can't trust fails the check.
     def done
-      result = @settled
-      # An answer from the old file: ask the new one.
-      @next = true if result.nil? && from_old_file?
-      if result.nil? && !from_old_file?
-        queued_request.state = "failed" # an answer it can't trust counts as a failed try
+      return if @settled
+
+      if from_old_file?
+        @next = true
+      else
+        queued_request.state = "failed"
         @failed = true
       end
-      return unless result
-
-      @next = true
-      LinkCheck.report(connection, self.class::KIND, result)
     end
 
     # The links stay stale, unused: asked again on the next event or a held record's send (revive),
@@ -221,14 +258,24 @@ module QubeRails
     end
 
     # A next batch that can't be queued now is queued again by revive.
+    # An answer it trusts is reported, a late one to a check failed for no answer too, and the
+    # next batch goes.
     def handle(event)
       super
+      if @settled
+        LinkCheck.report(connection, self.class::KIND, @settled) unless @settled.values.all?(&:empty?) && @late
+        @next = true
+      end
       LinkCheck.give_up_if_exhausted(connection, self.class::KIND) if @failed && !from_old_file?
       return unless @next
 
       begin
         self.class.queue(connection, connection)
-      rescue Backend::APIError, *Backend::NETWORK_ERRORS => e
+      rescue Backend::APIError => e
+        QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its next " \
+                              "#{self.class::KIND} link check (#{e.class})")
+        LinkCheck.give_up_if_exhausted(connection, self.class::KIND) if e.status.between?(400, 499)
+      rescue OldFileWorkPending, *Backend::NETWORK_ERRORS => e
         QubeRails.logger.warn("QuBe Sync: connection #{connection.id}: couldn't queue its next " \
                               "#{self.class::KIND} link check (#{e.class})")
       end
@@ -254,14 +301,17 @@ module QubeRails
       # still comes back: one not in the answer isn't in the file.
       result = { relinked: [], review: [], missing: [] }
       now = Time.now
+      # A link given up on (missing) that this answer finds is found after all.
+      unsettled = connection.quickbooks_records.where(kind: self.class::KIND)
+                            .where("stale_since IS NOT NULL OR missing_since IS NOT NULL")
       asked.each do |qb_id|
-        link = self.class.kind_links(connection).find_by(qb_id: qb_id)
+        link = unsettled.find_by(qb_id: qb_id)
         next unless link # settled already: a redelivery, or linked again by a run since
 
         record = found[qb_id]
         if record
           keep(link, record, result)
-        else
+        elsif link.stale?
           link.update!(stale_since: nil, missing_since: now)
           result[:missing] << link
         end

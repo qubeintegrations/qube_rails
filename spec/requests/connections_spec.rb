@@ -82,6 +82,27 @@ RSpec.describe "Onboarding", type: :request do
       expect(QubeRails::Connection.count).to eq(1)
     end
 
+    it "asks about a row once: a type QuBe Sync confirmed isn't asked again, and the first lookup with no answer ends them" do
+      QubeRails.config.connection_type = "standard"
+      checked = make_connection(account, qube_id: "conn-q-real", status: "pending")
+      asked = stub_request(:get, api_url("/connections/conn-q-real")).to_return(json_data("type" => "realtime"))
+      made = 0
+      stub_request(:post, api_url("/connections"))
+        .to_return { json_data("id" => "conn-q-new-#{made += 1}", "links" => { "onboarding" => onboarding }) }
+      post "/quickbooks/connections", headers: signed_in
+      expect(checked.reload).to have_attributes(connection_type: "realtime", revision: 0)
+      QubeRails::Connection.where(connection_type: "standard").update_all(status: "connected")
+
+      post "/quickbooks/connections", headers: signed_in
+      QubeRails::Connection.where(connection_type: "standard").update_all(status: "connected")
+      expect(asked).to have_been_made.once
+
+      later = 2.times.map { |i| make_connection(account, qube_id: "conn-q-old-#{i}", status: "pending") }
+      timeouts = later.map { |row| stub_request(:get, api_url("/connections/#{row.qube_id}")).to_timeout }
+      post "/quickbooks/connections", headers: signed_in
+      expect(timeouts.sum { |t| WebMock::RequestRegistry.instance.times_executed(t.request_pattern) }).to eq(1)
+    end
+
     it "doesn't ask about a row an event has already typed, and makes a new one if QuBe Sync can't say" do
       QubeRails.config.connection_type = "standard"
       make_connection(account, qube_id: "conn-q-typed", status: "setup_cancelled").update!(revision: 3)
