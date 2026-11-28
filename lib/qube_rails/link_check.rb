@@ -313,7 +313,7 @@ module QubeRails
       unsettled = connection.quickbooks_records.where(kind: self.class::KIND)
                             .where("stale_since IS NOT NULL OR missing_since IS NOT NULL")
       asked.each do |qb_id|
-        link = unsettled.find_by(qb_id: qb_id)
+        link = unsettled.lock.find_by(qb_id: qb_id) # locked, as keep_missing and link do
         next unless link # settled already: a redelivery, or linked again by a run since
 
         record = found[qb_id]

@@ -359,12 +359,19 @@ run on either file, so its ids are checked rather than trusted or dropped.
     `GET .../workflow-runs?reference=`) is cancelled there (`links.cancel`; a 409 is read
     again). One that ended `failed` or `cancelled` is ended here with that state. One QuBe Sync
     completed may have added the record to the open file, so nothing new starts: its ending is
-    asked for again (`redeliver`), and the record waits for it, then for its link's check;
+    asked for again (`redeliver`), and the record waits for it (its `sync_status` reads
+    `:sending`), then for its link's check. If the ending still hasn't come
+    `OldFileWork::DELIVERY_WINDOW` (a day) after the run's last send, the run QuBe Sync returns is
+    applied in its place, through your operation's own handler (links stale), or, when the
+    operation or record is gone, the run is just ended here `completed`;
   - a request QuBe Sync knows (a `qube_id`) is read there: one still `waiting` or `retryable` is
     discarded first, and it's ended here with the state QuBe Sync answers (`discarded`, `error`,
     `timed_out`). One QuickBooks answered (`response_received`) waits for its webhook, which
     brings the answer to your handler (links stale), for up to `OldFileWork::DELIVERY_WINDOW`
-    (a day, beyond QuBe Sync's retries) after its last send; after that it's ended here without it;
+    (a day, beyond QuBe Sync's retries) after its last send; after that it's ended here without it,
+    so your handler never sees that answer and the record can be queued again. The engine's own
+    link checks from the old file are ended here at once, with no call: their answers settle
+    nothing, so the open file's check goes straight away;
   - one QuBe Sync never acknowledged (no id, and no run found by its reference) is ended here once
     `OldFileWork::UNCONFIRMED_AFTER` (5 minutes, well over the client's 60-second limit) has passed
     since it was last sent (each start, queue and retry stamps `updated_at`), so a send still in
@@ -380,6 +387,54 @@ run on either file, so its ids are checked rather than trusted or dropped.
   Once it has ended, a new run or request is made with a new reference, built from the record as it
   is now. Its revision isn't touched, so its last webhooks still apply. A retry of a row that has
   ended raises `ArgumentError`, as before, and so does one whose record is gone.
+
+Two things it doesn't do, by design: an old-window handler that links an id already current keeps
+the current row as it is, EditSequence included (the next write reads a fresh one or meets a
+conflict question), and a plain request QuickBooks answered whose webhook never came within a day
+is ended without its answer, so queueing the record again sends it again.
+
+#### The rules, in one place
+
+For porting or reviewing (the Python and Node libraries copy these). "Old" means: made before the
+connection's `company_file_changed_at` and not ended here. "Last send" is the later of
+`created_at` and `updated_at`, which each start, queue and retry stamps.
+
+1. **Late events of old work** are applied as usual and your handlers run, but no sync mark
+   advances and every `link` on that connection writes the row stale with the id given; a link
+   onto an id or record that's current writes nothing (nil). Then, if the connection is connected,
+   its stale links are checked.
+2. **Sending a record whose latest run or request is old** (start, queue or a retry) first settles
+   it with QuBe Sync, outside the connection lock and before the record's link check; a retry of an
+   ended row, or one whose record is gone, raises `ArgumentError`.
+   - Run, `realtime_required`: ended here `cancelled`.
+   - Run without a `qube_run_id`: looked up by reference; not found and last sent over 5 minutes
+     ago, ended here `cancelled` (`cancel_reason` `status.company_file_changed`); not found and
+     sooner, pending.
+   - Run QuBe Sync knows: cancelled there (409 or 404: read it). `failed` or `cancelled`: ended
+     here so. `completed`: redelivered and pending, until a day after its last send, then its run
+     resource is applied as its completed webhook (or it's just ended `completed`). Anything else:
+     pending.
+   - The engine's own link check: ended here `failed` at once.
+   - Request without a `qube_id`: last sent over 5 minutes ago, ended here `failed`
+     (`{"error_type" => "company_file_changed"}`); sooner, pending.
+   - Request QuBe Sync knows: read; `waiting`/`retryable` discarded and read again; 404 ended
+     `failed`; `response_received` pending until a day after its last send, then ended so;
+     `error`/`timed_out`/`discarded` ended with QuBe Sync's state and error; anything else pending.
+   - Pending raises `OldFileWorkPending` (a `NotReady`) and sends nothing. Ending here writes the
+     state under the row lock, only if it hasn't ended meanwhile, and keeps the revision.
+3. **Sync status**: an old run not ended here reads `:sending`; an old run that completed counts
+   once the record's link is current; any other old run counts as none.
+4. **Link checks give up** on a kind when, among its checks since the change, counted newest first
+   and stopping at the first ended one that isn't failed, 3 failed (error, timeout, discard, an
+   answer it can't trust, no answer) or 3 queues were refused 400, 404 or 422 (other refusals don't
+   count). Its stale links are then kept missing and reported. A later trusted answer settles stale
+   and missing links alike (each locked): found under the same name, current; under another, held
+   for review with missing cleared.
+5. **No answer**: a check QuBe Sync took, unanswered for an hour counted from the later of its own
+   and the connection's last change, is failed under its lock (`no_answer`) and queued again when a
+   held record is sent while the connection is connected. A late answer to it is still settled and
+   reported.
+6. **Reports** (`links_checked`) run inside the answer's row lock; the next batch is queued after.
 
 QuickBooks answers a query by id with a 500 warning when an id isn't there, naming only the
 first missing one, and still returns every id it has, so an id the answer leaves out is missing. An answer the engine can't trust (a row it didn't ask for, an odd shape) settles

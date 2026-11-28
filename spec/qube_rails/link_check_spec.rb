@@ -250,9 +250,10 @@ RSpec.describe QubeRails::LinkCheck do
       travel(1.second) do
         run_event("connection.company_file_changed", "revision" => 7)
         run_event("connection.connected", "revision" => 8)
-        # The old one is ended once QuBe Sync says so, not reused, and the new file is asked at once.
+        # The old one is ended at once (its answer settles nothing), and the new file is asked.
         expect(checks("customer").count).to eq(2)
-        expect(row.reload).to have_attributes(state: "error", error: { "error_type" => "company_file_changed" })
+        expect(row.reload).to have_attributes(state: "failed", error: { "error_type" => "company_file_changed" })
+        expect(a_request(:get, %r{/queued-requests/})).not_to have_been_made
 
         answer(row, [riverbend_found])
         expect(connection.stale_links.where(kind: "customer").count).to eq(2)
@@ -263,6 +264,30 @@ RSpec.describe QubeRails::LinkCheck do
         answer(checks("customer").last, [riverbend_found])
         expect(connection.qb_id_for(riverbend, kind: "customer")).to eq("80000024-1760999990")
       end
+    end
+
+    it "ends an old file's check at once on the next switch, though QuickBooks answered it and its webhook was lost" do
+      row = checks("customer").first
+      travel(1.second) do
+        run_event("connection.company_file_changed", "revision" => 7)
+        run_event("connection.connected", "revision" => 8)
+      end
+
+      expect(row.reload.state).to eq("failed")
+      expect(checks("customer").count).to eq(2)
+      expect(checks("customer").last.state).to eq("queued")
+    end
+
+    it "locks each link it settles" do
+      locked = []
+      allow_any_instance_of(ActiveRecord::Relation).to receive(:lock).and_wrap_original do |original, *args|
+        locked << original.receiver.klass
+        original.call(*args)
+      end
+
+      answer(checks("customer").first, [riverbend_found])
+
+      expect(locked).to include(QubeRails::QuickbooksRecord)
     end
 
     it "queues a failed check again when a held record is sent, once RETRY_AFTER has passed" do

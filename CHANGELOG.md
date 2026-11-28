@@ -23,7 +23,9 @@ No migration.
   - a run QuBe Sync knows (its `qube_run_id`, or found by its reference) is cancelled there; one
     that ended failed or cancelled is ended here so; one QuBe Sync completed holds the record (its
     ending is asked for again with `redeliver`, its links come in stale and are checked) rather
-    than starting a second;
+    than starting a second, and reads `:sending` meanwhile; a day after its last send, the run QuBe
+    Sync returns is applied as its ending (through the operation's handler, links stale), or the
+    run is just ended `completed`;
   - a request QuBe Sync knows is read there, discarded if it's still waiting or retryable, and
     ended with the state QuBe Sync answers; one QuickBooks answered waits for its webhook for up to
     a day (`OldFileWork::DELIVERY_WINDOW`);
@@ -36,8 +38,13 @@ No migration.
     that has ended raises `ArgumentError` as before, as does one whose record is gone; the retry
     route logs `NotReady` rather than failing. `Connection#before_company_file_change?(row)` and
     `QuickbooksRecord#current?` are new.
-- A link check from before the switch is settled the same way, so `connected` queues a fresh one
-  once QuBe Sync confirms the old one is over.
+- A link check from before the switch is ended here at once (its answer settles nothing anyway),
+  so `connected` queues the open file's check straight away, even when the old one's answer was
+  lost. `LinkCheck` locks each link it settles.
+- By design: an old-window handler's link onto a current row keeps that row as it is (its
+  EditSequence too), and a plain request QuickBooks answered whose webhook never came within a day
+  is ended without its answer (queueing the record again sends it again). README, "The rules, in
+  one place", lists every rule.
 
 **Link checks that keep failing or never answer**
 - A check QuBe Sync took but never answered (its webhook lost) was never queued again. Now, when a

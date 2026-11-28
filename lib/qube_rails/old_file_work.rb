@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 module QubeRails
   # A record's last run or plain request, made before its connection last switched company file
   # (company_file_changed_at) and not ended here: settled with QuBe Sync before the record is sent
@@ -45,7 +47,7 @@ module QubeRails
         remote = cancel_run(run, connection, url) if url
       end
       return end_run(run, "cancelled") if remote.nil? # QuBe Sync no longer has it
-      return await_ending(run, connection) if remote["state"] == "completed"
+      return await_ending(run, connection, remote) if remote["state"] == "completed"
       return end_run(run, remote["state"]) if RUN_ENDED.include?(remote["state"])
 
       pending!(run, "QuBe Sync hasn't ended it yet")
@@ -56,6 +58,8 @@ module QubeRails
     # Ends row here once QuBe Sync confirms it's over (or discards it), or raises OldFileWorkPending.
     def settle_request(row, connection)
       return unless old?(row, connection)
+      # An old file's link check: its answer settles nothing anyway, so the new file's goes at once.
+      return end_row(row, "failed", nil) if row.operation_slug.to_s.start_with?(LinkCheck::SLUG_PREFIX)
 
       unless row.qube_id
         return end_row(row, "failed", nil) if last_sent(row) < Time.now - UNCONFIRMED_AFTER
@@ -79,14 +83,35 @@ module QubeRails
     end
 
     # A run QuBe Sync completed: its ending webhook is asked for again, and the record waits for it,
-    # since the run may have added it to the file the connection opens now.
-    def await_ending(run, connection)
+    # since the run may have added it to the file the connection opens now. After DELIVERY_WINDOW
+    # from its last send, the run QuBe Sync returns stands in for the ending (apply_ending).
+    def await_ending(run, connection, remote)
+      return apply_ending(run, connection, remote) if last_sent(run) < Time.now - DELIVERY_WINDOW
+
       begin
         QubeRails.client.redeliver_run(connection.qube_id, run.qube_run_id)
       rescue Backend::APIError => e
         raise unless [409, 429].include?(e.status)
       end
       pending!(run, "QuBe Sync completed it; waiting for its ending")
+    end
+
+    # The run as QuBe Sync returns it, applied as its completed webhook would be (links stale, by the
+    # operation's own handler), or the run just ended here when that can't be done.
+    def apply_ending(run, connection, remote)
+      operation = QubeRails.config.operation_class(run.operation_slug)
+      record = operation && operation.record_for(run)
+      unless record && remote["reference"] == run.reference
+        QubeRails.logger.warn("QuBe Sync: run #{run.id}'s ending never came; ended here as completed, no links")
+        return end_run(run, "completed")
+      end
+
+      body = remote.slice("reference", "workflow", "revision", "outcome", "headline", "output", "summary", "error")
+                   .merge("event" => "workflow_run.completed", "run_id" => remote["id"], "run_state" => "completed",
+                          "connection_id" => connection.qube_id)
+      QubeRails.logger.warn("QuBe Sync: run #{run.id}'s ending never came; applying the run QuBe Sync returns")
+      operation.new(record, run).handle(Backend.parse(JSON.generate(body)))
+      end_run(run, "completed") # in case its revision was applied already
     end
 
     def last_sent(row)

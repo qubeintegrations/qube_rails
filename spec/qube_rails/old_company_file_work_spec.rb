@@ -226,6 +226,44 @@ RSpec.describe "Work from before a company file change" do
       expect(started).not_to have_been_made
     end
 
+    it "reads as sending while it's held, and after DELIVERY_WINDOW applies the run QuBe Sync returns, links stale" do
+      old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
+      switch_file
+      stub_request(:post, cancel_url).to_return(status: 409, body: "{}", headers: { "Content-Type" => "application/json" })
+      stub_request(:get, "#{runs_url}/run-q-old").to_return(json_data(run_answer("completed", reference: old.reference).merge(
+        "revision" => 9, "workflow" => "add_transaction", "outcome" => "added",
+        "output" => { "record" => { "txn_id" => "T-NEW", "ref_number" => "1001" } }
+      )))
+      stub_request(:post, "#{runs_url}/run-q-old/redeliver").to_return(json_data({}))
+      checked = stub_request(:get, invoices_url).to_return(json_data("id" => "check-q-1", "state" => "queued"))
+
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::OldFileWorkPending)
+      expect(connection.sync_status(invoice, operation: "create_invoice")).to be_sending
+
+      travel(QubeRails::OldFileWork::DELIVERY_WINDOW + 1)
+      expect { QuickbooksDesktop::CreateInvoice.start(invoice, connection) }.to raise_error(QubeRails::LinkBeingChecked)
+
+      expect(old.reload).to have_attributes(state: "completed", revision: 9, outcome: "added")
+      expect(invoice.reload.status).to eq("sent") # the operation's own handler ran
+      expect(connection.stale_links.where(qb_id: "T-NEW").count).to eq(1)
+      expect(checked).to have_been_made.once
+      expect(a_request(:post, runs_url)).not_to have_been_made
+    end
+
+    it "just ends a held run after DELIVERY_WINDOW when its operation can't take the ending, then starts afresh" do
+      old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
+      switch_file
+      stub_request(:post, cancel_url).to_return(status: 409, body: "{}", headers: { "Content-Type" => "application/json" })
+      stub_request(:get, "#{runs_url}/run-q-old").to_return(json_data(run_answer("completed", reference: "someone-else")))
+      started = stub_request(:post, runs_url).to_return(json_data("id" => "run-q-new", "state" => "running"))
+
+      travel(QubeRails::OldFileWork::DELIVERY_WINDOW + 1)
+      QuickbooksDesktop::CreateInvoice.start(invoice, connection)
+
+      expect(old.reload.state).to eq("completed")
+      expect(started).to have_been_made.once
+    end
+
     it "cancels a live old run even while its record's links are being checked" do
       connection.link(invoice, kind: "invoice", qb_id: "T-1", name: "1001")
       old = make_run(invoice, connection).tap { |r| r.update!(qube_run_id: "run-q-old", cancel_url: cancel_url) }
